@@ -1,4 +1,5 @@
 import argparse
+from pyexpat import features
 
 from tqdm import tqdm
 
@@ -90,9 +91,9 @@ if __name__ == '__main__':
         p = args[f'{format}_align']
         parameters[format]['normalization']['align'] = p if p is not None else align
         p = args[f'{format}_noise_limit']
-        parameters[format]['normalization']['noise_limit'] = p if p is not None else noise_limit
+        parameters[format]['normalization']['add_noise'] = p if p is not None else noise_limit
         p = args[f'{format}_cube_reescale_factor']
-        parameters[format]['normalization']['cube_reescale_factor'] = p if p is not None else cube_reescale_factor
+        parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor
  
     parameters_groups = []
     parameters_groups_names = []
@@ -150,8 +151,7 @@ if __name__ == '__main__':
         for i in range(len(parameters_groups)):
             features_data_curr = deepcopy(features_data)
             filterFeaturesData(features_data_curr, parameters_groups[i]['curve_types'], parameters_groups[i]['surface_types'])
-            labels_curr = deepcopy(features_data)
-            face2Primitive(features_data_curr, labels_curr)
+            labels_curr, features_points = face2Primitive(features_data_curr, labels.copy())
 
             for format in parameters_groups_names[i]:
                 parameters_norm = parameters[format]['normalization']
@@ -165,5 +165,5 @@ if __name__ == '__main__':
 
                 h5_filename = join(h5_folder_name_curr, f'{filename}.h5')
 
-                FORMATS_DICT[format](deepcopy(point_cloud), labels_curr, features_data_curr, parameters_norm, , h5_filename)
+                FORMATS_DICT[format](point_cloud.copy(), labels_curr, features_points, features_data_curr, parameters_norm, h5_filename)
     print()

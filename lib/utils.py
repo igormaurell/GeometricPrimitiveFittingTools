@@ -83,3 +83,5 @@ def face2Primitive(labels, features_data):
         if index != -1:
             features_points[index].append(i)
         labels[i] = index
+    
+    return labels, features_points

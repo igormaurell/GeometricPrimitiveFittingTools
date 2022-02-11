@@ -46,13 +46,13 @@ def pca_numpy(array):
     S, U = np.linalg.eig(array.T @ array)
     return S, U
 
-def add_noise(points, normals, limit=0.01):
+def addNoise(points, normals, limit=0.01):
     noise = normals * np.random.uniform(-limit, limit, (points.shape[0],1))
     points = points + noise.astype(np.float32)
     #not adding noise on normals yet
     return points
 
-def rotate_features(features, transform):
+def rotateFeatures(features, transform):
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
@@ -60,7 +60,7 @@ def rotate_features(features, transform):
                     features[i][key] = list((transform @ np.array(features[i][key]).T).T)
     return features
 
-def align_canonical(points, normals, features=[]):
+def alignCanonical(points, normals, features=[]):
     S, U = pca_numpy(points)
     smallest_ev = U[:, np.argmin(S)]
     R = rotation_matrix_a_to_b(smallest_ev, np.array([1, 0, 0]))
@@ -68,10 +68,10 @@ def align_canonical(points, normals, features=[]):
     # axis aligns with x axis.
     points = (R @ points.T).T
     normals = (R @ normals.T).T
-    features = rotate_features(features, R)
+    features = rotateFeatures(features, R)
     return points, normals, features, R
 
-def translate_features(features, transform):
+def translateFeatures(features, transform):
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
@@ -82,10 +82,10 @@ def translate_features(features, transform):
 def centralize(points, features=[]):
     mean = np.mean(points, 0)
     centralized_points = points - mean
-    features = translate_features(features, -mean)
+    features = translateFeatures(features, -mean)
     return centralized_points, features, -mean
 
-def reescale_features(features, factor):
+def reescaleFeatures(features, factor):
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
@@ -98,12 +98,29 @@ def reescale_features(features, factor):
 def rescale(points, features=[], factor=1000):
     f = factor + EPS
     scaled_points = points*f
-    features = reescale_features(features, f)
+    features = reescaleFeatures(features, f)
     return scaled_points, features, f
 
-def cube_rescale(points, features=[], factor=1):
+def cubeRescale(points, features=[], factor=1):
     std = np.max(points, 0) - np.min(points, 0)
     f = factor/(np.max(std) + EPS)
     scaled_points = points*f
-    features = reescale_features(features, f)
+    features = reescaleFeatures(features, f)
     return scaled_points, features, f
+
+def normalize(point_cloud, parameters, features=[]):
+    points = point_cloud[:, :3]
+    normals = point_cloud[:, 3:]
+
+    if 'rescale' in parameters.keys():
+        points, features, _ = rescale(points, features, parameters['centralize'])
+    points, features, _ = centralize(points, features) if 'centralize' in parameters.keys() and parameters['centralize'] == True else points, features, None
+    points, normals, features, _ = alignCanonical(points, normals, features) if 'align' in parameters.keys() and parameters['align'] == True else points, normals, features, None
+    if 'add_noise' in parameters.keys():
+        points = addNoise(points, normals, parameters['add_noise'])
+    if 'cube_rescale' in parameters.keys():
+        points, features, _ = cubeRescale(points, features, parameters['cube_rescale'])
+
+    point_cloud = np.concatenate((points, normals), axis=1)
+
+    return point_cloud, features
