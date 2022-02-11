@@ -46,16 +46,13 @@ def pca_numpy(array):
     S, U = np.linalg.eig(array.T @ array)
     return S, U
 
-def add_noise(array, limit=0.01):
-    points = array[:, :3]
-    normals = array[:, 3:]
+def add_noise(points, normals, limit=0.01):
     noise = normals * np.random.uniform(-limit, limit, (points.shape[0],1))
     points = points + noise.astype(np.float32)
     #not adding noise on normals yet
-    noise_array = np.concatenate((points, normals), axis=1)
-    return noise_array
+    return points
 
-def rotateFeatures(features, transform):
+def rotate_features(features, transform):
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
@@ -63,21 +60,18 @@ def rotateFeatures(features, transform):
                     features[i][key] = list((transform @ np.array(features[i][key]).T).T)
     return features
 
-def align_canonical(array, features=[]):
-    points = array[:, :3]
-    normals = array[:, 3:]
+def align_canonical(points, normals, features=[]):
     S, U = pca_numpy(points)
     smallest_ev = U[:, np.argmin(S)]
     R = rotation_matrix_a_to_b(smallest_ev, np.array([1, 0, 0]))
     # rotate input points such that the minor principal
     # axis aligns with x axis.
     points = (R @ points.T).T
-    normals= (R @ normals.T).T
-    aligned_array = np.concatenate((points, normals), axis=1)
-    features = rotateFeatures(features, R)
-    return aligned_array, features
+    normals = (R @ normals.T).T
+    features = rotate_features(features, R)
+    return points, normals, features, R
 
-def translateFeatures(features, transform):
+def translate_features(features, transform):
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
@@ -85,15 +79,13 @@ def translateFeatures(features, transform):
                     features[i][key] = list(np.array(features[i][key]) + transform)
     return features
 
-def centralize(array, features=[]):
-    points = array[:, :3]
+def centralize(points, features=[]):
     mean = np.mean(points, 0)
     centralized_points = points - mean
-    array[:, :3] = centralized_points
-    features = translateFeatures(features, -mean)
-    return array, features
+    features = translate_features(features, -mean)
+    return centralized_points, features, -mean
 
-def reescaleFeatures(features, factor):
+def reescale_features(features, factor):
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
@@ -103,19 +95,15 @@ def reescaleFeatures(features, factor):
                     features[i][key]*= factor
     return features
 
-def rescale(array, features=[], factor=1000):
-    points = array[:, :3]
+def rescale(points, features=[], factor=1000):
     f = factor + EPS
     scaled_points = points*f
-    array[:, :3] = scaled_points
-    features = reescaleFeatures(features, f)
-    return array, features
+    features = reescale_features(features, f)
+    return scaled_points, features, f
 
-def cube_rescale(array, features=[], factor=1):
-    points = array[:, :3]
+def cube_rescale(points, features=[], factor=1):
     std = np.max(points, 0) - np.min(points, 0)
     f = factor/(np.max(std) + EPS)
     scaled_points = points*f
-    array[:, :3] = scaled_points
-    features = reescaleFeatures(features, f)
-    return array, features
+    features = reescale_features(features, f)
+    return scaled_points, features, f
