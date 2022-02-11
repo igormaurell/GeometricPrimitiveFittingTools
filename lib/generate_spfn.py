@@ -31,7 +31,7 @@ def filterFeature2SPFN(feature, name):
     feature['type'] = tp
     return feature
 
-def generateH52SPFN(point_cloud, labels, features_points, features_data, h5_filename, parameters):
+def generateH52SPFN(point_cloud, labels, features_data, h5_filename, parameters):
     h5_file = h5py.File(h5_filename, 'w')
 
     noise_limit = 0.
@@ -70,7 +70,7 @@ def generateH52SPFN(point_cloud, labels, features_points, features_data, h5_file
     for i, feature in enumerate(features_data):
         soup_name = f'{name}_soup_{i}'
         grp = h5_file.create_group(soup_name)
-        gt_points = points[np.array(features_points[i])]
+        gt_points = points[feature['point_indices'].sort()]
         grp.create_dataset('gt_points', data=gt_points)
         feature = filterFeature2SPFN(feature, soup_name)
         grp.attrs['meta'] = np.void(pickle.dumps(feature))

@@ -74,8 +74,7 @@ def face2Primitive(labels, features_data):
         for face in feat['face_indices']:
             face_2_primitive[face] = i
             face_primitive_count[face] += 1
-    if len(np.unique(face_primitive_count)) > 2:
-        print('There is faces that lies to more than one primitive.')
+    assert len(np.unique(face_primitive_count)) > 2
 
     features_points = [[] for i in range(0, len(features_data))]
     for i in range(0, len(labels)):
@@ -83,5 +82,6 @@ def face2Primitive(labels, features_data):
         if index != -1:
             features_points[index].append(i)
         labels[i] = index
-    
-    return labels, features_points
+
+    for i, feature_points in enumerate(features_points):
+        features_data[i]['point_indices'] = np.array(feature_points)

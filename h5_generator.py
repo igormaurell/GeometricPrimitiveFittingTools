@@ -151,7 +151,8 @@ if __name__ == '__main__':
         for i in range(len(parameters_groups)):
             features_data_curr = deepcopy(features_data)
             filterFeaturesData(features_data_curr, parameters_groups[i]['curve_types'], parameters_groups[i]['surface_types'])
-            labels_curr, features_points = face2Primitive(features_data_curr, labels.copy())
+            labels_curr = labels.copy()
+            face2Primitive(features_data_curr, labels_curr)
 
             for format in parameters_groups_names[i]:
                 parameters_norm = parameters[format]['normalization']
@@ -165,5 +166,5 @@ if __name__ == '__main__':
 
                 h5_filename = join(h5_folder_name_curr, f'{filename}.h5')
 
-                FORMATS_DICT[format](point_cloud.copy(), labels_curr, features_points, features_data_curr, parameters_norm, h5_filename)
+                FORMATS_DICT[format](point_cloud.copy(), labels_curr, features_data_curr, parameters_norm, h5_filename)
     print()
