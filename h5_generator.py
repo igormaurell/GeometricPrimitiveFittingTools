@@ -36,19 +36,19 @@ if __name__ == '__main__':
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
     for format in FORMATS_DICT.keys():
-        parser.add_argument(f'-{format}_ct', '--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
-        parser.add_argument(f'-{format}_st', '--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
-        parser.add_argument(f'-{format}_c', '--{format}_centralize', type=bool, help='')
-        parser.add_argument(f'-{format}_a', '--{format}_align', type=bool, help='')
-        parser.add_argument(f'-{format}_nl', '--{format}_noise_limit', type=float, help='')
-        parser.add_argument(f'-{format}_crf', '--{format}_cube_reescale_factor', type=float, help='')
+        parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
+        parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
+        parser.add_argument(f'-{format}_c', f'--{format}_centralize', type=bool, help='')
+        parser.add_argument(f'-{format}_a', f'--{format}_align', type=bool, help='')
+        parser.add_argument(f'-{format}_nl', f'--{format}_noise_limit', type=float, help='')
+        parser.add_argument(f'-{format}_crf', f'--{format}_cube_reescale_factor', type=float, help='')
 
     parser.add_argument('--h5_folder_name', type=str, default = 'h5', help='h5 folder name.')
     parser.add_argument('--mesh_folder_name', type=str, default = 'mesh', help='mesh folder name.')
     parser.add_argument('--features_folder_name', type=str, default = 'features', help='features folder name.')
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
 
-    parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default= 50000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
+    parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default= 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
     parser.add_argument('-d_h5', '--delete_old_h5', action='store_true', help='')
     parser.add_argument('-d_pc', '--delete_old_pc', action='store_true', help='')
 
@@ -105,6 +105,10 @@ if __name__ == '__main__':
             index = parameters_groups.index(parameters[format]['features'])
             parameters_groups_names[index].append(format)
 
+    if delete_old_h5:
+        if exists(h5_folder_name):
+            rmtree(h5_folder_name)
+
     if delete_old_pc:
         if exists(pc_folder_name):
             rmtree(pc_folder_name)
@@ -117,7 +121,6 @@ if __name__ == '__main__':
         exit()
 
     for features_filename in tqdm(features_files):
-        print(features_filename )
         point_position = features_filename.rfind('.')
         filename = features_filename[:point_position]
 
@@ -148,23 +151,23 @@ if __name__ == '__main__':
 
         labels = pc['label']
 
+        if not exists(h5_folder_name):
+            mkdir(h5_folder_name)
+
         for i in range(len(parameters_groups)):
             features_data_curr = deepcopy(features_data)
             filterFeaturesData(features_data_curr, parameters_groups[i]['curve_types'], parameters_groups[i]['surface_types'])
             labels_curr = labels.copy()
-            face2Primitive(features_data_curr, labels_curr)
+            face2Primitive(labels_curr, features_data_curr['surfaces'])
 
             for format in parameters_groups_names[i]:
                 parameters_norm = parameters[format]['normalization']
-                h5_folder_name_curr = h5_folder_name + '_' + format
-                if delete_old_h5:
-                    if exists(h5_folder_name_curr):
-                        rmtree(h5_folder_name_curr)
-
+                h5_folder_name_curr = join(h5_folder_name, format)
                 if not exists(h5_folder_name_curr):
                     mkdir(h5_folder_name_curr)
 
                 h5_filename = join(h5_folder_name_curr, f'{filename}.h5')
 
-                FORMATS_DICT[format](point_cloud.copy(), labels_curr, features_data_curr, parameters_norm, h5_filename)
-    print()
+                if not exists(h5_filename):
+                    #using just surfaces for now
+                    FORMATS_DICT[format](point_cloud.copy(), labels_curr, features_data_curr['surfaces'], parameters_norm, h5_filename)

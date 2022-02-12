@@ -65,7 +65,7 @@ def filterFeaturesData(features_data, curve_types, surface_types):
             i+=1 
 
 def face2Primitive(labels, features_data):
-    labels = np.max(labels)
+    max_face = np.max(labels)
     for feat in features_data:
         max_face = max(0 if len(feat['face_indices']) == 0 else max(feat['face_indices']), max_face)
     face_2_primitive = np.zeros(shape=(max_face+1,), dtype=np.int32) - 1
@@ -74,7 +74,7 @@ def face2Primitive(labels, features_data):
         for face in feat['face_indices']:
             face_2_primitive[face] = i
             face_primitive_count[face] += 1
-    assert len(np.unique(face_primitive_count)) > 2
+    assert len(np.unique(face_primitive_count)) <= 2
 
     features_points = [[] for i in range(0, len(features_data))]
     for i in range(0, len(labels)):
