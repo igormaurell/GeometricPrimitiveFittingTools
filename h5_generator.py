@@ -170,4 +170,4 @@ if __name__ == '__main__':
 
                 if not exists(h5_filename):
                     #using just surfaces for now
-                    FORMATS_DICT[format](point_cloud.copy(), labels_curr, features_data_curr['surfaces'], parameters_norm, h5_filename)
+                    FORMATS_DICT[format](point_cloud.copy(), h5_filename, labels_curr, features_data_curr['surfaces'], parameters_norm)

@@ -34,14 +34,14 @@ def filterFeature2SPFN(feature, name):
     feature['type'] = tp
     return feature
 
-def generateH52SPFN(point_cloud, labels, features_data, norm_parameters, h5_filename):
+def generateH52SPFN(point_cloud, h5_filename, labels = None, features_data = None, norm_parameters = None):
     with h5py.File(h5_filename, 'w') as h5_file:
         noise_limit = 0.
         if 'add_noise' in norm_parameters.keys():
             noise_limit = norm_parameters['add_noise']
             norm_parameters['add_noise'] = 0.
 
-        gt_point_cloud, features_data = normalize(point_cloud.copy(), norm_parameters, features=features_data)
+        gt_point_cloud, features_data, transforms = normalize(point_cloud.copy(), norm_parameters, features=features_data)
 
         h5_file.create_dataset('gt_points', data=gt_point_cloud[:, :3])
         h5_file.create_dataset('gt_normals', data=gt_point_cloud[:, 3:])
