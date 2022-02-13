@@ -1,6 +1,4 @@
 import argparse
-from pyexpat import features
-from lib.generate_default import generateH52DEFAULT
 
 from tqdm import tqdm
 
@@ -11,24 +9,16 @@ import numpy as np
 from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
-
-from lib.generate_spfn import generateH52SPFN
-from lib.generate_default import generateH52DEFAULT
-from lib.utils import generatePCD, loadFeatures
-
 from copy import deepcopy
 
+from lib.utils import generatePCD, loadFeatures
 from lib.utils import face2Primitive, filterFeaturesData
-
-FORMATS_DICT = {
-    'default': generateH52DEFAULT,
-    'spfn': generateH52SPFN
-}
+from lib.dataset_factory import *
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
-    formats_txt = ','.join(FORMATS_DICT.keys())
+    formats_txt = ','.join(FORMATS_FUNCTION_DICT.keys())
     parser.add_argument('h5_formats', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
 
     parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
@@ -38,7 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('-nl', '--noise_limit', type=float, default = 10., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
-    for format in FORMATS_DICT.keys():
+    for format in FORMATS_FUNCTION_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
         parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
         parser.add_argument(f'-{format}_c', f'--{format}_centralize', type=bool, help='')
@@ -51,7 +41,8 @@ if __name__ == '__main__':
     parser.add_argument('--features_folder_name', type=str, default = 'features', help='features folder name.')
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
 
-    parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default= 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
+    parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
+    parser.add_argument('-t_p', '--train_percentage', type=int, default = 80, help='')
     parser.add_argument('-d_h5', '--delete_old_h5', action='store_true', help='')
     parser.add_argument('-d_pc', '--delete_old_pc', action='store_true', help='')
 
@@ -61,7 +52,7 @@ if __name__ == '__main__':
     h5_formats = [s.lower() for s in args['h5_formats'].split(',')]
     aux = []
     for format in h5_formats:
-        if format in FORMATS_DICT.keys():
+        if format in FORMATS_FUNCTION_DICT.keys():
             aux.append(format)
     h5_formats = aux
 
@@ -75,6 +66,7 @@ if __name__ == '__main__':
     mps_ns = str(args['mesh_point_sampling_n_samples'])
     delete_old_h5 = args['delete_old_h5']
     delete_old_pc = args['delete_old_pc']
+    train_percentage = args['train_percentage']
 
     h5_folder_name = args['h5_folder_name']
     mesh_folder_name = join(folder_name, args['mesh_folder_name'])
@@ -172,4 +164,4 @@ if __name__ == '__main__':
 
                 if not exists(h5_filename):
                     #using just surfaces for now
-                    FORMATS_DICT[format](point_cloud.copy(), h5_filename, labels_curr, features_data_curr['surfaces'], deepcopy(parameters_norm))
+                    FORMATS_FUNCTION_DICT[format](point_cloud.copy(), h5_filename, labels_curr, features_data_curr['surfaces'], deepcopy(parameters_norm))

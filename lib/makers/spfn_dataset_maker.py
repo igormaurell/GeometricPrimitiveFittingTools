@@ -8,14 +8,18 @@ import numpy as np
 
 import gc
 
-from .normalization import normalize
+from ..normalization import normalize
 
-SPFN_FEATURES = {
-    'plane': ['location', 'z_axis', 'normalized'],
-    'cylinder': ['location', 'z_axis', 'radius', 'normalized'],
-    'cone': ['location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
-    'sphere': ['location', 'radius', 'normalized']
-}
+class SpfnDatasetMaker:
+    SPFN_FEATURES = {
+        'plane': ['location', 'z_axis', 'normalized'],
+        'cylinder': ['location', 'z_axis', 'radius', 'normalized'],
+        'cone': ['location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
+        'sphere': ['location', 'radius', 'normalized']
+    }
+
+    def __init__(self):
+        pass
 
 def filterFeature2SPFN(feature, name):
     tp = feature['type'].lower()
