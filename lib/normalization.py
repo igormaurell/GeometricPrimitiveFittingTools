@@ -115,16 +115,19 @@ def normalize(point_cloud, parameters, features=[]):
     transforms = {
         'translation': np.zeros(3),
         'rotation': np.eye(3),
-        'scale': 0.
+        'scale': 0.,
+        'sequence': ['translation', 'rotation', 'scale']
     }
 
     if 'rescale' in parameters.keys():
-        points, features, transforms['scale'] = rescale(points, features, parameters['centralize'])
-    points, features, transforms['translation'] = centralize(points, features) if 'centralize' in parameters.keys() and parameters['centralize'] == True else points, features, None
-    points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features) if 'align' in parameters.keys() and parameters['align'] == True else points, normals, features, None
+        points, features, transforms['scale'] = rescale(points, features, parameters['rescale'])
+    if 'centralize' in parameters.keys() and parameters['centralize'] == True:
+        points, features, transforms['translation'] = centralize(points, features)
+    if 'align' in parameters.keys() and parameters['align'] == True:
+        points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features)
     if 'add_noise' in parameters.keys():
         points = addNoise(points, normals, parameters['add_noise'])
-    if 'cube_rescale' in parameters.keys():
+    if 'cube_rescale' in parameters.keys() and parameters['cube_rescale'] > 0:
         points, features, scale = cubeRescale(points, features, parameters['cube_rescale'])
         transforms['scale'] *= scale
 

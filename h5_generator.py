@@ -1,5 +1,6 @@
 import argparse
 from pyexpat import features
+from lib.generate_default import generateH52DEFAULT
 
 from tqdm import tqdm
 
@@ -12,6 +13,7 @@ from os import listdir, mkdir
 from os.path import join, isfile, exists
 
 from lib.generate_spfn import generateH52SPFN
+from lib.generate_default import generateH52DEFAULT
 from lib.utils import generatePCD, loadFeatures
 
 from copy import deepcopy
@@ -19,7 +21,8 @@ from copy import deepcopy
 from lib.utils import face2Primitive, filterFeaturesData
 
 FORMATS_DICT = {
-    'spfn': generateH52SPFN,
+    'default': generateH52DEFAULT,
+    'spfn': generateH52SPFN
 }
 
 if __name__ == '__main__':
@@ -170,4 +173,4 @@ if __name__ == '__main__':
 
                 if not exists(h5_filename):
                     #using just surfaces for now
-                    FORMATS_DICT[format](point_cloud.copy(), h5_filename, labels_curr, features_data_curr['surfaces'], parameters_norm)
+                    FORMATS_DICT[format](point_cloud.copy(), h5_filename, labels_curr, features_data_curr['surfaces'], deepcopy(parameters_norm))

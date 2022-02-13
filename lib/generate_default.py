@@ -1,3 +1,4 @@
+from matplotlib.pyplot import axis
 from tqdm import tqdm
 
 import pickle
@@ -10,20 +11,20 @@ import gc
 
 from .normalization import normalize
 
-SPFN_FEATURES = {
+DEFAULT_FEATURES = {
     'plane': ['location', 'z_axis', 'normalized'],
     'cylinder': ['location', 'z_axis', 'radius', 'normalized'],
     'cone': ['location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
     'sphere': ['location', 'radius', 'normalized']
 }
 
-def filterFeature2SPFN(feature, name):
+def filterFeature2DEFAULT(feature, name):
     tp = feature['type'].lower()
-    if tp in SPFN_FEATURES.keys():
+    if tp in DEFAULT_FEATURES.keys():
         feature_out = {}
         feature_out['name'] = name
         feature_out['type'] = tp
-        for field in SPFN_FEATURES[tp]:
+        for field in DEFAULT_FEATURES[tp]:
             if field == 'normalized':
                 feature_out[field] = True
             else:
@@ -34,7 +35,7 @@ def filterFeature2SPFN(feature, name):
     feature['type'] = tp
     return feature
 
-def generateH52SPFN(point_cloud, h5_filename, labels = None, features_data = None, norm_parameters = None):
+def generateH52DEFAULT(point_cloud, h5_filename, labels = None, features_data = None, norm_parameters = None):
     with h5py.File(h5_filename, 'w') as h5_file:
         noise_limit = 0.
         if 'add_noise' in norm_parameters.keys():
@@ -73,7 +74,6 @@ def generateH52SPFN(point_cloud, h5_filename, labels = None, features_data = Non
             if len(feature['point_indices']) > 0:
                 soup_name = f'{name}_soup_{i}'
                 grp = h5_file.create_group(soup_name)
-                gt_points = points[feature['point_indices']]
-                grp.create_dataset('gt_points', data=gt_points)
-                feature = filterFeature2SPFN(feature, soup_name)
+                grp.create_dataset('gt_indices', data=feature['point_indices'])
+                feature = filterFeature2DEFAULT(feature, soup_name)
                 grp.attrs['meta'] = np.void(pickle.dumps(feature))
