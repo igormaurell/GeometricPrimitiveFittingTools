@@ -13,7 +13,7 @@ from copy import deepcopy
 
 from lib.utils import generatePCD, loadFeatures
 from lib.utils import face2Primitive, filterFeaturesData
-from lib.dataset_factory import *
+from lib.dataset_factory import DatasetFactory
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -75,12 +75,12 @@ if __name__ == '__main__':
 
     parameters = {}
     for format in h5_formats:
-        parameters[format] = {'features': {}, 'normalization': {}}
+        parameters[format] = {'filter_features': {}, 'normalization': {}}
 
         p = args[f'{format}_curve_types']
-        parameters[format]['features']['curve_types'] = p if p is not None else curve_types
+        parameters[format]['filter_features']['curve_types'] = p if p is not None else curve_types
         p = args[f'{format}_surface_types']
-        parameters[format]['features']['surface_types'] = p if p is not None else surface_types
+        parameters[format]['filter_features']['surface_types'] = p if p is not None else surface_types
         p = args[f'{format}_centralize']
         parameters[format]['normalization']['centralize'] = p if p is not None else centralize
         p = args[f'{format}_align']
@@ -89,25 +89,12 @@ if __name__ == '__main__':
         parameters[format]['normalization']['add_noise'] = p if p is not None else noise_limit
         p = args[f'{format}_cube_reescale_factor']
         parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor
- 
-    parameters_groups = []
-    parameters_groups_names = []
-    for format in h5_formats:
-
-        h5_folder_name_curr = join(folder_name, format, h5_folder_name)
-
+        h5_format_folder_name = join(folder_name, format, h5_folder_name)
+        parameters[format]['folder_name'] = h5_format_folder_name
         if delete_old_h5:
-            if exists(h5_folder_name_curr):
-                rmtree(h5_folder_name_curr)
-        
-        makedirs(h5_folder_name_curr, exist_ok=True)
-
-        if parameters[format]['features'] not in parameters_groups:
-            parameters_groups.append(parameters[format]['features'])
-            parameters_groups_names.append([format])
-        else:
-            index = parameters_groups.index(parameters[format]['features'])
-            parameters_groups_names[index].append(format)
+            if exists(h5_format_folder_name):
+                rmtree(h5_format_folder_name)
+        makedirs(h5_format_folder_name, exist_ok=True)
 
     if delete_old_pc:
         if exists(pc_folder_name):
@@ -119,6 +106,8 @@ if __name__ == '__main__':
     else:
         print('\nThere is no features folder.\n')
         exit()
+    
+    dataset_factory = DatasetFactory(parameters)
 
     for features_filename in tqdm(features_files):
         point_position = features_filename.rfind('.')

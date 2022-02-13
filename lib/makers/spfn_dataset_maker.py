@@ -11,32 +11,19 @@ import gc
 from ..normalization import normalize
 
 class SpfnDatasetMaker:
-    SPFN_FEATURES = {
+    FEATURES_BY_TYPE = {
         'plane': ['location', 'z_axis', 'normalized'],
         'cylinder': ['location', 'z_axis', 'radius', 'normalized'],
         'cone': ['location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
         'sphere': ['location', 'radius', 'normalized']
     }
 
-    def __init__(self):
-        pass
+    FEATURES_TRANSLATION = {}
 
-def filterFeature2SPFN(feature, name):
-    tp = feature['type'].lower()
-    if tp in SPFN_FEATURES.keys():
-        feature_out = {}
-        feature_out['name'] = name
-        feature_out['type'] = tp
-        for field in SPFN_FEATURES[tp]:
-            if field == 'normalized':
-                feature_out[field] = True
-            else:
-                feature_out[field] = feature[field]
-        return feature_out
+    def __init__(self, parameters):
+        self.folder_name = parameters['folder_name']
+        self.normalization_parameters = parameters['normalization']
 
-    feature['name'] = name
-    feature['type'] = tp
-    return feature
 
 def generateH52SPFN(point_cloud, h5_filename, labels = None, features_data = None, norm_parameters = None):
     with h5py.File(h5_filename, 'w') as h5_file:
