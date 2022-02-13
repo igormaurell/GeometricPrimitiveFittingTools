@@ -9,7 +9,7 @@ from pypcd import pypcd
 import numpy as np
 
 from shutil import rmtree
-from os import listdir, mkdir
+from os import listdir, makedirs
 from os.path import join, isfile, exists
 
 from lib.generate_spfn import generateH52SPFN
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     delete_old_h5 = args['delete_old_h5']
     delete_old_pc = args['delete_old_pc']
 
-    h5_folder_name = join(folder_name, args['h5_folder_name'])
+    h5_folder_name = args['h5_folder_name']
     mesh_folder_name = join(folder_name, args['mesh_folder_name'])
     features_folder_name = join(folder_name, args['features_folder_name'])
     pc_folder_name = join(folder_name, args['pc_folder_name'])
@@ -101,16 +101,21 @@ if __name__ == '__main__':
     parameters_groups = []
     parameters_groups_names = []
     for format in h5_formats:
+
+        h5_folder_name_curr = join(folder_name, format, h5_folder_name)
+
+        if delete_old_h5:
+            if exists(h5_folder_name_curr):
+                rmtree(h5_folder_name_curr)
+        
+        makedirs(h5_folder_name_curr, exist_ok=True)
+
         if parameters[format]['features'] not in parameters_groups:
             parameters_groups.append(parameters[format]['features'])
             parameters_groups_names.append([format])
         else:
             index = parameters_groups.index(parameters[format]['features'])
             parameters_groups_names[index].append(format)
-
-    if delete_old_h5:
-        if exists(h5_folder_name):
-            rmtree(h5_folder_name)
 
     if delete_old_pc:
         if exists(pc_folder_name):
@@ -132,8 +137,7 @@ if __name__ == '__main__':
               
         if exists(pc_filename): pass
         elif exists(mesh_filename):
-            if not exists(pc_folder_name):
-                mkdir(pc_folder_name)
+            makedirs(pc_folder_name, exist_ok=True)
             generatePCD(pc_filename, mps_ns, mesh_filename=mesh_filename)
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
@@ -154,9 +158,6 @@ if __name__ == '__main__':
 
         labels = pc['label']
 
-        if not exists(h5_folder_name):
-            mkdir(h5_folder_name)
-
         for i in range(len(parameters_groups)):
             features_data_curr = deepcopy(features_data)
             filterFeaturesData(features_data_curr, parameters_groups[i]['curve_types'], parameters_groups[i]['surface_types'])
@@ -165,9 +166,7 @@ if __name__ == '__main__':
 
             for format in parameters_groups_names[i]:
                 parameters_norm = parameters[format]['normalization']
-                h5_folder_name_curr = join(h5_folder_name, format)
-                if not exists(h5_folder_name_curr):
-                    mkdir(h5_folder_name_curr)
+                h5_folder_name_curr = join(folder_name, format, h5_folder_name)
 
                 h5_filename = join(h5_folder_name_curr, f'{filename}.h5')
 

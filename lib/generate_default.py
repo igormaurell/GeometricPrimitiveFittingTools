@@ -46,7 +46,6 @@ def generateH52DEFAULT(point_cloud, h5_filename, labels = None, features_data = 
 
         h5_file.create_dataset('gt_points', data=gt_point_cloud[:, :3])
         h5_file.create_dataset('gt_normals', data=gt_point_cloud[:, 3:])
-        points = gt_point_cloud[:, :3]
 
         del gt_point_cloud
         gc.collect()
