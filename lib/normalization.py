@@ -19,11 +19,6 @@ FEATURE_TYPE = {
 EPS = np.finfo(np.float32).eps
 
 def rotation_matrix_a_to_b(A, B):
-    """
-    Finds rotation matrix from vector A in 3d to vector B
-    in 3d.
-    B = R @ A
-    """
     cos = np.dot(A, B)
     sin = np.linalg.norm(np.cross(B, A))
     u = A

@@ -17,7 +17,7 @@ from lib.dataset_factory import DatasetFactory
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
-    formats_txt = ','.join(FORMATS_FUNCTION_DICT.keys())
+    formats_txt = ','.join(DatasetFactory.MAKERS_DICT.keys())
     parser.add_argument('h5_formats', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
 
     parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('-nl', '--noise_limit', type=float, default = 10., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
-    for format in FORMATS_FUNCTION_DICT.keys():
+    for format in DatasetFactory.MAKERS_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
         parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
         parser.add_argument(f'-{format}_c', f'--{format}_centralize', type=bool, help='')
@@ -49,12 +49,6 @@ if __name__ == '__main__':
 
     folder_name = args['folder']
     h5_formats = [s.lower() for s in args['h5_formats'].split(',')]
-    aux = []
-    for format in h5_formats:
-        if format in FORMATS_FUNCTION_DICT.keys():
-            aux.append(format)
-    h5_formats = aux
-
     curve_types = [s.lower() for s in args['curve_types'].split(',')]
     surface_types = [s.lower() for s in args['surface_types'].split(',')]
     centralize = args['centralize']

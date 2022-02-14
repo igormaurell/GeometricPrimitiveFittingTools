@@ -74,9 +74,6 @@ def filterFeaturesData(features_data, curve_types, surface_types):
             i+=1
     return features_data
 
-def filterFeaturesData(features_data, parameters):
-    filterFeaturesData(features_data, parameters['curve_types'], parameters['surface_types'])
-
 def face2Primitive(labels, features_data):
     max_face = np.max(labels)
     for feat in features_data:
