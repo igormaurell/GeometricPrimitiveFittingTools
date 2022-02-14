@@ -3,7 +3,7 @@ from copy import deepcopy
 import random
 from math import ceil, floor
 
-class BaseDatasetMaker:
+class BaseDatasetHandler:
 
     def __init__(self, parameters):
         self.dataset_folder_name = parameters['dataset_folder_name']
