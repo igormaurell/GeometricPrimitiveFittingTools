@@ -4,10 +4,13 @@ import numpy as np
 import gc
 import uuid
 import os
+
 from lib.normalization import normalize
 from lib.utils import filterFeature
 
-class SpfnDatasetMaker:
+from .base_dataset_maker import BaseDatasetMaker
+
+class SpfnDatasetMaker(BaseDatasetMaker):
     FEATURES_BY_TYPE = {
         'plane': ['name', 'location', 'z_axis', 'normalized'],
         'cylinder': ['name', 'location', 'z_axis', 'radius', 'normalized'],
@@ -18,9 +21,7 @@ class SpfnDatasetMaker:
     FEATURES_TRANSLATION = {}
 
     def __init__(self, parameters):
-        self.folder_name = parameters['folder_name']
-        self.normalization_parameters = parameters['normalization']
-        self.filenames = []
+        super().__init__(parameters)
 
     def step(self, points, normals=None, labels=None, features_data=[], filename=None):
         if filename is None:
@@ -28,20 +29,22 @@ class SpfnDatasetMaker:
         
         self.filenames.append(filename)
 
-        h5_file_path = os.path.join(self.folder_name, f'{filename}.h5')
+        data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
+        transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
-        if os.path.exists(h5_file_path):
+        if os.path.exists(data_file_path):
            return False
 
-        print(h5_file_path)
-
-        with h5py.File(h5_file_path, 'w') as h5_file:
+        with h5py.File(data_file_path, 'w') as h5_file:
             noise_limit = 0.
             if 'add_noise' in self.normalization_parameters.keys():
                 noise_limit = self.normalization_parameters['add_noise']
                 self.normalization_parameters['add_noise'] = 0.
 
             gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(),features=features_data)
+
+            with open(transforms_file_path, 'wb') as pkl_file:
+                pickle.dump(transforms, pkl_file)
 
             h5_file.create_dataset('gt_points', data=gt_points)
             if gt_normals is not None:
@@ -65,9 +68,9 @@ class SpfnDatasetMaker:
             del points
             gc.collect()
 
-            point_position = h5_file_path.rfind('.')
+            point_position = data_file_path.rfind('.')
             point_position = point_position if point_position >= 0 else len(point_position)
-            bar_position = h5_file_path.rfind('/')
+            bar_position = data_file_path.rfind('/')
             bar_position = bar_position if bar_position >= 0 else 0
 
             for i, feature in enumerate(features_data):
@@ -80,6 +83,13 @@ class SpfnDatasetMaker:
                     feature['normalized'] = True
                     feature = filterFeature(feature, SpfnDatasetMaker.FEATURES_BY_TYPE, SpfnDatasetMaker.FEATURES_TRANSLATION)
                     grp.attrs['meta'] = np.void(pickle.dumps(feature))
-    
-    def finish(self):
         return True
+
+    def finish(self, permutation=None):
+        train_models, test_models = self.divideTrainVal(permutation)
+        with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w') as f:
+            text = ','.join([f'{filename}.h5' for filename in train_models])
+            f.write(text)
+        with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w') as f:
+            text = ','.join([f'{filename}.h5' for filename in test_models])
+            f.write(text)

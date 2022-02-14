@@ -1,82 +1,94 @@
-from matplotlib.pyplot import axis
-from tqdm import tqdm
-
 import pickle
-
 import h5py
-
 import numpy as np
-
 import gc
+import uuid
+import os
 
-from ..normalization import normalize
+from lib.normalization import normalize
+from lib.utils import filterFeature
 
-class DefaultDatasetMaker:
-    DEFAULT_FEATURES = {
-        'plane': ['location', 'z_axis', 'normalized'],
-        'cylinder': ['location', 'z_axis', 'radius', 'normalized'],
-        'cone': ['location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
-        'sphere': ['location', 'radius', 'normalized']
+from .base_dataset_maker import BaseDatasetMaker
+
+class DefaultDatasetMaker(BaseDatasetMaker):
+    FEATURES_BY_TYPE = {
+        'plane': ['name', 'location', 'z_axis', 'normalized'],
+        'cylinder': ['name', 'location', 'z_axis', 'radius', 'normalized'],
+        'cone': ['name', 'location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
+        'sphere': ['name', 'location', 'radius', 'normalized']
     }
 
-    def __init__(self):
-        pass
+    FEATURES_TRANSLATION = {}
 
-def filterFeature2DEFAULT(feature, name):
-    tp = feature['type'].lower()
-    if tp in DEFAULT_FEATURES.keys():
-        feature_out = {}
-        feature_out['name'] = name
-        feature_out['type'] = tp
-        for field in DEFAULT_FEATURES[tp]:
-            if field == 'normalized':
-                feature_out[field] = True
-            else:
-                feature_out[field] = feature[field]
-        return feature_out
+    def __init__(self, parameters):
+        super().__init__(parameters)
 
-    feature['name'] = name
-    feature['type'] = tp
-    return feature
+    def step(self, points, normals=None, labels=None, features_data=[], filename=None):
+        if filename is None:
+            filename = str(uuid.uuid4())
+        
+        self.filenames.append(filename)
 
-def generateH52DEFAULT(point_cloud, h5_filename, labels = None, features_data = None, norm_parameters = None):
-    with h5py.File(h5_filename, 'w') as h5_file:
-        noise_limit = 0.
-        if 'add_noise' in norm_parameters.keys():
-            noise_limit = norm_parameters['add_noise']
-            norm_parameters['add_noise'] = 0.
+        data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
+        transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
-        gt_point_cloud, features_data, transforms = normalize(point_cloud.copy(), norm_parameters, features=features_data)
+        if os.path.exists(data_file_path):
+           return False
 
-        h5_file.create_dataset('gt_points', data=gt_point_cloud[:, :3])
-        h5_file.create_dataset('gt_normals', data=gt_point_cloud[:, 3:])
+        with h5py.File(data_file_path, 'w') as h5_file:
+            noise_limit = 0.
+            if 'add_noise' in self.normalization_parameters.keys():
+                noise_limit = self.normalization_parameters['add_noise']
+                self.normalization_parameters['add_noise'] = 0.
 
-        del gt_point_cloud
-        gc.collect()
+            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(),features=features_data)
 
-        h5_file.create_dataset('gt_labels', data=labels)
+            with open(transforms_file_path, 'wb') as pkl_file:
+                pickle.dump(transforms, pkl_file)
 
-        del labels
-        gc.collect()
+            h5_file.create_dataset('gt_points', data=gt_points)
+            if gt_normals is not None:
+                h5_file.create_dataset('gt_normals', data=gt_normals)
 
-        norm_parameters['add_noise'] = noise_limit
-        point_cloud, _, _ = normalize(point_cloud, norm_parameters)
-        h5_file.create_dataset('noisy_points', data=point_cloud[:, :3])
+            del gt_normals
+            gc.collect()
 
-        del point_cloud
-        gc.collect()
+            if labels is not None:
+                h5_file.create_dataset('gt_labels', data=labels)
 
-        point_position = h5_filename.rfind('.')
-        point_position = point_position if point_position >= 0 else len(point_position)
-        bar_position = h5_filename.rfind('/')
-        bar_position = bar_position if bar_position >= 0 else 0
+            del labels
+            gc.collect()
 
-        name = h5_filename[bar_position+1:point_position]
+            if noise_limit != 0.:
+                self.normalization_parameters['add_noise'] = noise_limit
+                noisy_points, _, _, _ = normalize(points, self.normalization_parameters, normals=normals.copy())
+                h5_file.create_dataset('noisy_points', data=noisy_points)
+                del noisy_points
 
-        for i, feature in enumerate(features_data):
-            if len(feature['point_indices']) > 0:
-                soup_name = f'{name}_soup_{i}'
-                grp = h5_file.create_group(soup_name)
-                grp.create_dataset('gt_indices', data=feature['point_indices'])
-                feature = filterFeature2DEFAULT(feature, soup_name)
-                grp.attrs['meta'] = np.void(pickle.dumps(feature))
+            del points
+            gc.collect()
+
+            point_position = data_file_path.rfind('.')
+            point_position = point_position if point_position >= 0 else len(point_position)
+            bar_position = data_file_path.rfind('/')
+            bar_position = bar_position if bar_position >= 0 else 0
+
+            for i, feature in enumerate(features_data):
+                if len(feature['point_indices']) > 0:
+                    soup_name = f'{filename}_soup_{i}'
+                    grp = h5_file.create_group(soup_name)
+                    grp.create_dataset('gt_indices', data=feature['point_indices'])
+                    feature['name'] = soup_name
+                    feature['normalized'] = True
+                    feature = filterFeature(feature, DefaultDatasetMaker.FEATURES_BY_TYPE, DefaultDatasetMaker.FEATURES_TRANSLATION)
+                    grp.attrs['meta'] = np.void(pickle.dumps(feature))
+        return True
+
+    def finish(self, permutation=None):
+        train_models, test_models = self.divideTrainVal(permutation)
+        with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w') as f:
+            text = ','.join([f'{filename}.h5' for filename in train_models])
+            f.write(text)
+        with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w') as f:
+            text = ','.join([f'{filename}.h5' for filename in test_models])
+            f.write(text)

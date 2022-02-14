@@ -2,6 +2,7 @@ from cProfile import label
 from lib.makers import *
 from lib.utils import filterFeaturesData, face2Primitive
 
+import random
 from copy import deepcopy
 
 class DatasetFactory:
@@ -27,6 +28,7 @@ class DatasetFactory:
                     self.filter_features_groups_names[index].append(format)
                 parameters[format].pop('filter_features')
             self.makers[format] = DatasetFactory.MAKERS_DICT[format](parameters[format])
+        random.seed(1234)
         self.step_num = 0
 
     def step(self, points, normals=None, labels=None, features_data=[], filename = None):
@@ -40,7 +42,9 @@ class DatasetFactory:
 
             for format in self.filter_features_groups_names[i]:
                 self.makers[format].step(points, normals=normals, labels=labels_curr, features_data=features_data_curr, filename=filename)
+        self.step_num += 1
 
     def finish(self):
+        permutation = random.shuffle(list(range(self.step_num)))
         for maker in self.makers.values():
-            maker.finish()
+            maker.finish(permutation)
