@@ -24,6 +24,16 @@ class SpfnDatasetMaker:
         self.folder_name = parameters['folder_name']
         self.normalization_parameters = parameters['normalization']
 
+    def step(self, points, normals=None, labels=None, features_data=[]):
+        parameters_norm = parameters[format]['normalization']
+                h5_folder_name_curr = join(folder_name, format, h5_folder_name)
+
+                h5_filename = join(h5_folder_name_curr, f'{filename}.h5')
+
+                if not exists(h5_filename):
+                    #using just surfaces for now
+                    FORMATS_FUNCTION_DICT[format](point_cloud.copy(), h5_filename, labels_curr, features_data_curr['surfaces'], deepcopy(parameters_norm))
+
 
 def generateH52SPFN(point_cloud, h5_filename, labels = None, features_data = None, norm_parameters = None):
     with h5py.File(h5_filename, 'w') as h5_file:

@@ -72,6 +72,7 @@ def filterFeaturesData(features_data, curve_types, surface_types):
             features_data['surfaces'].pop(i)
         else:
             i+=1
+    return features_data
 
 def filterFeaturesData(features_data, parameters):
     filterFeaturesData(features_data, parameters['curve_types'], parameters['surface_types'])
@@ -97,3 +98,5 @@ def face2Primitive(labels, features_data):
 
     for i, feature_points in enumerate(features_points):
         features_data[i]['point_indices'] = np.array(feature_points)
+    
+    return face_2_primitive, features_data

@@ -12,7 +12,6 @@ from os.path import join, isfile, exists
 from copy import deepcopy
 
 from lib.utils import generatePCD, loadFeatures
-from lib.utils import face2Primitive, filterFeaturesData
 from lib.dataset_factory import DatasetFactory
 
 if __name__ == '__main__':
@@ -129,28 +128,15 @@ if __name__ == '__main__':
 
         pc = pypcd.PointCloud.from_path(pc_filename).pc_data
 
-        point_cloud = np.ndarray(shape=(pc['x'].shape[0], 6), dtype=np.float64)
-        point_cloud[:, 0] = pc['x']
-        point_cloud[:, 1] = pc['y']
-        point_cloud[:, 2] = pc['z']
-        point_cloud[:, 3] = pc['normal_x']
-        point_cloud[:, 4] = pc['normal_y']
-        point_cloud[:, 5] = pc['normal_z']
-
+        points = np.ndarray(shape=(pc['x'].shape[0], 3), dtype=np.float64)
+        normals = np.ndarray(shape=(pc['normal_x'].shape[0], 3), dtype=np.float64)
+        labels = np.ndarray(shape=(pc['label'].shape[0],), dtype=np.float64)
+        points[:, 0] = pc['x']
+        points[:, 1] = pc['y']
+        points[:, 2] = pc['z']
+        normals[:, 0] = pc['normal_x']
+        normals[:, 1] = pc['normal_y']
+        normals[:, 2] = pc['normal_z']
         labels = pc['label']
 
-        for i in range(len(parameters_groups)):
-            features_data_curr = deepcopy(features_data)
-            filterFeaturesData(features_data_curr, parameters_groups[i]['curve_types'], parameters_groups[i]['surface_types'])
-            labels_curr = labels.copy()
-            face2Primitive(labels_curr, features_data_curr['surfaces'])
-
-            for format in parameters_groups_names[i]:
-                parameters_norm = parameters[format]['normalization']
-                h5_folder_name_curr = join(folder_name, format, h5_folder_name)
-
-                h5_filename = join(h5_folder_name_curr, f'{filename}.h5')
-
-                if not exists(h5_filename):
-                    #using just surfaces for now
-                    FORMATS_FUNCTION_DICT[format](point_cloud.copy(), h5_filename, labels_curr, features_data_curr['surfaces'], deepcopy(parameters_norm))
+        dataset_factory.step(points, normals=normals, labels=labels, features_data=features_data)
