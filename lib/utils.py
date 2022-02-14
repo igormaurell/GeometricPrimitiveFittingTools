@@ -47,6 +47,15 @@ def loadFeatures(features_name: str, tp: str):
     else:
         return loadJSON(f'{features_name}.{tp}')
 
+def filterFeature(feature_data, features_by_type, features_translation):
+    assert 'type' in feature_data.keys()
+    tp = feature_data['type'].lower()
+    assert tp in features_by_type.keys()
+    feature_out = {}
+    for key in features_by_type[tp]:
+        feature_out[key if not key in features_translation.keys() else features_translation[key]] = feature_data[key]
+    return feature_out
+
 def filterFeaturesData(features_data, curve_types, surface_types):
     i = 0
     while i < len(features_data['curves']):
@@ -62,7 +71,8 @@ def filterFeaturesData(features_data, curve_types, surface_types):
         if feature['type'].lower() not in surface_types:
             features_data['surfaces'].pop(i)
         else:
-            i+=1 
+            i+=1
+    return features_data
 
 def face2Primitive(labels, features_data):
     max_face = np.max(labels)
@@ -85,3 +95,5 @@ def face2Primitive(labels, features_data):
 
     for i, feature_points in enumerate(features_points):
         features_data[i]['point_indices'] = np.array(feature_points)
+    
+    return face_2_primitive, features_data
