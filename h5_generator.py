@@ -139,4 +139,4 @@ if __name__ == '__main__':
         normals[:, 2] = pc['normal_z']
         labels = pc['label']
 
-        dataset_factory.step(points, normals=normals, labels=labels, features_data=features_data)
+        dataset_factory.step(points, normals=normals, labels=labels, features_data=features_data, filename=filename)

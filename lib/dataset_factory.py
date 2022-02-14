@@ -30,7 +30,7 @@ class DatasetFactory:
             self.makers[format] = DatasetFactory.MAKERS_DICT[format](parameters[format])
         self.step_num = 0
 
-    def step(self, points, normals=None, labels=None, features_data=[]):
+    def step(self, points, normals=None, labels=None, features_data=[], filename = None):
         for i in range(len(self.filter_features_groups)):
             features_data_curr = features_data
             labels_curr = labels
@@ -40,6 +40,4 @@ class DatasetFactory:
                 labels_curr, features_data_curr = face2Primitive(labels_curr.copy(), features_data_curr)
 
             for format in self.filter_features_groups_names[i]:
-                self.makers[format].step(points, normals=normals, labels=labels_curr, features_data=features_data_curr)
-
-                
+                self.makers[format].step(points, normals=normals, labels=labels_curr, features_data=features_data_curr, filename=filename)

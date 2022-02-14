@@ -60,14 +60,15 @@ def rotateFeatures(features, transform):
                     features[i][key] = list((transform @ np.array(features[i][key]).T).T)
     return features
 
-def alignCanonical(points, normals, features=[]):
+def alignCanonical(points, normals=None, features=[]):
     S, U = pca_numpy(points)
     smallest_ev = U[:, np.argmin(S)]
     R = rotation_matrix_a_to_b(smallest_ev, np.array([1, 0, 0]))
     # rotate input points such that the minor principal
     # axis aligns with x axis.
     points = (R @ points.T).T
-    normals = (R @ normals.T).T
+    if normals is not None:
+        normals = (R @ normals.T).T
     features = rotateFeatures(features, R)
     return points, normals, features, R
 
@@ -108,10 +109,7 @@ def cubeRescale(points, features=[], factor=1):
     features = reescaleFeatures(features, f)
     return scaled_points, features, f
 
-def normalize(point_cloud, parameters, features=[]):
-    points = point_cloud[:, :3]
-    normals = point_cloud[:, 3:]
-
+def normalize(points, parameters,  normals=None, features=[]):
     transforms = {
         'translation': np.zeros(3),
         'rotation': np.eye(3),
@@ -125,12 +123,11 @@ def normalize(point_cloud, parameters, features=[]):
         points, features, transforms['translation'] = centralize(points, features)
     if 'align' in parameters.keys() and parameters['align'] == True:
         points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features)
-    if 'add_noise' in parameters.keys():
+    if 'add_noise' in parameters.keys() and parameters['add_noise'] != 0.:
+        assert normals is not None
         points = addNoise(points, normals, parameters['add_noise'])
     if 'cube_rescale' in parameters.keys() and parameters['cube_rescale'] > 0:
         points, features, scale = cubeRescale(points, features, parameters['cube_rescale'])
         transforms['scale'] *= scale
 
-    point_cloud = np.concatenate((points, normals), axis=1)
-
-    return point_cloud, features, transforms
+    return points, normals, features, transforms
