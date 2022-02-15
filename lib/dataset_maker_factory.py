@@ -6,7 +6,6 @@ from copy import deepcopy
 
 class DatasetMakerFactory:
     MAKERS_DICT = {
-        'default': DefaultDatasetMaker,
         'spfn': SpfnDatasetMaker,
     }
 
