@@ -78,15 +78,14 @@ class SpfnDatasetMaker(BaseDatasetMaker):
             bar_position = bar_position if bar_position >= 0 else 0
 
             for i, feature in enumerate(features_data):
-                if len(features_point_indices[i]) > 0:
-                    soup_name = f'{filename}_soup_{i}'
-                    grp = h5_file.create_group(soup_name)
-                    points = gt_points[features_point_indices[i]]
-                    grp.create_dataset('gt_points', data=points)
-                    feature['name'] = soup_name
-                    feature['normalized'] = True
-                    feature = filterFeature(feature, SpfnDatasetMaker.FEATURES_BY_TYPE, SpfnDatasetMaker.FEATURES_TRANSLATION)
-                    grp.attrs['meta'] = np.void(pickle.dumps(feature))
+                soup_name = f'{filename}_soup_{i}'
+                grp = h5_file.create_group(soup_name)
+                points = gt_points[features_point_indices[i]]
+                grp.create_dataset('gt_points', data=points)
+                feature['name'] = soup_name
+                feature['normalized'] = True
+                feature = filterFeature(feature, SpfnDatasetMaker.FEATURES_BY_TYPE, SpfnDatasetMaker.FEATURES_TRANSLATION)
+                grp.attrs['meta'] = np.void(pickle.dumps(feature))
         return True
 
     def finish(self, permutation=None):

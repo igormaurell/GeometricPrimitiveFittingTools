@@ -90,9 +90,11 @@ def computeLabelsFromFace2Primitive(labels, features_data):
         index = face_2_primitive[labels[i]]
         features_points[index].append(i)
         labels[i] = index
-    features_points.pop(-1)
+    #features_points.pop(-1)
     
+    print(features_points)
+
     for i in range(0, len(features_points)):
         features_points[i] = np.array(features_points[i])
-
+    
     return labels, features_points

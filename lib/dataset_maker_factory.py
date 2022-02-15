@@ -4,7 +4,7 @@ from lib.utils import filterFeaturesData, computeLabelsFromFace2Primitive
 import random
 from copy import deepcopy
 
-class DatasetFactory:
+class DatasetMakerFactory:
     MAKERS_DICT = {
         'default': DefaultDatasetMaker,
         'spfn': SpfnDatasetMaker,
@@ -12,7 +12,7 @@ class DatasetFactory:
 
     def __init__(self, parameters):
         formats = parameters.keys()
-        assert all([format in DatasetFactory.MAKERS_DICT.keys() for format in formats])
+        assert all([format in DatasetMakerFactory.MAKERS_DICT.keys() for format in formats])
         self.filter_features_groups = []
         self.filter_features_groups_names = []
         self.makers = {}
@@ -26,7 +26,7 @@ class DatasetFactory:
                     index = self.filter_features_groups.index(parameters[format]['filter_features'])
                     self.filter_features_groups_names[index].append(format)
                 parameters[format].pop('filter_features')
-            self.makers[format] = DatasetFactory.MAKERS_DICT[format](parameters[format])
+            self.makers[format] = DatasetMakerFactory.MAKERS_DICT[format](parameters[format])
         random.seed(1234)
         self.step_num = 0
 
@@ -46,3 +46,4 @@ class DatasetFactory:
         permutation = random.shuffle(list(range(self.step_num)))
         for maker in self.makers.values():
             maker.finish(permutation)
+        self.step_num = 0
