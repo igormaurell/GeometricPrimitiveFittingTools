@@ -8,9 +8,9 @@ import os
 from lib.normalization import normalize
 from lib.utils import filterFeature
 
-from .base_dataset_handler import BaseDatasetHandler
+from .base_dataset_maker import BaseDatasetMaker
 
-class SpfnDatasetHandler(BaseDatasetHandler):
+class DefaultDatasetMaker(BaseDatasetMaker):
     FEATURES_BY_TYPE = {
         'plane': ['name', 'location', 'z_axis', 'normalized'],
         'cylinder': ['name', 'location', 'z_axis', 'radius', 'normalized'],
@@ -77,11 +77,10 @@ class SpfnDatasetHandler(BaseDatasetHandler):
                 if len(feature['point_indices']) > 0:
                     soup_name = f'{filename}_soup_{i}'
                     grp = h5_file.create_group(soup_name)
-                    points = gt_points[feature['point_indices']]
-                    grp.create_dataset('gt_points', data=points)
+                    grp.create_dataset('gt_indices', data=feature['point_indices'])
                     feature['name'] = soup_name
                     feature['normalized'] = True
-                    feature = filterFeature(feature, SpfnDatasetHandler.FEATURES_BY_TYPE, SpfnDatasetHandler.FEATURES_TRANSLATION)
+                    feature = filterFeature(feature, DefaultDatasetMaker.FEATURES_BY_TYPE, DefaultDatasetMaker.FEATURES_TRANSLATION)
                     grp.attrs['meta'] = np.void(pickle.dumps(feature))
         return True
 

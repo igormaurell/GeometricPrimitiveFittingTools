@@ -1,4 +1,4 @@
-from lib.handlers import *
+from lib.makers import *
 from lib.utils import filterFeaturesData, face2Primitive
 
 import random
@@ -6,8 +6,8 @@ from copy import deepcopy
 
 class DatasetFactory:
     MAKERS_DICT = {
-        'default': DefaultDatasetHandler,
-        'spfn': SpfnDatasetHandler,
+        'default': DefaultDatasetMaker,
+        'spfn': SpfnDatasetMaker,
     }
 
     def __init__(self, parameters):
