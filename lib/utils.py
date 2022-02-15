@@ -74,7 +74,7 @@ def filterFeaturesData(features_data, curve_types, surface_types):
             i+=1
     return features_data
 
-def face2Primitive(labels, features_data):
+def computeLabelsFromFace2Primitive(labels, features_data):
     max_face = np.max(labels)
     for feat in features_data:
         max_face = max(0 if len(feat['face_indices']) == 0 else max(feat['face_indices']), max_face)
@@ -85,15 +85,14 @@ def face2Primitive(labels, features_data):
             face_2_primitive[face] = i
             face_primitive_count[face] += 1
     assert len(np.unique(face_primitive_count)) <= 2
-
-    features_points = [[] for i in range(0, len(features_data))]
+    features_points = [[] for i in range(0, len(features_data) + 1)]
     for i in range(0, len(labels)):
         index = face_2_primitive[labels[i]]
-        if index != -1:
-            features_points[index].append(i)
+        features_points[index].append(i)
         labels[i] = index
-
-    for i, feature_points in enumerate(features_points):
-        features_data[i]['point_indices'] = np.array(feature_points)
+    features_points.pop(-1)
     
-    return face_2_primitive, features_data
+    for i in range(0, len(features_points)):
+        features_points[i] = np.array(features_points[i])
+
+    return labels, features_points

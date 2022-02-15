@@ -6,38 +6,22 @@ import uuid
 import os
 
 from lib.normalization import normalize
-from lib.utils import filterFeature, computeLabelsFromFace2Primitive
+from lib.utils import filterFeature
 
-from .base_dataset_maker import BaseDatasetMaker
+from .base_dataset_reader import BaseDatasetReader
 
-class DefaultDatasetMaker(BaseDatasetMaker):
-    FEATURES_BY_TYPE = {
-        'plane': ['name', 'location', 'z_axis', 'normalized'],
-        'cylinder': ['name', 'location', 'z_axis', 'radius', 'normalized'],
-        'cone': ['name', 'location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
-        'sphere': ['name', 'location', 'radius', 'normalized']
-    }
-
-    FEATURES_TRANSLATION = {}
+class DefaultDatasetReader(BaseDatasetReader):
 
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], filename=None):
-        if filename is None:
-            filename = str(uuid.uuid4())
-        
+    def step(self, filename):
         self.filenames.append(filename)
 
         data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
-        features_data = features_data['surfaces']
-
-        if os.path.exists(data_file_path):
-           return False
-
-        with h5py.File(data_file_path, 'w') as h5_file:
+        with h5py.File(data_file_path, 'r') as h5_file:
             noise_limit = 0.
             if 'add_noise' in self.normalization_parameters.keys():
                 noise_limit = self.normalization_parameters['add_noise']
@@ -55,9 +39,7 @@ class DefaultDatasetMaker(BaseDatasetMaker):
             del gt_normals
             gc.collect()
 
-            features_point_indices = []
             if labels is not None:
-                labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data)
                 h5_file.create_dataset('gt_labels', data=labels)
 
             del labels
@@ -78,20 +60,12 @@ class DefaultDatasetMaker(BaseDatasetMaker):
             bar_position = bar_position if bar_position >= 0 else 0
 
             for i, feature in enumerate(features_data):
-                if len(features_point_indices[i]) > 0:
+                if len(feature['point_indices']) > 0:
                     soup_name = f'{filename}_soup_{i}'
                     grp = h5_file.create_group(soup_name)
+                    grp.create_dataset('gt_indices', data=feature['point_indices'])
                     feature['name'] = soup_name
                     feature['normalized'] = True
-                    feature = filterFeature(feature, DefaultDatasetMaker.FEATURES_BY_TYPE, DefaultDatasetMaker.FEATURES_TRANSLATION)
+                    feature = filterFeature(feature, DefaultDatasetReader.FEATURES_BY_TYPE, DefaultDatasetReader.FEATURES_TRANSLATION)
                     grp.attrs['meta'] = np.void(pickle.dumps(feature))
         return True
-
-    def finish(self, permutation=None):
-        train_models, test_models = self.divideTrainVal(permutation)
-        with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w') as f:
-            text = ','.join([f'{filename}.h5' for filename in train_models])
-            f.write(text)
-        with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w') as f:
-            text = ','.join([f'{filename}.h5' for filename in test_models])
-            f.write(text)

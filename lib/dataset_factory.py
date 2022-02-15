@@ -1,5 +1,5 @@
 from lib.makers import *
-from lib.utils import filterFeaturesData, face2Primitive
+from lib.utils import filterFeaturesData, computeLabelsFromFace2Primitive
 
 import random
 from copy import deepcopy
@@ -37,7 +37,6 @@ class DatasetFactory:
             if len(features_data) > 0:
                 features_data_curr = filterFeaturesData(deepcopy(features_data_curr), self.filter_features_groups[i]['curve_types'], self.filter_features_groups[i]['surface_types'])
                 assert labels is not None and labels.shape[0] == points.shape[0]
-                labels_curr, features_data_curr = face2Primitive(labels_curr.copy(), features_data_curr['surfaces'])
 
             for format in self.filter_features_groups_names[i]:
                 self.makers[format].step(points, normals=normals, labels=labels_curr, features_data=features_data_curr, filename=filename)

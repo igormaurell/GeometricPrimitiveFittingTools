@@ -6,7 +6,7 @@ import uuid
 import os
 
 from lib.normalization import normalize
-from lib.utils import filterFeature
+from lib.utils import filterFeature, computeLabelsFromFace2Primitive
 
 from .base_dataset_maker import BaseDatasetMaker
 
@@ -32,6 +32,8 @@ class SpfnDatasetMaker(BaseDatasetMaker):
         data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
+        features_data = features_data['surfaces']
+
         if os.path.exists(data_file_path):
            return False
 
@@ -41,7 +43,7 @@ class SpfnDatasetMaker(BaseDatasetMaker):
                 noise_limit = self.normalization_parameters['add_noise']
                 self.normalization_parameters['add_noise'] = 0.
 
-            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(),features=features_data)
+            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
 
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
@@ -53,7 +55,9 @@ class SpfnDatasetMaker(BaseDatasetMaker):
             del gt_normals
             gc.collect()
 
+            features_point_indices = []
             if labels is not None:
+                labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data)
                 h5_file.create_dataset('gt_labels', data=labels)
 
             del labels
@@ -74,10 +78,10 @@ class SpfnDatasetMaker(BaseDatasetMaker):
             bar_position = bar_position if bar_position >= 0 else 0
 
             for i, feature in enumerate(features_data):
-                if len(feature['point_indices']) > 0:
+                if len(features_point_indices[i]) > 0:
                     soup_name = f'{filename}_soup_{i}'
                     grp = h5_file.create_group(soup_name)
-                    points = gt_points[feature['point_indices']]
+                    points = gt_points[features_point_indices[i]]
                     grp.create_dataset('gt_points', data=points)
                     feature['name'] = soup_name
                     feature['normalized'] = True
