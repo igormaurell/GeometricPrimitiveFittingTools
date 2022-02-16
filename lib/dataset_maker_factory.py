@@ -1,7 +1,6 @@
 from lib.makers import *
-from lib.utils import filterFeaturesData, computeLabelsFromFace2Primitive
-
 import random
+
 from copy import deepcopy
 
 class DatasetMakerFactory:
@@ -16,29 +15,13 @@ class DatasetMakerFactory:
         self.filter_features_groups_names = []
         self.makers = {}
         for format in formats:
-            #improving performance using filter features groups
-            if 'filter_features' in parameters[format].keys():
-                if parameters[format]['filter_features'] not in self.filter_features_groups:
-                    self.filter_features_groups.append(parameters[format]['filter_features'])
-                    self.filter_features_groups_names.append([format])
-                else:
-                    index = self.filter_features_groups.index(parameters[format]['filter_features'])
-                    self.filter_features_groups_names[index].append(format)
-                parameters[format].pop('filter_features')
             self.makers[format] = DatasetMakerFactory.MAKERS_DICT[format](parameters[format])
         random.seed(1234)
         self.step_num = 0
 
-    def step(self, points, normals=None, labels=None, features_data=[], filename = None):
-        for i in range(len(self.filter_features_groups)):
-            features_data_curr = features_data
-            labels_curr = labels
-            if len(features_data) > 0:
-                features_data_curr = filterFeaturesData(deepcopy(features_data_curr), self.filter_features_groups[i]['curve_types'], self.filter_features_groups[i]['surface_types'])
-                assert labels is not None and labels.shape[0] == points.shape[0]
-
-            for format in self.filter_features_groups_names[i]:
-                self.makers[format].step(points, normals=normals, labels=labels_curr, features_data=features_data_curr, filename=filename)
+    def step(self, points, normals=None, labels=None, features_data=[], filename=None, is_face_labels=False):
+        for maker in self.makers.values():
+            maker.step(points.copy(), normals=normals.copy(), labels=labels.copy(), features_data=deepcopy(features_data), filename=filename, is_face_labels=is_face_labels)
         self.step_num += 1
 
     def finish(self):

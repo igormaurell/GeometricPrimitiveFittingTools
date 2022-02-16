@@ -11,6 +11,7 @@ class BaseDatasetMaker:
         self.transform_folder_name = parameters['transform_folder_name'] if 'transform_folder_name' in parameters.keys() else None
         self.normalization_parameters = parameters['normalization'] if 'normalization' in parameters.keys() else None
         self.train_percentage = parameters['train_percentage'] if 'train_percentage' in parameters.keys() else None
+        self.filter_features_parameters = parameters['filter_features'] if 'filter_features' in parameters.keys() else None
         self.filenames = []
 
     def divideTrainVal(self, permutation=None):

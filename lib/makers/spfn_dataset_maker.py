@@ -6,7 +6,7 @@ import uuid
 import os
 
 from lib.normalization import normalize
-from lib.utils import filterFeature, computeLabelsFromFace2Primitive
+from lib.utils import filterFeaturesData, filterFeature, computeLabelsFromFace2Primitive, computeFeaturesPointIndices
 
 from .base_dataset_maker import BaseDatasetMaker
 
@@ -23,7 +23,7 @@ class SpfnDatasetMaker(BaseDatasetMaker):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], filename=None):
+    def step(self, points, normals=None, labels=None, features_data=[], filename=None, is_face_labels=False):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -55,14 +55,6 @@ class SpfnDatasetMaker(BaseDatasetMaker):
             del gt_normals
             gc.collect()
 
-            features_point_indices = []
-            if labels is not None:
-                labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data)
-                h5_file.create_dataset('gt_labels', data=labels)
-
-            del labels
-            gc.collect()
-
             if noise_limit != 0.:
                 self.normalization_parameters['add_noise'] = noise_limit
                 noisy_points, _, _, _ = normalize(points, self.normalization_parameters, normals=normals.copy())
@@ -72,20 +64,34 @@ class SpfnDatasetMaker(BaseDatasetMaker):
             del points
             gc.collect()
 
-            point_position = data_file_path.rfind('.')
-            point_position = point_position if point_position >= 0 else len(point_position)
-            bar_position = data_file_path.rfind('/')
-            bar_position = bar_position if bar_position >= 0 else 0
+            if labels is not None and len(features_data) > 0:
+                features_point_indices = []
+                if is_face_labels:
+                    if self.filter_features_parameters is not None:
+                        features_data = filterFeaturesData(features_data, self.filter_features_parameters['surface_types'])
+                    labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data)
+                else:
+                    if self.filter_features_parameters is not None:
+                        features_data, labels = filterFeaturesData(features_data, self.filter_features_parameters['surface_types'], labels=labels)
+                    features_point_indices = computeFeaturesPointIndices(labels)
 
-            for i, feature in enumerate(features_data):
-                soup_name = f'{filename}_soup_{i}'
-                grp = h5_file.create_group(soup_name)
-                points = gt_points[features_point_indices[i]]
-                grp.create_dataset('gt_points', data=points)
-                feature['name'] = soup_name
-                feature['normalized'] = True
-                feature = filterFeature(feature, SpfnDatasetMaker.FEATURES_BY_TYPE, SpfnDatasetMaker.FEATURES_TRANSLATION)
-                grp.attrs['meta'] = np.void(pickle.dumps(feature))
+                h5_file.create_dataset('gt_labels', data=labels)
+
+                point_position = data_file_path.rfind('.')
+                point_position = point_position if point_position >= 0 else len(point_position)
+                bar_position = data_file_path.rfind('/')
+                bar_position = bar_position if bar_position >= 0 else 0
+
+                for i, feature in enumerate(features_data):
+                    soup_name = f'{filename}_soup_{i}'
+                    grp = h5_file.create_group(soup_name)
+                    points = gt_points[features_point_indices[i]]
+                    grp.create_dataset('gt_points', data=points)
+                    feature['name'] = soup_name
+                    feature['normalized'] = True
+                    feature = filterFeature(feature, SpfnDatasetMaker.FEATURES_BY_TYPE, SpfnDatasetMaker.FEATURES_TRANSLATION)
+                    grp.attrs['meta'] = np.void(pickle.dumps(feature))
+
         return True
 
     def finish(self, permutation=None):

@@ -56,23 +56,38 @@ def filterFeature(feature_data, features_by_type, features_translation):
         feature_out[key if not key in features_translation.keys() else features_translation[key]] = feature_data[key]
     return feature_out
 
-def filterFeaturesData(features_data, curve_types, surface_types):
+def filterFeaturesData(features_data, surface_types, labels=None):
+    labels_map = np.zeros(len(features_data))
     i = 0
-    while i < len(features_data['curves']):
-        feature = features_data['curves'][i]
-        if feature['type'].lower() not in curve_types:
-            features_data['curves'].pop(i)
-        else:
-            i+=1
-
-    i = 0
-    while i < len(features_data['surfaces']):
-        feature = features_data['surfaces'][i]
+    j = 0
+    while i < len(features_data):
+        feature = features_data[i]
         if feature['type'].lower() not in surface_types:
-            features_data['surfaces'].pop(i)
+            features_data.pop(i)
+            labels_map[j] = -1
         else:
+            labels_map[j] = i
             i+=1
+        j+=1
+
+    if labels is not None:
+        for i in range(len(labels)):
+            labels[i] = labels_map[labels[i]]
+        return features_data, labels
+
     return features_data
+
+def computeFeaturesPointIndices(labels):
+    size = np.max(labels)
+    features_point_indices = [[] for i in range(0, len(size) + 1)]
+    for i in range(0, len(labels)):
+        features_point_indices[labels[i]].append(i)
+    features_point_indices.pop(-1)
+
+    for i in range(0, len(features_point_indices)):
+        features_point_indices[i] = np.array(features_point_indices[i], dtype=np.int64)
+
+    return features_point_indices
 
 def computeLabelsFromFace2Primitive(labels, features_data):
     max_face = np.max(labels)
@@ -85,16 +100,14 @@ def computeLabelsFromFace2Primitive(labels, features_data):
             face_2_primitive[face] = i
             face_primitive_count[face] += 1
     assert len(np.unique(face_primitive_count)) <= 2
-    features_points = [[] for i in range(0, len(features_data) + 1)]
+    features_point_indices = [[] for i in range(0, len(features_data) + 1)]
     for i in range(0, len(labels)):
         index = face_2_primitive[labels[i]]
-        features_points[index].append(i)
+        features_point_indices[index].append(i)
         labels[i] = index
-    #features_points.pop(-1)
-    
-    print(features_points)
+    features_point_indices.pop(-1)
 
-    for i in range(0, len(features_points)):
-        features_points[i] = np.array(features_points[i])
+    for i in range(0, len(features_point_indices)):
+        features_point_indices[i] = np.array(features_point_indices[i], dtype=np.int64)
     
-    return labels, features_points
+    return labels, features_point_indices
