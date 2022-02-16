@@ -110,10 +110,18 @@ if __name__ == '__main__':
     
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
 
-    finish = False
-    set_name = 'test'
-    while not finish:
+    # finish = False
+    # set_name = 'test'
+    # while not finish:
+    #     data = dataset_reader_factory.step(input_format, set_name=set_name)
+    #     finish = data['last_iteration']
+    
+    i = 0
+    set_name = 'train'
+    train_set_len = dataset_reader_factory.getSetLen(input_format, set_name)
+    while i < train_set_len:
         data = dataset_reader_factory.step(input_format, set_name=set_name)
-        print(data.keys())
+        j = 0
+        i += 1
 
     #dataset_maker_factory = DatasetMakerFactory(output_parameters)

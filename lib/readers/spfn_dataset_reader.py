@@ -18,6 +18,9 @@ class SpfnDatasetReader(BaseDatasetReader):
             self.sets['test'] = text.split(', ')
         self.sets_steps = {'train': 0, 'test': 0}
 
+    def getSetLen(self, set_name):
+        return len(self.sets[set_name])
+
     def step(self, set_name='train'):
         assert set_name in self.sets.keys()
 

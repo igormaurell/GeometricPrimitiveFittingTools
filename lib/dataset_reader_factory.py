@@ -14,6 +14,9 @@ class DatasetReaderFactory:
         for format in formats:
             self.readers[format] = DatasetReaderFactory.READERS_DICT[format](parameters[format])
             self.step_num[format] = 0
+    
+    def getSetLen(self, format, set_name):
+        return self.readers[format].getSetLen(set_name)
 
     def step(self, format, set_name='train'):
         assert format in self.readers.keys()
