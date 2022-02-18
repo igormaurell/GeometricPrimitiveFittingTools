@@ -9,27 +9,19 @@ class SpfnDatasetReader(BaseDatasetReader):
 
     def __init__(self, parameters):
         super().__init__(parameters)
-        self.sets = {'train': [], 'test': []}
+
         with open(join(self.data_folder_name, 'train_models.csv'), 'r') as f:
             text = f.read()
-            self.sets['train'] = text.split(', ')
+            self.filenames_by_set['train'] = text.split(', ')
         with open(join(self.data_folder_name, 'test_models.csv'), 'r') as f:
             text = f.read()
-            self.sets['test'] = text.split(', ')
-        self.sets_steps = {'train': 0, 'test': 0}
-
-    def setCurrentSetName(self, set_name):
-        assert set_name in self.sets.keys()
-        self.current_set_name = set_name
-    
-    def __len__(self):
-        return len(self.sets[self.current_set_name])
+            self.filenames_by_set['test'] = text.split(', ')
 
     def step(self):
-        assert self.current_set_name in self.sets.keys()
+        assert self.current_set_name in self.filenames_by_set.keys()
 
-        index = self.sets_steps[self.current_set_name]%len(self.sets[self.current_set_name])
-        filename = self.sets[self.current_set_name][index]
+        index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
+        filename = self.filenames_by_set[self.current_set_name][index]
         point_position = filename.rfind('.')
 
         data_file_path = join(self.data_folder_name, filename)
@@ -67,9 +59,9 @@ class SpfnDatasetReader(BaseDatasetReader):
             'features': features_data,
         }
 
-        self.sets_steps[self.current_set_name] += 1
+        self.steps_by_set[self.current_set_name] += 1
         
         return result
     
     def finish(self):
-        return True
+        super().finish()

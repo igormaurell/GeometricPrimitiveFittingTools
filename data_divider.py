@@ -109,7 +109,7 @@ if __name__ == '__main__':
             makedirs(output_transform_format_folder_name, exist_ok=True)
     
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
-    dataset_reader_factory.setCurrentFormat(input_format)
+    reader = dataset_reader_factory.getReaderByFormat(input_format)
 
     # finish = False
     # set_name = 'test'
@@ -118,18 +118,18 @@ if __name__ == '__main__':
     #     finish = data['last_iteration']
     
     i = 0
-    dataset_reader_factory.setCurrentSetName('train')
-    train_set_len = len(dataset_reader_factory)
+    reader.setCurrentSetName('train')
+    train_set_len = len(reader)
     div = number_train//train_set_len
     mod = number_train%train_set_len
-    n_models = [div + 1 if i < mod else div  for i in range(train_set_len)]
+    n_models = [div + 1 if i < mod else div for i in range(train_set_len)]
     while i < train_set_len:
-        data = dataset_reader_factory.step()
+        data = reader.step()
         j = 0
         while j < n_models[i]:
-            pass
             #divide
             #make
+            j += 1
         i += 1
 
     #dataset_maker_factory = DatasetMakerFactory(output_parameters)
