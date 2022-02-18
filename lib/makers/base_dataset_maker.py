@@ -25,8 +25,12 @@ class BaseDatasetMaker:
         if len(self.filenames_by_set['train']) > 0 and len(self.filenames_by_set['test']) > 0:
             return self.filenames_by_set['train'], self.filenames_by_set['test']
         elif len(self.filenames_by_set['train']) > 0:
+            if self.train_percentage is None:
+                return self.filenames_by_set['train'], []
             filenames = self.filenames_by_set['train']
         elif len(self.filenames_by_set['test']) > 0:
+            if self.train_percentage is None:
+                return [], self.filenames_by_set['test']
             filenames = self.filenames_by_set['test']
         else:
             return [], []

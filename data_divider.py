@@ -9,6 +9,8 @@ from os.path import join, exists
 from lib.dataset_maker_factory import DatasetMakerFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
+from lib.division import divideOnceRandom
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
@@ -19,7 +21,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-c', '--centralize', type=bool, default = True, help='')
     parser.add_argument('-a', '--align', type=bool, default = True, help='')
-    parser.add_argument('-nl', '--noise_limit', type=float, default = 0., help='')
+    parser.add_argument('-nl', '--noise_limit', type=float, default = 10., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 1, help='')
 
     for format in DatasetMakerFactory.MAKERS_DICT.keys():
@@ -41,6 +43,8 @@ if __name__ == '__main__':
     parser.add_argument('-rs', '--region_size', type=str, default='2000,2000', help='')
     parser.add_argument('-np', '--number_points', type=int, default=10000, help='')
     parser.add_argument('-nt', '--number_train', type=int, default=1000, help='')
+    parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
+    parser.add_argument('-rvt', '--relative_volume_threshold', type=float, default=0.2, help='')
 
     args = vars(parser.parse_args())
 
@@ -66,6 +70,8 @@ if __name__ == '__main__':
     region_size = [int(s) for s in args['region_size'].split(',')]
     number_points = args['number_points']
     number_train = args['number_train']
+    abs_volume_threshold = args['abs_volume_threshold']
+    relative_volume_threshold = args['relative_volume_threshold']
 
     input_parameters = {}
     output_parameters = {}
@@ -111,6 +117,9 @@ if __name__ == '__main__':
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
     reader = dataset_reader_factory.getReaderByFormat(input_format)
 
+    dataset_maker_factory = DatasetMakerFactory(output_parameters)
+
+
     # finish = False
     # set_name = 'test'
     # while not finish:
@@ -119,17 +128,23 @@ if __name__ == '__main__':
     
     i = 0
     reader.setCurrentSetName('train')
+    dataset_maker_factory.setCurrentSetNameAllFormats('train')
     train_set_len = len(reader)
     div = number_train//train_set_len
     mod = number_train%train_set_len
     n_models = [div + 1 if i < mod else div for i in range(train_set_len)]
     while i < train_set_len:
         data = reader.step()
+        filename = data['filename'] if 'filename' in data.keys() else str(i)
         j = 0
         while j < n_models[i]:
-            #divide
-            #make
+            filename_curr = f'{filename}_{j}'
+            result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], region_size,
+                                      region_axis, number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
+                                      relative_volume_threshold=relative_volume_threshold)
+            dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
+                                                 features_data=result['features'], filename=filename_curr)
             j += 1
         i += 1
-
-    #dataset_maker_factory = DatasetMakerFactory(output_parameters)
+    reader.finish()
+    dataset_maker_factory.finishAllFormats()

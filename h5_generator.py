@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
     parser.add_argument('-c', '--centralize', type=bool, default = False, help='')
     parser.add_argument('-a', '--align', type=bool, default = False, help='')
-    parser.add_argument('-nl', '--noise_limit', type=float, default = 10., help='')
+    parser.add_argument('-nl', '--noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
     for format in DatasetMakerFactory.MAKERS_DICT.keys():

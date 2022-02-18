@@ -99,7 +99,7 @@ def filterFeaturesData(features_data, surface_types, labels=None):
 
 def computeFeaturesPointIndices(labels):
     size = np.max(labels)
-    features_point_indices = [[] for i in range(0, len(size) + 1)]
+    features_point_indices = [[] for i in range(0, size + 2)]
     for i in range(0, len(labels)):
         features_point_indices[labels[i]].append(i)
     features_point_indices.pop(-1)

@@ -20,6 +20,10 @@ class DatasetMakerFactory:
     def getMakerByFormat(self, format):
         return self.makers[format]
 
+    def setCurrentSetNameAllFormats(self, set_name):
+        for maker in self.makers.values():
+            maker.setCurrentSetName(set_name)
+
     def stepAllFormats(self, points, normals=None, labels=None, features_data=[], filename=None, is_face_labels=False):
         for maker in self.makers.values():
             maker.step(points.copy(), normals=normals.copy(), labels=labels.copy(), features_data=deepcopy(features_data), filename=filename, is_face_labels=is_face_labels)

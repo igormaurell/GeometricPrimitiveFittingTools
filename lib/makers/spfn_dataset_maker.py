@@ -12,10 +12,10 @@ from .base_dataset_maker import BaseDatasetMaker
 
 class SpfnDatasetMaker(BaseDatasetMaker):
     FEATURES_BY_TYPE = {
-        'plane': ['name', 'location', 'z_axis', 'normalized'],
-        'cylinder': ['name', 'location', 'z_axis', 'radius', 'normalized'],
-        'cone': ['name', 'location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
-        'sphere': ['name', 'location', 'radius', 'normalized']
+        'plane': ['type', 'name', 'location', 'z_axis', 'normalized'],
+        'cylinder': ['type', 'name', 'location', 'z_axis', 'radius', 'normalized'],
+        'cone': ['type', 'name', 'location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
+        'sphere': ['type', 'name', 'location', 'radius', 'normalized']
     }
 
     FEATURES_TRANSLATION = {}
@@ -32,7 +32,8 @@ class SpfnDatasetMaker(BaseDatasetMaker):
         data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
-        features_data = features_data['surfaces']
+        if type(features_data) == dict:
+            features_data = features_data['surfaces']
 
         if os.path.exists(data_file_path):
            return False

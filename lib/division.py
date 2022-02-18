@@ -6,11 +6,11 @@ from lib.utils import computeFeaturesPointIndices, sortedIndicesIntersection
 def computeRegionAroundPoint(point, region_size, region_axis):
     assert region_axis in ['x', 'y', 'z']
     if region_axis == 'x':
-        size = np.array([np.inf, region_size[0], region_axis[1]])
+        size = np.array([np.inf, region_size[0], region_size[1]])
     elif region_axis == 'y':
-        size = np.array([region_size[0], np.inf, region_axis[1]])
+        size = np.array([region_size[0], np.inf, region_size[1]])
     else:
-        size = np.array([region_size[0], region_axis[1], np.inf])
+        size = np.array([region_size[0], region_size[1], np.inf])
     
     ll = point - size/2
     ur = point + size/2
@@ -55,7 +55,7 @@ def featuresIndicesByPointsIndices(features_point_indices, points_indices, filte
 
 
 
-def cropRdRegionWithRdSampledPoints(points, normals, labels, features_data, region_size, region_axis, n_points,
+def divideOnceRandom(points, normals, labels, features_data, region_size, region_axis, n_points,
                                     filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
     middle_point = points[random.randint(0, points.shape[0])]
 
@@ -73,19 +73,18 @@ def cropRdRegionWithRdSampledPoints(points, normals, labels, features_data, regi
                                                       abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
 
     features_data_part = [None for f in features_indices]
-    labels_part_new = np.zeros(len(labels_part)) - 1
+    labels_part_new = np.zeros(len(labels_part), dtype=np.int64) - 1
     for i, index in enumerate(features_indices):
         features_data_part[i] = features_data[index]
         labels_part_new[labels_part == index] = i
     features_data = features_data_part
     labels_part = labels_part_new
 
-
     result = {
         'points': points_part,
         'normals': normals_part,
-        'labels': labels,
-        'features': features_data,
+        'labels': labels_part,
+        'features': features_data_part,
     }
 
     return result
