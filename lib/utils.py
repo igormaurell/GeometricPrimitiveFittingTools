@@ -2,9 +2,29 @@ import numpy as np
 import pickle
 import json
 import yaml
+from numba import njit
 
 from os.path import exists
 from os import system
+
+@njit
+def sortedIndicesIntersection(a, b):
+    i = 0
+    j = 0
+    k = 0
+    intersect = np.empty_like(a)
+    while i< a.size and j < b.size:
+            if a[i]==b[j]: # the 99% case
+                intersect[k]=a[i]
+                k+=1
+                i+=1
+                j+=1
+            elif a[i]<b[j]:
+                i+=1
+            else : 
+                j+=1
+    return intersect[:k]
+
 
 '''POINT CLOUDS'''
 

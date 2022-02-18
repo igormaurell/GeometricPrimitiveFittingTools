@@ -53,8 +53,8 @@ class SpfnDatasetReader(BaseDatasetReader):
 
         result = {
             'noisy_points': noisy_points,
-            'gt_points': gt_points,
-            'gt_normals': gt_normals,
+            'points': gt_points,
+            'normals': gt_normals,
             'labels': labels,
             'features': features_data,
         }
