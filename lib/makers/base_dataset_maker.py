@@ -12,22 +12,35 @@ class BaseDatasetMaker:
         self.normalization_parameters = parameters['normalization'] if 'normalization' in parameters.keys() else None
         self.train_percentage = parameters['train_percentage'] if 'train_percentage' in parameters.keys() else None
         self.filter_features_parameters = parameters['filter_features'] if 'filter_features' in parameters.keys() else None
-        self.filenames = []
+        
+        self.current_set_name = 'train'
+        self.filenames_by_set = {'train': [], 'test': []}
 
-    def divideTrainVal(self, permutation=None):
+    def divisionTrainVal(self, permutation=None):
+        if len(self.filenames_by_set['train']) > 0 and len(self.filenames_by_set['test']) > 0:
+            return self.filenames_by_set['train'], self.filenames_by_set['test']
+        elif len(self.filenames_by_set['train']) > 0:
+            filenames = self.filenames_by_set['train']
+        elif len(self.filenames_by_set['test']) > 0:
+            filenames = self.filenames_by_set['test']
+        else:
+            return [], []
         if permutation is None:
-            filenames = deepcopy(self.filenames)
             random.shuffle(filenames)
         else:
-            filenames = [self.filenames[index] for index in permutation]
+            filenames = [filenames[index] for index in permutation]
         n_train = len(filenames)*(self.train_percentage/100.)
         n_train = ceil(n_train) if n_train < 1 else floor(n_train)
         return filenames[:n_train], filenames[n_train:]
+    
+    def setCurrentSetName(self, set_name):
+        assert set_name in self.filenames_by_set.keys()
+        self.current_set_name = set_name
 
-    @abstractmethod
-    def step(self, points, normals=None, labels=None, features_data=[], filename=None):
-        pass
-
-    @abstractmethod
     def finish(self, permutation=None):
+        self.current_set_name = 'train'
+        self.filenames_by_set = {'train': [], 'test': []}
+
+    @abstractmethod
+    def step(self, points, normals=None, labels=None, features_data=[], filename=None, is_face_labels=False):
         pass

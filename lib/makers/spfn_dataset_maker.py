@@ -27,7 +27,7 @@ class SpfnDatasetMaker(BaseDatasetMaker):
         if filename is None:
             filename = str(uuid.uuid4())
         
-        self.filenames.append(filename)
+        self.filenames_by_set[self.current_set_name].append(filename)
 
         data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
@@ -95,10 +95,13 @@ class SpfnDatasetMaker(BaseDatasetMaker):
         return True
 
     def finish(self, permutation=None):
-        train_models, test_models = self.divideTrainVal(permutation)
+        train_models, test_models = self.divisionTrainVal(permutation=permutation)
+        
         with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w') as f:
             text = ','.join([f'{filename}.h5' for filename in train_models])
             f.write(text)
         with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w') as f:
             text = ','.join([f'{filename}.h5' for filename in test_models])
             f.write(text)
+
+        super().finish()

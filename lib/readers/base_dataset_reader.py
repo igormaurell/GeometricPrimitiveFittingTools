@@ -7,7 +7,16 @@ class BaseDatasetReader:
         self.data_folder_name = parameters['data_folder_name'] if 'data_folder_name' in parameters.keys() else None
         self.transform_folder_name = parameters['transform_folder_name'] if 'transform_folder_name' in parameters.keys() else None
         self.filenames = []
+        self.current_set_name = 'train'
+    
+    @abstractmethod
+    def setCurrentSetName(self, set_name):
+        pass
 
     @abstractmethod
-    def step(self, filename):
+    def __len__(self):
+        pass
+
+    @abstractmethod
+    def step(self):
         pass

@@ -14,14 +14,25 @@ class DatasetReaderFactory:
         for format in formats:
             self.readers[format] = DatasetReaderFactory.READERS_DICT[format](parameters[format])
             self.step_num[format] = 0
+        self.current_format = formats[0]
     
-    def getSetLen(self, format, set_name):
-        return self.readers[format].getSetLen(set_name)
-
-    def step(self, format, set_name='train'):
+    def setCurrentFormat(self, format):
+        self.current_format = format
+    
+    def setCurrentSetName(self, set_name):
+        self.readers[self.current_format].setCurrentSetName(set_name)
+    
+    def setCurrentFormatAndSetName(self, format, set_name):
+        self.setCurrentFormat(format)
+        self.setCurrentSetName(set_name)
+    
+    def __len__(self):
+        return len(self.readers[self.current_format])
+    
+    def step(self):
         assert format in self.readers.keys()
-        result = self.readers[format].step(set_name=set_name)
-        self.step_num[format] += 1
+        result = self.readers[self.current_format].step()
+        self.step_num[self.current_format] += 1
         return result
 
     def finish(self, format):

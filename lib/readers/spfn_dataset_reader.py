@@ -18,14 +18,18 @@ class SpfnDatasetReader(BaseDatasetReader):
             self.sets['test'] = text.split(', ')
         self.sets_steps = {'train': 0, 'test': 0}
 
-    def getSetLen(self, set_name):
-        return len(self.sets[set_name])
-
-    def step(self, set_name='train'):
+    def setCurrentSetName(self, set_name):
         assert set_name in self.sets.keys()
+        self.current_set_name = set_name
+    
+    def __len__(self):
+        return len(self.sets[self.current_set_name])
 
-        index = self.sets_steps[set_name]%len(self.sets[set_name])
-        filename = self.sets[set_name][index]
+    def step(self):
+        assert self.current_set_name in self.sets.keys()
+
+        index = self.sets_steps[self.current_set_name]%len(self.sets[self.current_set_name])
+        filename = self.sets[self.current_set_name][index]
         point_position = filename.rfind('.')
 
         data_file_path = join(self.data_folder_name, filename)
@@ -61,10 +65,9 @@ class SpfnDatasetReader(BaseDatasetReader):
             'gt_normals': gt_normals,
             'labels': labels,
             'features': features_data,
-            'last_iteration': (index + 1) == len(self.sets[set_name])
         }
 
-        self.sets_steps[set_name] += 1
+        self.sets_steps[self.current_set_name] += 1
         
         return result
     
