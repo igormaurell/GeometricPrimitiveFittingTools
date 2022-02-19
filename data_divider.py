@@ -9,7 +9,7 @@ from os.path import join, exists
 from lib.dataset_maker_factory import DatasetMakerFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
-from lib.division import divideOnceRandom
+from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -39,8 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
     parser.add_argument('-d_dt', '--delete_old_data', action='store_true', help='')
 
-    parser.add_argument('-ra', '--region_axis', type=str, default='z', help='')
-    parser.add_argument('-rs', '--region_size', type=str, default='2000,2000', help='')
+    parser.add_argument('-ra', '--region_axis', type=str, default='y', help='')
+    parser.add_argument('-rs', '--region_size', type=str, default='4000,4000', help='')
     parser.add_argument('-np', '--number_points', type=int, default=10000, help='')
     parser.add_argument('-nt', '--number_train', type=int, default=1000, help='')
     parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
@@ -118,14 +118,28 @@ if __name__ == '__main__':
     reader = dataset_reader_factory.getReaderByFormat(input_format)
 
     dataset_maker_factory = DatasetMakerFactory(output_parameters)
+    import numpy as np
+    i = 0
+    reader.setCurrentSetName('test')
+    dataset_maker_factory.setCurrentSetNameAllFormats('test')
+    while i < len(reader):
+        data = reader.step()
+        regions_grid = computeGridOfRegions(data['points'], region_size, region_axis)
+        filename = data['filename'] if 'filename' in data.keys() else str(i)
+        for j in range(len(regions_grid)):
+            for k in range(len(regions_grid[i])):
+                filename_curr = f'{filename}_{j}_{k}'
+                result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'], region_size, region_axis,
+                                            number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
+                                            relative_volume_threshold=relative_volume_threshold)
+                n_p = result['points'].shape[0]
+                if n_p < number_points:
+                    print(f'Point cloud has {n_p} points. The desired amount is {number_points}')
+                else:
+                    dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
+                                                         features_data=result['features'], filename=filename_curr)
+        i += 1
 
-
-    # finish = False
-    # set_name = 'test'
-    # while not finish:
-    #     data = dataset_reader_factory.step(input_format, set_name=set_name)
-    #     finish = data['last_iteration']
-    
     i = 0
     reader.setCurrentSetName('train')
     dataset_maker_factory.setCurrentSetNameAllFormats('train')

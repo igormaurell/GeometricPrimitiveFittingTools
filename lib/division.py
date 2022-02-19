@@ -1,23 +1,59 @@
+from copy import deepcopy
 import numpy as np
 import random
 
 from lib.utils import computeFeaturesPointIndices, sortedIndicesIntersection
 
-def computeRegionAroundPoint(point, region_size, region_axis):
+def compute3DRegionSize(region_size, region_axis):
     assert region_axis in ['x', 'y', 'z']
-    if region_axis == 'x':
-        size = np.array([np.inf, region_size[0], region_size[1]])
-    elif region_axis == 'y':
-        size = np.array([region_size[0], np.inf, region_size[1]])
-    else:
-        size = np.array([region_size[0], region_size[1], np.inf])
+    index = ['x', 'y', 'z'].index(region_axis)
+    size = list(region_size)
+    size.insert(index, np.inf)
+    size = np.array(size)
+    return size
+
+def computeGridOfRegions(points, region_size, region_axis):
+    assert region_axis in ['x', 'y', 'z']
+    index = ['x', 'y', 'z'].index(region_axis)
+
+    size = np.array(region_size)
+
+    min = np.min(points, 0)
+    min = np.delete(min, index)
+    max = np.max(points, 0)
+    max = np.delete(max, index)
+    points_size = max - min
     
+    num_parts = np.ceil(points_size/size)
+    num_parts = num_parts.astype('int64')
+
+    regions = [[ None for j in range(num_parts[1])] for i in range(num_parts[0])]
+
+    for i in range(num_parts[0]):
+        m0 = min[0] + i*size[0]
+        M0 = min[0] + (i+1)*size[0]
+        for j in range(num_parts[1]):
+            m1 = min[1] + j*size[1]
+            M1 = min[1] + (j+1)*size[1]
+            ll = [m0, m1]
+            ll.insert(index, -np.inf)
+            ll = np.array(ll)
+            ur = [M0, M1]
+            ur.insert(index, np.inf)
+            ur = np.array(ur)
+            regions[i][j] = (ll, ur)
+        
+    return regions
+
+def computeRegionAroundPoint(point, region_size, region_axis):
+    size = compute3DRegionSize(region_size, region_axis)
+
     ll = point - size/2
     ur = point + size/2
 
     return ll, ur
 
-def randomSamplingOnRegion(points, ll, ur, n_points):
+def randomSamplingPointsOnRegion(points, ll, ur, n_points):
     inidx = np.all(np.logical_and(points >= ll, points <= ur), axis=1)
     indices = np.arange(0, inidx.shape[0], 1, dtype=int)
     indices = indices[inidx]
@@ -53,15 +89,12 @@ def featuresIndicesByPointsIndices(features_point_indices, points_indices, filte
 
     return np.array(features_indices)
 
+def sampleDataOnRegion(region, points, normals, labels, features_data, region_size, region_axis, n_points,
+                   filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
+    
+    ll, ur = region
 
-
-def divideOnceRandom(points, normals, labels, features_data, region_size, region_axis, n_points,
-                                    filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
-    middle_point = points[random.randint(0, points.shape[0])]
-
-    ll, ur = computeRegionAroundPoint(middle_point, region_size, region_axis)
-
-    indices = randomSamplingOnRegion(points, ll, ur, n_points)
+    indices = randomSamplingPointsOnRegion(points, ll, ur, n_points)
 
     points_part = points[indices]
     normals_part = normals[indices]
@@ -88,3 +121,13 @@ def divideOnceRandom(points, normals, labels, features_data, region_size, region
     }
 
     return result
+
+def divideOnceRandom(points, normals, labels, features_data, region_size, region_axis, n_points,
+                     filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
+    
+    middle_point = points[random.randint(0, points.shape[0])]
+
+    region = computeRegionAroundPoint(middle_point, region_size, region_axis)
+
+    return sampleDataOnRegion(region, points, normals, labels, features_data, region_size, region_axis, n_points, filter_features_by_volume=filter_features_by_volume,
+                       abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
