@@ -1,5 +1,6 @@
 import pickle
 import h5py
+import csv
 import numpy as np
 import gc
 import uuid
@@ -92,17 +93,19 @@ class SpfnDatasetMaker(BaseDatasetMaker):
                     feature['normalized'] = True
                     feature = filterFeature(feature, SpfnDatasetMaker.FEATURES_BY_TYPE, SpfnDatasetMaker.FEATURES_TRANSLATION)
                     grp.attrs['meta'] = np.void(pickle.dumps(feature))
-
+            
         return True
 
     def finish(self, permutation=None):
         train_models, test_models = self.divisionTrainVal(permutation=permutation)
         
-        with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w') as f:
-            text = ','.join([f'{filename}.h5' for filename in train_models])
-            f.write(text)
-        with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w') as f:
-            text = ','.join([f'{filename}.h5' for filename in test_models])
-            f.write(text)
+        with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w', newline='') as f:
+            writer = csv.writer(f, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow([f'{filename}.h5' for filename in train_models])
+        with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w', newline='') as f:
+            writer = csv.writer(f, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow([f'{filename}.h5' for filename in test_models])
 
         super().finish()

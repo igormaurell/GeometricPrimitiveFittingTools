@@ -110,24 +110,24 @@ if __name__ == '__main__':
         if delete_old_data:
             if exists(output_dataset_format_folder_name):
                 rmtree(output_dataset_format_folder_name)
-            makedirs(output_dataset_folder_name, exist_ok=True)
-            makedirs(output_data_format_folder_name, exist_ok=True)
-            makedirs(output_transform_format_folder_name, exist_ok=True)
+        makedirs(output_dataset_folder_name, exist_ok=True)
+        makedirs(output_data_format_folder_name, exist_ok=True)
+        makedirs(output_transform_format_folder_name, exist_ok=True)
     
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
     reader = dataset_reader_factory.getReaderByFormat(input_format)
 
     dataset_maker_factory = DatasetMakerFactory(output_parameters)
     import numpy as np
-    i = 0
     reader.setCurrentSetName('test')
     dataset_maker_factory.setCurrentSetNameAllFormats('test')
-    while i < len(reader):
+    print('Generating test dataset:')
+    for i in tqdm(range(len(reader))):
         data = reader.step()
         regions_grid = computeGridOfRegions(data['points'], region_size, region_axis)
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         for j in range(len(regions_grid)):
-            for k in range(len(regions_grid[i])):
+            for k in range(len(regions_grid[j])):
                 filename_curr = f'{filename}_{j}_{k}'
                 result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'], region_size, region_axis,
                                             number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
@@ -138,27 +138,24 @@ if __name__ == '__main__':
                 else:
                     dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                          features_data=result['features'], filename=filename_curr)
-        i += 1
 
-    i = 0
     reader.setCurrentSetName('train')
     dataset_maker_factory.setCurrentSetNameAllFormats('train')
     train_set_len = len(reader)
     div = number_train//train_set_len
     mod = number_train%train_set_len
     n_models = [div + 1 if i < mod else div for i in range(train_set_len)]
-    while i < train_set_len:
+    print('Generating training dataset:')
+    for i in tqdm(range(train_set_len)):
         data = reader.step()
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         j = 0
-        while j < n_models[i]:
+        for j in range(n_models[i]):
             filename_curr = f'{filename}_{j}'
             result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], region_size,
                                       region_axis, number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                       relative_volume_threshold=relative_volume_threshold)
             dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                  features_data=result['features'], filename=filename_curr)
-            j += 1
-        i += 1
     reader.finish()
     dataset_maker_factory.finishAllFormats()
