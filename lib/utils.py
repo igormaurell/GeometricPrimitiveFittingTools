@@ -33,9 +33,14 @@ def generatePCD(pc_filename, mps_ns, mesh_filename=None):
         if mesh_filename is None:
             return []
         system(f'mesh_point_sampling {mesh_filename} {pc_filename} --n_samples {mps_ns} --write_normals --no_vis_result > /dev/null')
-
     return True
 
+def writeColorPointCloudOBJ(out_filename, point_cloud):
+    with open(out_filename, 'w') as fout:
+        text = ''
+        for point in point_cloud:
+            text += 'v %f %f %f %d %d %d\n' % (point[0], point[1], point[2], point[3], point[4], point[5])
+        fout.write(text)
 
 '''FEATURES'''
 

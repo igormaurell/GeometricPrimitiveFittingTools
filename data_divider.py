@@ -6,11 +6,21 @@ from shutil import rmtree
 from os import makedirs
 from os.path import join, exists
 
+import numpy as np
+
 from lib.dataset_maker_factory import DatasetMakerFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
+from lib.utils import writeColorPointCloudOBJ
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion
 
+def computeRGB(value):
+    r = value%256
+    value = value//256
+    g = value%256
+    b = value//256
+    return (r, g, b)
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
@@ -39,6 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
     parser.add_argument('-d_dt', '--delete_old_data', action='store_true', help='')
 
+    parser.add_argument('-wo', '--write_obj', action='store_true', help='')
     parser.add_argument('-ra', '--region_axis', type=str, default='y', help='')
     parser.add_argument('-rs', '--region_size', type=str, default='4000,4000', help='')
     parser.add_argument('-np', '--number_points', type=int, default=10000, help='')
@@ -66,6 +77,7 @@ if __name__ == '__main__':
     features_folder_name = join(folder_name, args['features_folder_name'])
     pc_folder_name = join(folder_name, args['pc_folder_name'])
 
+    write_obj = args['write_obj']
     region_axis = args['region_axis']
     region_size = [int(s) for s in args['region_size'].split(',')]
     number_points = args['number_points']
@@ -110,15 +122,17 @@ if __name__ == '__main__':
         if delete_old_data:
             if exists(output_dataset_format_folder_name):
                 rmtree(output_dataset_format_folder_name)
-        makedirs(output_dataset_folder_name, exist_ok=True)
+        makedirs(output_dataset_format_folder_name, exist_ok=True)
         makedirs(output_data_format_folder_name, exist_ok=True)
         makedirs(output_transform_format_folder_name, exist_ok=True)
     
+    colors = np.random.permutation(256*256*256)
+
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
     reader = dataset_reader_factory.getReaderByFormat(input_format)
 
     dataset_maker_factory = DatasetMakerFactory(output_parameters)
-    import numpy as np
+    point_cloud_full = None
     reader.setCurrentSetName('test')
     dataset_maker_factory.setCurrentSetNameAllFormats('test')
     print('Generating test dataset:')
@@ -132,13 +146,25 @@ if __name__ == '__main__':
                 result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'], region_size, region_axis,
                                             number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                             relative_volume_threshold=relative_volume_threshold)
+                
                 n_p = result['points'].shape[0]
                 if n_p < number_points:
                     print(f'Point cloud has {n_p} points. The desired amount is {number_points}')
                 else:
+                    if write_obj:
+                        points = np.zeros((result['points'].shape[0], 6))
+                        points[:, 0:3] = result['points']
+                        points[:, 3:6] = np.array(computeRGB(colors[j*len(regions_grid[j]) + k]))
+                        if point_cloud_full is None:
+                            point_cloud_full = points.copy()
+                        else:
+                            point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
                     dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                          features_data=result['features'], filename=filename_curr)
+        if write_obj:
+            writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_test.obj', point_cloud_full)
 
+    point_cloud_full = None
     reader.setCurrentSetName('train')
     dataset_maker_factory.setCurrentSetNameAllFormats('train')
     train_set_len = len(reader)
@@ -155,7 +181,21 @@ if __name__ == '__main__':
             result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], region_size,
                                       region_axis, number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                       relative_volume_threshold=relative_volume_threshold)
-            dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
-                                                 features_data=result['features'], filename=filename_curr)
+            n_p = result['points'].shape[0]
+            if n_p < number_points:
+                print(f'Point cloud has {n_p} points. The desired amount is {number_points}')
+            else:
+                if write_obj:
+                    points = np.zeros((result['points'].shape[0], 6))
+                    points[:, 0:3] = result['points']
+                    points[:, 3:6] = np.array(computeRGB(colors[j]))
+                    if point_cloud_full is None:
+                        point_cloud_full = points.copy()
+                    else:
+                        point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
+                dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
+                                                     features_data=result['features'], filename=filename_curr)
+        if write_obj:
+            writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_train.obj', point_cloud_full)
     reader.finish()
     dataset_maker_factory.finishAllFormats()
