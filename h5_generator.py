@@ -9,25 +9,24 @@ import numpy as np
 from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
-from copy import deepcopy
 
 from lib.utils import generatePCD, loadFeatures
-from lib.dataset_factory import DatasetFactory
+from lib.dataset_maker_factory import DatasetMakerFactory
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
-    formats_txt = ','.join(DatasetFactory.MAKERS_DICT.keys())
-    parser.add_argument('h5_formats', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
+    formats_txt = ','.join(DatasetMakerFactory.MAKERS_DICT.keys())
+    parser.add_argument('formats', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
 
     parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
     parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
     parser.add_argument('-c', '--centralize', type=bool, default = False, help='')
     parser.add_argument('-a', '--align', type=bool, default = False, help='')
-    parser.add_argument('-nl', '--noise_limit', type=float, default = 10., help='')
+    parser.add_argument('-nl', '--noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
-    for format in DatasetFactory.MAKERS_DICT.keys():
+    for format in DatasetMakerFactory.MAKERS_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
         parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
         parser.add_argument(f'-{format}_c', f'--{format}_centralize', type=bool, help='')
@@ -50,7 +49,7 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     folder_name = args['folder']
-    h5_formats = [s.lower() for s in args['h5_formats'].split(',')]
+    formats = [s.lower() for s in args['formats'].split(',')]
     curve_types = [s.lower() for s in args['curve_types'].split(',')]
     surface_types = [s.lower() for s in args['surface_types'].split(',')]
     centralize = args['centralize']
@@ -71,8 +70,8 @@ if __name__ == '__main__':
     pc_folder_name = join(folder_name, args['pc_folder_name'])
 
     parameters = {}
-    for format in h5_formats:
-        parameters[format] = {'filter_features': {}, 'normalization': {}}
+    for format in formats:
+        parameters[format] = {'filter_features': {}, 'normalization': {}, 'input': {}}
 
         p = args[f'{format}_curve_types']
         parameters[format]['filter_features']['curve_types'] = p if p is not None else curve_types
@@ -87,7 +86,7 @@ if __name__ == '__main__':
         p = args[f'{format}_cube_reescale_factor']
         parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor
         parameters[format]['train_percentage'] = train_percentage
-        dataset_format_folder_name = join(folder_name, format, dataset_folder_name)
+        dataset_format_folder_name = join(folder_name, dataset_folder_name, format)
         parameters[format]['dataset_folder_name'] = dataset_format_folder_name
         data_format_folder_name = join(dataset_format_folder_name, data_folder_name)
         parameters[format]['data_folder_name'] = data_format_folder_name
@@ -96,9 +95,9 @@ if __name__ == '__main__':
         if delete_old_data:
             if exists(dataset_format_folder_name):
                 rmtree(dataset_format_folder_name)
-            makedirs(dataset_folder_name, exist_ok=True)
-            makedirs(data_format_folder_name, exist_ok=True)
-            makedirs(transform_format_folder_name, exist_ok=True)
+        makedirs(dataset_folder_name, exist_ok=True)
+        makedirs(data_format_folder_name, exist_ok=True)
+        makedirs(transform_format_folder_name, exist_ok=True)
 
     if delete_old_pc:
         if exists(pc_folder_name):
@@ -111,7 +110,7 @@ if __name__ == '__main__':
         print('\nThere is no features folder.\n')
         exit()
     
-    dataset_factory = DatasetFactory(parameters)
+    dataset_maker_factory = DatasetMakerFactory(parameters)
 
     for features_filename in tqdm(features_files):
         point_position = features_filename.rfind('.')
@@ -144,5 +143,5 @@ if __name__ == '__main__':
         normals[:, 2] = pc['normal_z']
         labels = pc['label']
 
-        dataset_factory.step(points, normals=normals, labels=labels, features_data=features_data, filename=filename)
-    dataset_factory.finish()
+        dataset_maker_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=True)
+    dataset_maker_factory.finishAllFormats()
