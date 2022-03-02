@@ -3,9 +3,9 @@ import pickle
 import json
 import yaml
 from numba import njit
-
 from os.path import exists
 from os import system
+from math import acos
 
 @njit
 def sortedIndicesIntersection(a, b):
@@ -41,6 +41,16 @@ def writeColorPointCloudOBJ(out_filename, point_cloud):
         for point in point_cloud:
             text += 'v %f %f %f %d %d %d\n' % (point[0], point[1], point[2], point[3], point[4], point[5])
         fout.write(text)
+
+def distancePoints(A, B):
+    AB = B - A
+    return np.linalg.norm(AB, ord=2)
+
+def angleNormals(n1, n2):
+    c = np.dot(n1, n2)/(np.linalg.norm(n1, ord=2)*np.linalg.norm(n2, ord=2))
+    c = -1.0 if c < -1 else c
+    c =  1.0 if c >  1 else c
+    return acos(c)
 
 '''FEATURES'''
 

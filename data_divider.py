@@ -24,9 +24,9 @@ def computeRGB(value):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
-    formats_txt = ','.join(DatasetMakerFactory.MAKERS_DICT.keys())
+    formats_txt = ','.join(DatasetReaderFactory.MAKERS_DICT.keys())
     parser.add_argument('input_format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
-    formats_txt = ','.join(DatasetReaderFactory.READERS_DICT.keys())
+    formats_txt = ','.join(DatasetMakerFactory.READERS_DICT.keys())
     parser.add_argument('output_formats', type=str, help='')
 
     parser.add_argument('-c', '--centralize', type=bool, default = True, help='')
