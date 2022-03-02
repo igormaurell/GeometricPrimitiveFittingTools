@@ -7,11 +7,13 @@ import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from lib.dataset_reader_factory import DatasetReaderFactory
+from lib.dataset_writer_factory import DatasetWriterFactory
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for methods results')
     parser.add_argument('folder', type=str, help='dataset folder.')
-    formats_txt = ','.join(DatasetReaderFactory.MAKERS_DICT.keys())
+    formats_txt = ','.join(DatasetWriterFactory.WRITERS_DICT.keys())
     parser.add_argument('format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')    parser.add_argument('--h5_folder_name', type=str, default = 'h5', help='h5 folder name.')
     parser.add_argument('--dataset_folder_name', type=str, default = 'dataset', help='input dataset folder name.')
     parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')

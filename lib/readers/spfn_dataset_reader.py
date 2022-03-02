@@ -4,8 +4,6 @@ import csv
 from os.path import join
 import re
 
-from lib.makers.spfn_dataset_maker import SpfnDatasetMaker
-
 from .base_dataset_reader import BaseDatasetReader
 
 from lib.utils import filterFeature
