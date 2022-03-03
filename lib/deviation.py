@@ -3,10 +3,6 @@ from math import acos, pi, sqrt, tan
 
 # 1D
 
-def distancePoints(A, B):
-    AB = B - A
-    return np.linalg.norm(AB, ord=2)
-
 def angleVectors(n1, n2):
     c = abs(np.dot(n1.T, n2))
     return acos(c)
@@ -92,9 +88,10 @@ def deviationPointTorus(point, normal, surface, location, z_axis, min_radius, ma
     B = (min_radius + radius)*v + A
 
     BP = P - B
-    n_pp = BP/np.linalg.norm(BP, ord=2)
+    d = np.linalg.norm(BP, ord=2)
+    n_pp = BP/d
 
-    return abs(distancePoints(B, P) - radius), angleVectors(n_pp, n_p)
+    return abs(d - radius), angleVectors(n_pp, n_p)
 
 def deviationPointCylinder(point, normal, location, z_axis, radius):
     A = location
