@@ -1,76 +1,73 @@
 import numpy as np
-from math import acos, pi, sqrt
+from math import acos, pi, sqrt, tan
+
+# 1D
 
 def distancePoints(A, B):
     AB = B - A
     return np.linalg.norm(AB, ord=2)
 
 def angleVectors(n1, n2):
-    c = np.dot(n1, n2)/(np.linalg.norm(n1, ord=2)*np.linalg.norm(n2, ord=2))
-    c = -1.0 if c < -1 else c
-    c =  1.0 if c >  1 else c
+    c = abs(np.dot(n1.T, n2))
     return acos(c)
 
-def deviationNormals(n1, n2):
-    a1 = angleVectors(n1, n2)
-    a2 = angleVectors(n1, -n2)
-    if abs(a1) < abs(a2):
-        return a1
-    return a2
+# 2D
 
 def deviationPointLine(point, normal, location, direction):
     A = location
-    v = direction
+    v = direction/np.linalg.norm(direction, ord=2)
     P = point
-    n_p = normal
+    n_p = normal/np.linalg.norm(normal, ord=2)
     AP = P - A
-    return np.linalg.norm(np.cross(v, AP), ord=2)/np.linalg.norm(v, ord=2), abs(pi/2 - deviationNormals(v, n_p))
+    AP_proj = np.dot(AP, v)
+    return np.linalg.norm(AP - AP_proj, ord=2), abs(pi/2 - angleVectors(v, n_p))
 
-def deviationPointCircle(point, normal, curve, location, z_axis, radius):
+def deviationPointCircle(point, normal, location, z_axis, radius):
     A = location
-    n = z_axis
+    n = z_axis/np.linalg.norm(z_axis, ord=2)
     P = point
-    n_p = normal
+    n_p = normal/np.linalg.norm(normal, ord=2)
 
     AP = P - A
     #orthogonal distance between point and circle plane
-    dist_point_plane = np.dot(AP, n)/np.linalg.norm(n, ord=2)
+    dist_point_plane = np.dot(AP, n)
 
     #projection P in the circle plane and calculating the distance to the center
-    P_p = P - dist_point_plane*n/np.linalg.norm(n, ord=2)
-    dist_pointproj_center = np.linalg.norm(P_p - A, ord=2)
+    P_proj = P - dist_point_plane*n
+    dist_pointproj_center = np.linalg.norm(P_proj - A, ord=2)
     #if point is outside the circle arc, the distance to the curve is used 
     a = dist_pointproj_center - radius
-    b = np.linalg.norm(P - P_p, ord=2)
+    b = np.linalg.norm(P - P_proj, ord=2)
 
-    #calculanting tangent vector to the circle in that point
-    n_pp = (P_p - A)/np.linalg.norm((P_p - A), ord=2)
-    t = np.cross(n_pp, n)
-    return sqrt(a**2 + b**2), abs(pi/2 - deviationNormals(t, n_p))
+    angle = angleVectors(n, n_p)
+    return sqrt(a**2 + b**2), angle if angle <= pi/2 else pi - angle
+
+# 3D
 
 def deviationPointSphere(point, normal, surface, location, radius):
     A = location
     P = point
-    n_p = normal
+    n_p = normal/np.linalg.norm(normal, ord=2)
     #normal of the point projected in the sphere surface
     AP = P - A
-    n_pp = AP/np.linalg.norm(AP, ord=2)
+    d = np.linalg.norm(AP, ord=2)
+    #TODO: Talvez esse n_pp tambem esteja errado, mas eh menos provavel
+    n_pp = AP/d
     #simple, distance from point to the center minus the sphere radius
     #angle between normals
-    return abs(distancePoints(P, A) - radius), deviationNormals(n_pp, n_p)
+    return abs(d - radius), angleVectors(n_pp, n_p)
 
 def deviationPointPlane(point, normal, surface, location, z_axis):
     A = location
-    n = z_axis
+    n = z_axis/np.linalg.norm(z_axis, ord=2)
     P = point
-    n_p = normal
+    n_p = normal/np.linalg.norm(normal, ord=2)
     AP = P - A
+    d = abs(np.dot(AP, n))
     #orthogonal distance between point and plane
     #angle between normals
-    angle = deviationNormals(n, n_p)
-    if angle > pi/2:
-        angle = pi - angle
-    return abs(np.dot(AP, n)/np.linalg.norm(n, ord=2)), angle
+    angle = angleVectors(n, n_p)
+    return d, angle if angle <= pi/2 else pi - angle
 
 def deviationPointTorus(point, normal, surface, location, z_axis, min_radius, max_radius):
     A = location
@@ -97,74 +94,58 @@ def deviationPointTorus(point, normal, surface, location, z_axis, min_radius, ma
     BP = P - B
     n_pp = BP/np.linalg.norm(BP, ord=2)
 
-    return abs(distancePoints(B, P) - radius), deviationNormals(n_pp, n_p)
+    return abs(distancePoints(B, P) - radius), angleVectors(n_pp, n_p)
 
 def deviationPointCylinder(point, normal, location, z_axis, radius):
     A = location
-    n = z_axis
+    n = z_axis/np.linalg.norm(z_axis, ord=2)
     P = point
-    n_p = normal
+    n_p = normal/np.linalg.norm(normal, ord=2)
     #normal of the point projected in the sphere surface
     AP = P - A
-    n_pp = AP/np.linalg.norm(AP, ord=2)
-    #simple distance from point to the revolution axis line minus radius
-    return abs(deviationPointLine(point, normal, A, n)[0] - radius), deviationNormals(n_pp, n_p)
+    AP_d = np.dot(AP, n)
+    P_proj = A + AP_d*n
+    P_projP = P - P_proj
+    d = np.linalg.norm(P_projP, ord=2)
 
-def deviationPointCone(point, normal, location, z_axis, apex, radius):
+    n_pp = P_projP/d
+    #simple distance from point to the revolution axis line minus radius
+    return abs(d - radius), angleVectors(n_pp, n_p)
+
+def deviationPointCone(point, normal, location, z_axis, apex, radius, half_angle):
     A = location
-    v = z_axis
+    n = z_axis/np.linalg.norm(z_axis, ord=2)
     B = apex
     P = point
-    n_p = normal
+    n_p = normal/np.linalg.norm(normal, ord=2)
 
-    #height of cone
-    h = distancePoints(A, B)
+    BP = P - B
+    BP_d = np.dot(BP, n)
 
-    AP = P - A
-    P_p = A + np.dot(AP, v)/np.dot(v, v) * v
-
-    #distance from center of base to point projected
-    dist_AP = distancePoints(P_p, A)
-    #distance from apex to the point projected
-    dist_BP = distancePoints(P_p, B)
-
-    #if point is below the center of base, return the distance to the circle base line
-    if dist_BP > dist_AP and dist_BP >= h:
-        AP = P - A
-        signal_dist_point_plane = np.dot(AP, v)/np.linalg.norm(v, ord=2)
-
-        #projection P in the circle plane and calculating the distance to the center
-        P_p = P - signal_dist_point_plane*v/np.linalg.norm(v, ord=2)
-        dist_pointproj_center = np.linalg.norm(P_p - A, ord=2)
-        #if point is outside the circle arc, the distance to the curve is used 
-        if dist_pointproj_center > radius:
-            #not using distance_point_circle function to not repeat operations
-            a = dist_pointproj_center - radius
-            b = np.linalg.norm(P - P_p, ord=2)
-            n_pp = (P_p - A)/np.linalg.norm((P_p - A), ord=2)
-            t = np.cross(n_pp, v)
-            return sqrt(a**2 + b**2), abs(pi/2 - deviationNormals(t, n_p))
+    d = 0.
+    angle = 0.
+    if BP_d < 0:
+        d, angle = deviationPointCircle(P, n_p, A, n, radius)
+    else:
+        r = BP_d*tan(half_angle)
+        P_proj = A + BP_d*n
+        PprojP = P - P_proj
+        d = np.linalg.norm(PprojP, ord=2)
+        #point on the surface of cone
+        P_proj_surf = P_proj + r*PprojP/d
+        BPprojsurf = P_proj_surf - B
+        y_axis = np.cross(n, PprojP/d)
+        n_pp = np.cross(BPprojsurf, y_axis)
         
-        #if not, the orthogonal distance to the circle plane is used
-        return abs(signal_dist_point_plane), deviationNormals(-v, n_p)
-    #if point is above the apex, return the distance from point to apex
-    elif dist_AP > dist_BP and dist_AP >= h:
-        return distancePoints(P, B), deviationNormals(v, n_p)
+        d = d - r
+        angle = angleVectors(n_pp, n_p)
+    
+    return d, angle
 
-    #if not, calculate the radius of the circle in this point height 
-    r = radius*dist_BP/h
 
-    d = (P - P_p)/np.linalg.norm((P-P_p), ord=2)
-
-    vr = r * d
-
-    P_s = P_p + vr
-
-    s = (P_s - B)/np.linalg.norm((P_s - B), ord=2)
-
-    t = np.cross(d, v)
-
-    n_pp = np.cross(t, s)
-
-    #distance from point to the point projected in the revolution axis line minus the current radius
-    return abs(distancePoints(P, P_p) - r), deviationNormals(n_pp, n_p)
+# def deviationNormals(n1, n2):
+#     a1 = angleVectors(n1, n2)
+#     a2 = angleVectors(n1, -n2)
+#     if abs(a1) < abs(a2):
+#         return a1
+#     return a2
