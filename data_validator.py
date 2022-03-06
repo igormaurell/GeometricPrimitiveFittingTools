@@ -29,11 +29,9 @@ def generateErrorsBoxPlot(errors, individual=True, all_models=False):
     fig, (ax1, ax2) = plt.subplots(2, 1)
     fig.tight_layout(pad=2.0)
     ax1.set_title('Distance Deviation')
-    print(data_distances)
     if len(data_distances) > 0:
         ax1.boxplot(data_distances, labels=data_labels, autorange=False, meanline=True)
     ax2.set_title('Normal Deviation')
-    print(data_angles)
     if len(data_angles) > 0:
         ax2.boxplot(data_angles, labels=data_labels, autorange=False, meanline=True)
     return fig
@@ -95,6 +93,16 @@ def generateErrorsLog(errors, max_distance_deviation, max_angle_deviation, save_
 
     return log_total + log
 
+def computeErrorsArrays(indices, distances, angles, max_distance_deviation, max_angle_deviation):
+    indices_array = np.zeros(len(indices), dtype=np.int64)
+    indices_array[distances > max_distance_deviation] += 1
+    indices_array[angles > max_angle_deviation] += 2
+
+    error_dist = indices[indices_array == 1]
+    error_ang = indices[indices_array == 2]
+    error_both = indices[indices_array == 3]
+
+    return error_dist, error_ang, error_both
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for methods results')
@@ -108,6 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('-d_dt', '--delete_old_data', action='store_true', help='')
     parser.add_argument('-v', '--verbose', action='store_true', help='show more verbose logs.')
     parser.add_argument('-s', '--segmentation_gt', action='store_true', help='write segmentation ground truth.')
+    parser.add_argument('-p', '--points_error', action='store_true', help='write segmentation ground truth.')
     parser.add_argument('-b', '--show_box_plot', action='store_true', help='show box plot of the data.')
     parser.add_argument('-md', '--max_distance_deviation', type=float, default=50, help='max distance deviation.')
     parser.add_argument('-mn', '--max_normal_deviation', type=float, default=10, help='max normal deviation.')
@@ -123,6 +132,7 @@ if __name__ == '__main__':
     delete_old_data = args['delete_old_data']
     VERBOSE = args['verbose']
     write_segmentation_gt = args['segmentation_gt']
+    write_points_error = args['points_error']
     box_plot = args['show_box_plot']
     max_distance_deviation = args['max_distance_deviation']
     max_normal_deviation = args['max_normal_deviation']*pi/180.
@@ -154,6 +164,7 @@ if __name__ == '__main__':
     dataset_reader_factory = DatasetReaderFactory(parameters)
     reader = dataset_reader_factory.getReaderByFormat(format)
     sets = ['test', 'train']
+    colors_full = getAllColorsArray()
     for s in sets:
         full_log = ''
         reader.setCurrentSetName(s)
@@ -169,11 +180,13 @@ if __name__ == '__main__':
             normals = data['normals']
             labels = data['labels']
             features = data['features']
-            labels_type = np.zeros(len(labels), dtype=np.int64) - 1
 
             dataset_errors[filename] = {}
 
             log = printAndLog(f'\n-- File {filename}:\n', log)
+
+            colors_instances = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
+            colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
 
             fpi = computeFeaturesPointIndices(labels, size=len(features))
             for i, feature in tqdm(enumerate(features)):
@@ -182,9 +195,6 @@ if __name__ == '__main__':
                 primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
                 errors = primitive.computeErrors(points_curr, normals_curr)
                 tp = primitive.getPrimitiveType()
-
-                tp_label = PrimitiveSurfaceFactory.getTypeLabel(tp)
-                labels_type[fpi[i]] = tp_label
                 
                 if tp not in dataset_errors[filename]:
                     dataset_errors[filename][tp] = {'distances': [], 'mean_distances': [], 'angles': [], 'mean_angles': [], 'void_primitives': []}
@@ -196,21 +206,29 @@ if __name__ == '__main__':
                     dataset_errors[filename][tp]['angles'].append(errors['angles'])
                     dataset_errors[filename][tp]['mean_distances'].append(np.mean(errors['distances']))
                     dataset_errors[filename][tp]['mean_angles'].append(np.mean(errors['angles']))
+                
+                if write_segmentation_gt:
+                    colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
+                    colors_types[fpi[i], :] = primitive.getColor()
+                    if write_points_error:
+                        error_dist, error_ang, error_both = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_normal_deviation)
+                        
+                        colors_instances[error_dist, :] = np.array([0, 255, 255])
+                        colors_types[error_dist, :] = np.array([0, 255, 255])
+
+                        colors_instances[error_ang, :] = np.array([255, 0, 255])
+                        colors_types[error_ang, :] = np.array([255, 0, 255])
+
+                        colors_instances[error_both, :] = np.array([0, 0, 0])
+                        colors_types[error_both, :] = np.array([0, 0, 0])
 
             if write_segmentation_gt:
                 instances_filename = f'{filename}_instances.obj'
-                colors = getAllColorsArray()
-                labels_color = np.zeros(shape=points.shape)
-                for i in range(len(labels_color)):
-                    labels_color[i, :] = computeRGB(colors[labels[i]%len(colors)])
-                writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, labels_color), axis=1))
+                
+                writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
 
                 types_filename = f'{filename}_types.obj'
-                colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,00), (255,255,255)]
-                labels_color = np.zeros(shape=points.shape)
-                for i in range(len(labels_color)):
-                    labels_color[i, :] = colors[labels_type[i]]
-                writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, labels_color), axis=1))
+                writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
 
             error_log = generateErrorsLog(dataset_errors[filename], max_distance_deviation, max_normal_deviation)
 
@@ -230,115 +248,3 @@ if __name__ == '__main__':
         
         with open(f'{log_format_folder_name}/{s}.txt', 'w') as f:
             f.write(full_log)
-
-            
-                
-    exit()
-    for h5_filename in h5_files if VERBOSE else tqdm(h5_files):
-        report = ''
-        report+= f'\n-- Processing file {h5_filename}...\n'
-        if VERBOSE:
-            print(f'\n-- Processing file {h5_filename}...')
-
-        bar_position = h5_filename.rfind('/')
-        point_position = h5_filename.rfind('.')
-        base_filename = h5_filename[(bar_position+1):point_position]
-
-        h5_file = readH5(join(h5_folder_name, h5_filename))
-
-        if write_segmentation_gt:
-            labels_type = createLabelsByType(h5_file)
-
-            points = h5_file['gt_points']
-            labels = h5_file['gt_labels']
-
-            instances_filename = f'{base_filename}_instances.obj'
-            writeSegmentedPointCloudOBJ(join(seg_folder_name, instances_filename), points, labels)
-
-            types_filename = f'{base_filename}_types.obj'
-            colors = [(255,255,255), (255,0,0), (0,255,0), (0,0,255), (255,255,0)]
-            writeSegmentedPointCloudOBJ(join(seg_folder_name, types_filename), points, labels_type, colors=colors)
-        
-        error_results = calculateError(h5_file)
-
-        number_of_primitives = 0
-        distance_error = 0
-        normal_dev_error = 0
-        mean_distance = 0.
-        mean_normal_dev = 0.
-        for key in error_results.keys():
-            number_of_primitives += len(error_results[key]['mean_distance'])
-            distance_error += np.count_nonzero(error_results[key]['mean_distance'] > max_distance_deviation)
-            normal_dev_error += np.count_nonzero(error_results[key]['mean_normal'] > max_normal_deviation)
-            mean_distance += np.sum(error_results[key]['mean_distance'])
-            mean_normal_dev += np.sum(error_results[key]['mean_normal'])
-        
-        if number_of_primitives > 0:
-            distance_error /= number_of_primitives
-            normal_dev_error /= number_of_primitives
-            mean_distance /= number_of_primitives
-            mean_normal_dev /= number_of_primitives
-        
-        report+= f'{h5_filename} is processed.\n'
-        if VERBOSE:
-            print(f'{h5_filename} is processed.')
-
-        report+= '\nTESTING REPORT:\n'
-        report+= '\n- Total:\n'
-        report+= f'\t- Number of Primitives: {number_of_primitives}\n' 
-        report+= f'\t- Distance Error Rate: {(distance_error)*100} %\n'
-        report+= f'\t- Normal Error Rate: {(normal_dev_error)*100} %\n'
-        report+= f'\t- Mean Distance Error: {mean_distance}\n'
-        report+= f'\t- Mean Normal Error: {mean_normal_dev}\n' 
-
-        print('\nTESTING REPORT:')
-        print('\n- Total:')
-        print('\t- Number of Primitives:', number_of_primitives)
-        print('\t- Distance Error Rate:', (distance_error)*100, '%')
-        print('\t- Normal Error Rate:', (normal_dev_error)*100, '%')
-        print('\t- Mean Distance Error:', mean_distance)
-        print('\t- Mean Normal Error:', mean_normal_dev)
-        data_distance = []
-        data_normal = []
-        labels = []
-        for key in error_results.keys():
-            name = key[0].upper() + key[1:]
-            number_of_primitives_loc = len(error_results[key]['mean_distance'])
-            distance_error_rate = (np.count_nonzero(error_results[key]['mean_distance'] > max_distance_deviation)/number_of_primitives_loc)*100
-            normal_error_rate = (np.count_nonzero(error_results[key]['mean_normal'] > max_normal_deviation)/number_of_primitives_loc)*100
-            distance_error = np.mean(error_results[key]['mean_distance'])
-            normal_error = np.mean(error_results[key]['mean_normal'])
-
-            report+= f'\n- {name}:\n'
-            report+= f'\t- Number of Primitives: {number_of_primitives_loc}\n' 
-            report+= f'\t- Distance Error Rate: {distance_error_rate} %\n'
-            report+= f'\t- Normal Error Rate: {normal_error_rate} %\n'
-            report+= f'\t- Mean Distance Error: {distance_error}\n'
-            report+= f'\t- Mean Normal Error: {normal_error}\n' 
-
-            print(f'\n- {name}:')
-            print('\t- Number of Primitives:', number_of_primitives_loc)
-            print('\t- Distance Error Rate:', distance_error_rate, '%')
-            print('\t- Normal Error Rate:', normal_error_rate, '%')
-            print('\t- Mean Distance Error:', distance_error)
-            print('\t- Mean Normal Error:', normal_error)
-            data_distance.append(error_results[key]['mean_distance'])
-            data_normal.append(error_results[key]['mean_normal'])
-            labels.append(name)
-
-        with open(join(log_folder_name, f'{base_filename}.txt'), 'w') as f:
-            f.write(report)
-        if box_plot:
-            fig, (ax1, ax2) = plt.subplots(2, 1)
-            fig.tight_layout(pad=2.0)
-            ax1.set_title('Distance Deviation')
-            if len(data_distance) > 0:
-                ax1.boxplot(data_distance, labels=labels, autorange=False, meanline=True)
-            ax2.set_title('Normal Deviation')
-            if len(data_distance) > 0:
-                ax2.boxplot(data_normal, labels=labels, autorange=False, meanline=True)
-            plt.savefig(join(box_plot_folder_name, f'{base_filename}.png'))
-            plt.show(block=False)
-            plt.pause(10)
-            plt.close()
-        

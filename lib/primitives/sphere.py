@@ -6,6 +6,9 @@ from lib.deviation import deviationPointSphere
 class Sphere(PrimitiveSurface):    
     def getPrimitiveType(self):
         return 'sphere'
+    
+    def getColor(self):
+        return (255, 255, 0)
 
     def __init__(self, parameters: dict = {}):
         super().__init__()

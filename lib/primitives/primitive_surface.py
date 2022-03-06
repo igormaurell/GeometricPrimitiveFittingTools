@@ -21,7 +21,15 @@ class PrimitiveSurface:
             distances[i] = distance
             angles[i] = angle
         result = {'distances': distances, 'angles': angles}
-        return result 
+        return result
+    
+    @abstractmethod
+    def getPrimitiveName(self):
+        pass
+
+    @abstractmethod
+    def getColor(self):
+        pass
 
     def __init__(self):
         self.vert_indices = None

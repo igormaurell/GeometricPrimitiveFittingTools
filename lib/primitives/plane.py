@@ -4,6 +4,9 @@ from lib.deviation import deviationPointPlane
 class Plane(PrimitiveSurface):
     def getPrimitiveType(self):
         return 'plane'
+    
+    def getColor(self):
+        return (255, 0, 0)
 
     def __init__(self, parameters: dict = {}):
         super().__init__()

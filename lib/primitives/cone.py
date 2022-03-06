@@ -6,6 +6,9 @@ from lib.deviation import deviationPointCone
 class Cone(PrimitiveSurface):   
     def getPrimitiveType(self):
         return 'cone'
+    
+    def getColor(self):
+        return (0, 255, 0)
 
     def __init__(self, parameters: dict = {}):
         super().__init__()

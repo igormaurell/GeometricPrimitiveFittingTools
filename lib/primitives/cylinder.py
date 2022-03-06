@@ -7,6 +7,9 @@ class Cylinder(PrimitiveSurface):
     def getPrimitiveType(self):
         return 'cylinder'
 
+    def getColor(self):
+        return (0, 0, 255)
+
     def __init__(self):
         super().__init__()
         self.location = None
