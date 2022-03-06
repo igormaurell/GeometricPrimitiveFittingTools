@@ -8,7 +8,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
-from lib.utils import computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
+from lib.utils import sortedIndicesIntersection, computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 
 def printAndLog(text, log):
     print(text)
@@ -45,34 +45,32 @@ def generateErrorsLog(errors, max_distance_deviation, max_angle_deviation, save_
     total_number_error_angles = 0
     total_mean_distances = 0.
     total_mean_angles = 0.
-    for tp in errors.keys():
-        number_of_primitives = len(errors[tp]['distances'])
-        number_of_void_primitives = len(errors[tp]['void_primitives'])
+    for tp, e in errors.items():
+        number_of_primitives = len(e['distances'])
+        number_of_void_primitives = len(e['void_primitives'])
         total_number_of_primitives += number_of_primitives
         total_number_of_void_primitives += number_of_void_primitives
         log += f'\n\t- {tp}:\n'
         log += f'\t\t- Number of Primitives: {number_of_primitives + number_of_void_primitives}\n'
         log += f'\t\t- Number of Void Primitives: {number_of_void_primitives}\n'
 
-        ind_distances = errors[tp]['distances']
-        ind_angles = errors[tp]['distances']
+        ind_distances = e['distances']
+        ind_angles = e['angles']
         number_of_points = 0
         number_error_distances = 0
         number_error_angles = 0
         for i in range(len(ind_distances)):
             number_of_points += len(ind_distances[i])
-            for elem in ind_distances[i]:
-                if elem > max_distance_deviation:
-                    number_error_distances += 1
-            for elem in ind_angles[i]:
-                if elem > max_angle_deviation:
-                    number_error_angles += 1
+            number_error_distances += np.count_nonzero(ind_distances[i] > max_distance_deviation)
+            number_error_angles += np.count_nonzero(ind_angles[i] > max_angle_deviation)
+
         total_number_of_points += number_of_points
         total_number_error_distances += number_error_distances
         total_number_error_angles += number_error_angles
 
-        log += f'\t\t- Distance Error Rate (<{max_distance_deviation}): {(100.0*number_error_distances)/number_of_points}%\n'
-        log += f'\t\t- Normal Error Rate (<{max_angle_deviation}): {(100.0*number_error_angles)/number_of_points}%\n'
+
+        log += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {(100.0*number_error_distances)/number_of_points}%\n'
+        log += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {(100.0*number_error_angles)/number_of_points}%\n'
 
         mean_distances = np.array(errors[tp]['mean_distances'])
         summd = np.sum(mean_distances)
@@ -86,23 +84,17 @@ def generateErrorsLog(errors, max_distance_deviation, max_angle_deviation, save_
     log_total = f'\n\t- Total:\n'
     log_total += f'\t\t- Number of Primitives: {total_number_of_primitives + total_number_of_void_primitives}\n'
     log_total += f'\t\t- Number of Void Primitives: {total_number_of_void_primitives}\n'
-    log_total += f'\t\t- Distance Error Rate (<{max_distance_deviation}): {(100.0*total_number_error_distances)/total_number_of_points}%\n'
-    log_total += f'\t\t- Normal Error Rate (<{max_angle_deviation}): {(100.0*total_number_error_angles)/total_number_of_points}%\n'
+    log_total += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {(100.0*total_number_error_distances)/total_number_of_points}%\n'
+    log_total += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {(100.0*total_number_error_angles)/total_number_of_points}%\n'
     log_total += f'\t\t- Mean Distance Error: {total_mean_distances/total_number_of_primitives}\n'
     log_total += f'\t\t- Mean Normal Error: {total_mean_angles/total_number_of_primitives}\n\n'
 
     return log_total + log
 
 def computeErrorsArrays(indices, distances, angles, max_distance_deviation, max_angle_deviation):
-    indices_array = np.zeros(len(indices), dtype=np.int64)
-    indices_array[distances > max_distance_deviation] += 1
-    indices_array[angles > max_angle_deviation] += 2
-
-    error_dist = indices[indices_array == 1]
-    error_ang = indices[indices_array == 2]
-    error_both = indices[indices_array == 3]
-
-    return error_dist, error_ang, error_both
+    error_dist = np.sort(indices[distances > max_distance_deviation])
+    error_ang = np.sort(indices[angles > max_angle_deviation])
+    return error_dist, error_ang
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for methods results')
@@ -207,20 +199,26 @@ if __name__ == '__main__':
                     dataset_errors[filename][tp]['mean_distances'].append(np.mean(errors['distances']))
                     dataset_errors[filename][tp]['mean_angles'].append(np.mean(errors['angles']))
                 
-                if write_segmentation_gt:
-                    colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
-                    colors_types[fpi[i], :] = primitive.getColor()
-                    if write_points_error:
-                        error_dist, error_ang, error_both = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_normal_deviation)
-                        
-                        colors_instances[error_dist, :] = np.array([0, 255, 255])
-                        colors_types[error_dist, :] = np.array([0, 255, 255])
+                    if write_segmentation_gt:
+                        colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
+                        colors_types[fpi[i], :] = primitive.getColor()
+                        if write_points_error:
+                            error_dist, error_ang = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_normal_deviation)
+                            error_both = sortedIndicesIntersection(error_dist, error_ang)
 
-                        colors_instances[error_ang, :] = np.array([255, 0, 255])
-                        colors_types[error_ang, :] = np.array([255, 0, 255])
+                            colors_instances[error_dist, :] = np.array([0, 255, 255])
+                            colors_types[error_dist, :] = np.array([0, 255, 255])
 
-                        colors_instances[error_both, :] = np.array([0, 0, 0])
-                        colors_types[error_both, :] = np.array([0, 0, 0])
+                            colors_instances[error_ang, :] = np.array([0, 0, 0])
+                            colors_types[error_ang, :] = np.array([0, 0, 0])
+
+                            colors_instances[error_both, :] = np.array([255, 0, 255])
+                            colors_types[error_both, :] = np.array([255, 0, 255])
+
+            error_log = generateErrorsLog(dataset_errors[filename], max_distance_deviation, max_normal_deviation)
+            log = printAndLog(error_log, log)
+            with open(f'{log_format_folder_name}/{filename}.txt', 'w') as f:
+                f.write(log)
 
             if write_segmentation_gt:
                 instances_filename = f'{filename}_instances.obj'
@@ -229,12 +227,6 @@ if __name__ == '__main__':
 
                 types_filename = f'{filename}_types.obj'
                 writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
-
-            error_log = generateErrorsLog(dataset_errors[filename], max_distance_deviation, max_normal_deviation)
-
-            log = printAndLog(error_log, log)
-            with open(f'{log_format_folder_name}/{filename}.txt', 'w') as f:
-                f.write(log)
 
             if box_plot:
                 fig = generateErrorsBoxPlot(dataset_errors[filename])
