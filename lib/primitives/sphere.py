@@ -3,9 +3,8 @@ import numpy as np
 from .primitive_surface import PrimitiveSurface
 from lib.deviation import deviationPointSphere
 
-class Sphere(PrimitiveSurface):
-    @staticmethod
-    def getPrimitiveType():
+class Sphere(PrimitiveSurface):    
+    def getPrimitiveType(self):
         return 'sphere'
 
     def __init__(self, parameters: dict = {}):
@@ -28,7 +27,7 @@ class Sphere(PrimitiveSurface):
     
     def toDict(self):
         parameters = super().toDict()
-        parameters['type'] = Sphere.getPrimitiveType()
+        parameters['type'] = self.getPrimitiveType()
         PrimitiveSurface.readParameterOnDict('location', self.location, parameters)
         PrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
         PrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
@@ -36,7 +35,7 @@ class Sphere(PrimitiveSurface):
         PrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
         PrimitiveSurface.readParameterOnDict('radius', self.radius, parameters)
     
-    def computeErrors(self, points, normals, deviation_function=None):
-        if deviation_function is None:
-            deviation_function = deviationPointSphere
-        return super().computeErrors(points, normals, deviation_function)
+    def computeErrors(self, points, normals):
+        deviation_function = deviationPointSphere
+        args = (self.location, self.radius,)
+        return PrimitiveSurface.genericComputeErrors(points, normals, deviation_function, args)

@@ -3,9 +3,8 @@ import numpy as np
 from .primitive_surface import PrimitiveSurface
 from lib.deviation import deviationPointCylinder
 
-class Cylinder(PrimitiveSurface):
-    @staticmethod
-    def getPrimitiveType():
+class Cylinder(PrimitiveSurface):    
+    def getPrimitiveType(self):
         return 'cylinder'
 
     def __init__(self):
@@ -28,7 +27,7 @@ class Cylinder(PrimitiveSurface):
     
     def toDict(self):
         parameters = super().toDict()
-        parameters['type'] = Cylinder.getPrimitiveType()
+        parameters['type'] = self.getPrimitiveType()
         PrimitiveSurface.readParameterOnDict('location', self.location, parameters)
         PrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
         PrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
@@ -36,7 +35,7 @@ class Cylinder(PrimitiveSurface):
         PrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
         PrimitiveSurface.readParameterOnDict('radius', self.radius, parameters)
     
-    def computeErrors(self, points, normals, deviation_function=None):
-        if deviation_function is None:
-            deviation_function = deviationPointCylinder
-        return super().computeErrors(points, normals, deviation_function)
+    def computeErrors(self, points, normals):
+        deviation_function = deviationPointCylinder
+        args = (self.location, self.z_axis, self.radius,)
+        return PrimitiveSurface.genericComputeErrors(points, normals, deviation_function, args)

@@ -24,6 +24,17 @@ def sortedIndicesIntersection(a, b):
                 j+=1
     return intersect[:k]
 
+'''COLOR'''
+def computeRGB(value):
+    r = value%256
+    value = value//256
+    g = value%256
+    b = value//256
+    return (r, g, b)
+
+def getAllColorsArray():
+    colors = np.random.permutation(256*256*256)
+    return colors
 
 '''POINT CLOUDS'''
 
@@ -101,8 +112,9 @@ def filterFeaturesData(features_data, surface_types, labels=None):
 
     return features_data
 
-def computeFeaturesPointIndices(labels):
-    size = np.max(labels)
+def computeFeaturesPointIndices(labels, size=None):
+    if size is None:
+        size = np.max(labels)
     features_point_indices = [[] for i in range(0, size + 2)]
     for i in range(0, len(labels)):
         features_point_indices[labels[i]].append(i)
@@ -135,3 +147,4 @@ def computeLabelsFromFace2Primitive(labels, features_data):
         features_point_indices[i] = np.array(features_point_indices[i], dtype=np.int64)
     
     return labels, features_point_indices
+

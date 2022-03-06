@@ -10,9 +10,16 @@ class PrimitiveSurfaceFactory:
     }
 
     @staticmethod
-    def getPrimitiveClass(type):
+    def getTypeLabel(type):
+        type = type.lower()
         assert type in PrimitiveSurfaceFactory.PRIMITIVES_DICT
-        return PrimitiveSurfaceFactory.PRIMITIVES_DICT['type']
+        return list(PrimitiveSurfaceFactory.PRIMITIVES_DICT.keys()).index(type)
+
+    @staticmethod
+    def getPrimitiveClass(type):
+        type = type.lower()
+        assert type in PrimitiveSurfaceFactory.PRIMITIVES_DICT
+        return PrimitiveSurfaceFactory.PRIMITIVES_DICT[type]
     
     @staticmethod
     def primitiveFromDict(parameters: dict):

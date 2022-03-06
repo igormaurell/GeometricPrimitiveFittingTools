@@ -11,15 +11,8 @@ import numpy as np
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
-from lib.utils import writeColorPointCloudOBJ
+from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion
-
-def computeRGB(value):
-    r = value%256
-    value = value//256
-    g = value%256
-    b = value//256
-    return (r, g, b)
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -126,7 +119,7 @@ if __name__ == '__main__':
         makedirs(output_data_format_folder_name, exist_ok=True)
         makedirs(output_transform_format_folder_name, exist_ok=True)
     
-    colors = np.random.permutation(256*256*256)
+    colors = getAllColorsArray()
 
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
     reader = dataset_reader_factory.getReaderByFormat(input_format)

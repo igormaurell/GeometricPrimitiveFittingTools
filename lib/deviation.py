@@ -5,6 +5,8 @@ from math import acos, pi, sqrt, tan
 
 def angleVectors(n1, n2):
     c = abs(np.dot(n1.T, n2))
+    c = c if c <= 1. else 1.
+    c = c if c >= -1. else -1. 
     return acos(c)
 
 # 2D
@@ -40,7 +42,7 @@ def deviationPointCircle(point, normal, location, z_axis, radius):
 
 # 3D
 
-def deviationPointSphere(point, normal, surface, location, radius):
+def deviationPointSphere(point, normal, location, radius):
     A = location
     P = point
     n_p = normal/np.linalg.norm(normal, ord=2)
@@ -53,7 +55,7 @@ def deviationPointSphere(point, normal, surface, location, radius):
     #angle between normals
     return abs(d - radius), angleVectors(n_pp, n_p)
 
-def deviationPointPlane(point, normal, surface, location, z_axis):
+def deviationPointPlane(point, normal, location, z_axis):
     A = location
     n = z_axis/np.linalg.norm(z_axis, ord=2)
     P = point
@@ -65,7 +67,7 @@ def deviationPointPlane(point, normal, surface, location, z_axis):
     angle = angleVectors(n, n_p)
     return d, angle if angle <= pi/2 else pi - angle
 
-def deviationPointTorus(point, normal, surface, location, z_axis, min_radius, max_radius):
+def deviationPointTorus(point, normal, location, z_axis, min_radius, max_radius):
     A = location
     n = z_axis
     P = point
@@ -109,31 +111,33 @@ def deviationPointCylinder(point, normal, location, z_axis, radius):
     #simple distance from point to the revolution axis line minus radius
     return abs(d - radius), angleVectors(n_pp, n_p)
 
-def deviationPointCone(point, normal, location, z_axis, apex, radius, half_angle):
+def deviationPointCone(point, normal, location, z_axis, apex, radius, angle):
     A = location
     n = z_axis/np.linalg.norm(z_axis, ord=2)
     B = apex
     P = point
     n_p = normal/np.linalg.norm(normal, ord=2)
 
-    BP = P - B
-    BP_d = np.dot(BP, n)
+    AP = P - A
+    AP_d = np.dot(AP, n)
 
     d = 0.
     angle = 0.
-    if BP_d < 0:
+    if AP_d < 0:
         d, angle = deviationPointCircle(P, n_p, A, n, radius)
     else:
-        r = BP_d*tan(half_angle)
-        P_proj = A + BP_d*n
+        BP_d = np.dot(P - B, n)
+        r = BP_d*tan(angle)
+        P_proj = B + BP_d*n
         PprojP = P - P_proj
         d = np.linalg.norm(PprojP, ord=2)
         #point on the surface of cone
         P_proj_surf = P_proj + r*PprojP/d
         BPprojsurf = P_proj_surf - B
-        y_axis = np.cross(n, PprojP/d)
+        y_axis = np.cross(n, PprojP)
         n_pp = np.cross(BPprojsurf, y_axis)
-        
+        n_pp = n_pp/np.linalg.norm(n_pp, ord=2)
+
         d = d - r
         angle = angleVectors(n_pp, n_p)
     

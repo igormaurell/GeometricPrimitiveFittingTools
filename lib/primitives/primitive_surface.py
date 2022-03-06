@@ -4,12 +4,24 @@ import numpy as np
 class PrimitiveSurface:
     @staticmethod
     def readParameterOnDict(key, d, old_value=None):
-        return None if key not in d.keys and old_value is None else d[key]
+        return None if key not in d.keys() and old_value is None else d[key]
     
     @staticmethod
     def writeParameterOnDict(key, value, d):
         if value is not None:
             d[key] = value
+    
+    @staticmethod
+    def genericComputeErrors(points, normals, deviation_function, primitive_args):
+        assert len(points) == len(normals)
+        distances = np.zeros(len(points))
+        angles = np.zeros(len(points))
+        for i in range(len(points)):
+            distance, angle = deviation_function(points[i], normals[i], *primitive_args)
+            distances[i] = distance
+            angles[i] = angle
+        result = {'distances': distances, 'angles': angles}
+        return result 
 
     def __init__(self):
         self.vert_indices = None
@@ -28,17 +40,6 @@ class PrimitiveSurface:
         PrimitiveSurface.writeParameterOnDict('face_indices', self.face_indices, parameters)
         return parameters
 
-    def computeErrors(self, points, normals, deviation_function):
-        assert len(points) == len(normals)
-        distances = np.zeros(len(points))
-        angles = np.zeros(len(points))
-        for i in range(len(points)):
-            distance, angle = deviation_function(points[i], normals[i], self.location, self.z_axis, self.radius)
-            distances[i] = distance
-            angles[i] = angle
-        result = {}
-        result['mean_distance_error'] = np.mean(distances)
-        result['mean_angle_error'] = np.mean(angles)
-        result['distance_errors'] = distances
-        result['angle_errors'] = angles
-        return result
+    @abstractmethod
+    def computeErrors(self, points, normals):
+        pass

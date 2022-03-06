@@ -3,9 +3,8 @@ import numpy as np
 from .primitive_surface import PrimitiveSurface
 from lib.deviation import deviationPointCone
 
-class Cone(PrimitiveSurface):
-    @staticmethod
-    def getPrimitiveType():
+class Cone(PrimitiveSurface):   
+    def getPrimitiveType(self):
         return 'cone'
 
     def __init__(self, parameters: dict = {}):
@@ -32,7 +31,7 @@ class Cone(PrimitiveSurface):
 
     def toDict(self):
         parameters = super().toDict()
-        parameters['type'] = Cone.getPrimitiveType()
+        parameters['type'] = self.getPrimitiveType()
         PrimitiveSurface.readParameterOnDict('location', self.location, parameters)
         PrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
         PrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
@@ -42,7 +41,7 @@ class Cone(PrimitiveSurface):
         PrimitiveSurface.readParameterOnDict('angle', self.angle, parameters)
         PrimitiveSurface.readParameterOnDict('apex', self.apex, parameters)
 
-    def computeErrors(self, points, normals, deviation_function=None):
-        if deviation_function is None:
-            deviation_function = deviationPointCone
-        return super().computeErrors(points, normals, deviation_function)
+    def computeErrors(self, points, normals):
+        deviation_function = deviationPointCone
+        args = (self.location, self.z_axis, self.apex, self.radius, self.angle,)
+        return PrimitiveSurface.genericComputeErrors(points, normals, deviation_function, args)

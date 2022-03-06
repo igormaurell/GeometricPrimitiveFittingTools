@@ -2,8 +2,7 @@ from .primitive_surface import PrimitiveSurface
 from lib.deviation import deviationPointPlane
 
 class Plane(PrimitiveSurface):
-    @staticmethod
-    def getPrimitiveType():
+    def getPrimitiveType(self):
         return 'plane'
 
     def __init__(self, parameters: dict = {}):
@@ -24,14 +23,14 @@ class Plane(PrimitiveSurface):
     
     def toDict(self):
         parameters = super().toDict()
-        parameters['type'] = Plane.getPrimitiveType()
+        parameters['type'] = self.getPrimitiveType()
         PrimitiveSurface.readParameterOnDict('location', self.location, parameters)
         PrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
         PrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
         PrimitiveSurface.readParameterOnDict('z_axis', self.z_axis, parameters)
         PrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
     
-    def computeErrors(self, points, normals, deviation_function=None):
-        if deviation_function is None:
-            deviation_function = deviationPointPlane
-        return super().computeErrors(points, normals, deviation_function)
+    def computeErrors(self, points, normals):
+        deviation_function = deviationPointPlane
+        args = (self.location, self.z_axis,)
+        return PrimitiveSurface.genericComputeErrors(points, normals, deviation_function, args)
