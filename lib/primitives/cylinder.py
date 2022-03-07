@@ -6,7 +6,7 @@ from lib.deviation import deviationPointCylinder
 class Cylinder(PrimitiveSurface):    
     def getPrimitiveType(self):
         return 'cylinder'
-
+    
     def getColor(self):
         return (0, 0, 255)
 

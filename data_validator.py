@@ -10,10 +10,9 @@ from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 from lib.utils import sortedIndicesIntersection, computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 
-def printAndLog(text, log):
+def printAndReturn(text):
     print(text)
-    log += text
-    return log
+    return text
 
 def generateErrorsBoxPlot(errors, individual=True, all_models=False):
     data_distances = []
@@ -36,23 +35,44 @@ def generateErrorsBoxPlot(errors, individual=True, all_models=False):
         ax2.boxplot(data_angles, labels=data_labels, autorange=False, meanline=True)
     return fig
 
-def generateErrorsLog(errors, max_distance_deviation, max_angle_deviation, save_path=None):
-    log = ''
-    total_number_of_primitives = 0
-    total_number_of_void_primitives = 0
-    total_number_of_points = 0
-    total_number_error_distances = 0
-    total_number_error_angles = 0
-    total_mean_distances = 0.
-    total_mean_angles = 0.
-    for tp, e in errors.items():
+def sumToLogsDict(keys, d, nop=0, novp=0, nopoints=0, ned=0, nea=0, sd=0, sa=0):
+    for key in keys:
+        d[key]['number_of_primitives'] += nop
+        d[key]['number_of_void_primitives'] += novp
+        d[key]['number_of_points'] += nopoints
+        d[key]['number_error_distances'] += ned
+        d[key]['number_error_angles'] += nea
+        d[key]['sum_distances'] += sd
+        d[key]['sum_angles'] += sa
+    return d
+
+def getBaseKeyLogsDict():
+    d = {
+        'number_of_primitives': 0,
+        'number_of_void_primitives': 0,
+        'number_of_points': 0,
+        'number_error_distances': 0,
+        'number_error_angles': 0,
+        'sum_distances': 0,
+        'sum_angles': 0,
+        }
+    return d
+
+def addTwoLogsDict(first, second):
+    for key in second:
+        if key not in first:
+            first[key] = getBaseKeyLogsDict()
+        first = sumToLogsDict([key], first, nop=second[key]['number_of_primitives'], novp=second[key]['number_of_void_primitives'], nopoints=second[key]['number_of_points'], ned=second[key]['number_error_distances'],
+                                   nea=second[key]['number_error_angles'], sd=second[key]['sum_distances'], sa=second[key]['sum_angles'])
+    return first
+
+def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
+    logs_dict = {
+        'total': getBaseKeyLogsDict(),
+    }
+    for tp, e in errors.items():           
         number_of_primitives = len(e['distances'])
         number_of_void_primitives = len(e['void_primitives'])
-        total_number_of_primitives += number_of_primitives
-        total_number_of_void_primitives += number_of_void_primitives
-        log += f'\n\t- {tp}:\n'
-        log += f'\t\t- Number of Primitives: {number_of_primitives + number_of_void_primitives}\n'
-        log += f'\t\t- Number of Void Primitives: {number_of_void_primitives}\n'
 
         ind_distances = e['distances']
         ind_angles = e['angles']
@@ -64,32 +84,34 @@ def generateErrorsLog(errors, max_distance_deviation, max_angle_deviation, save_
             number_error_distances += np.count_nonzero(ind_distances[i] > max_distance_deviation)
             number_error_angles += np.count_nonzero(ind_angles[i] > max_angle_deviation)
 
-        total_number_of_points += number_of_points
-        total_number_error_distances += number_error_distances
-        total_number_error_angles += number_error_angles
-
-
-        log += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {(100.0*number_error_distances)/number_of_points}%\n'
-        log += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {(100.0*number_error_angles)/number_of_points}%\n'
-
         mean_distances = np.array(errors[tp]['mean_distances'])
         summd = np.sum(mean_distances)
-        total_mean_distances += summd
         mean_angles = np.array(errors[tp]['mean_angles'])
         summa = np.sum(mean_angles)
-        total_mean_angles += summa
-        log += f'\t\t- Mean Distance Error: {summd/number_of_primitives}\n'
-        log += f'\t\t- Mean Normal Error: {summa/number_of_primitives}\n\n'
+        if tp not in logs_dict.keys():
+            logs_dict[tp] = getBaseKeyLogsDict()
+        logs_dict = sumToLogsDict(['total', tp], logs_dict, nop=number_of_primitives, novp=number_of_void_primitives, nopoints=number_of_points, ned=number_error_distances, nea=number_error_angles, sd=summd, sa=summa)
+    return logs_dict
 
-    log_total = f'\n\t- Total:\n'
-    log_total += f'\t\t- Number of Primitives: {total_number_of_primitives + total_number_of_void_primitives}\n'
-    log_total += f'\t\t- Number of Void Primitives: {total_number_of_void_primitives}\n'
-    log_total += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {(100.0*total_number_error_distances)/total_number_of_points}%\n'
-    log_total += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {(100.0*total_number_error_angles)/total_number_of_points}%\n'
-    log_total += f'\t\t- Mean Distance Error: {total_mean_distances/total_number_of_primitives}\n'
-    log_total += f'\t\t- Mean Normal Error: {total_mean_angles/total_number_of_primitives}\n\n'
-
-    return log_total + log
+def generateLog(logs_dict, max_distance_deviation, max_angle_deviation):
+    log = ''
+    for key, value in logs_dict.items():
+        number_of_primitives = value['number_of_primitives']
+        number_of_void_primitives = value['number_of_void_primitives']
+        number_of_points = value['number_of_points']
+        number_error_distances = value['number_error_distances']
+        number_error_angles = value['number_error_angles']
+        sum_distances = value['sum_distances']
+        sum_angles = value['sum_angles']
+        log += f'\n\t- {key}:\n'
+        log += f'\t\t- Number of Primitives: {number_of_primitives + number_of_void_primitives}\n'
+        log += f'\t\t- Number of Void Primitives: {number_of_void_primitives}\n'
+        log += f'\t\t- Number of Points: {number_of_points}\n'
+        log += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {(100.0*number_error_distances)/number_of_points}%\n'
+        log += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {(100.0*number_error_angles)/number_of_points}%\n'
+        log += f'\t\t- Mean Distance Error: {sum_distances/number_of_primitives}\n'
+        log += f'\t\t- Mean Normal Error: {sum_angles/number_of_primitives}\n\n'
+    return log
 
 def computeErrorsArrays(indices, distances, angles, max_distance_deviation, max_angle_deviation):
     error_dist = np.sort(indices[distances > max_distance_deviation])
@@ -158,10 +180,10 @@ if __name__ == '__main__':
     sets = ['test', 'train']
     colors_full = getAllColorsArray()
     for s in sets:
-        full_log = ''
         reader.setCurrentSetName(s)
-        print(f'\nValidation of {s} dataset:')
+        full_log = printAndReturn(f'\nValidation of {s} dataset:\n')
         dataset_errors = {}
+        full_logs_dicts = {}
         for i in range(len(reader)):
             log = ''
             
@@ -175,7 +197,7 @@ if __name__ == '__main__':
 
             dataset_errors[filename] = {}
 
-            log = printAndLog(f'\n-- File {filename}:\n', log)
+            log += printAndReturn(f'\n-- File {filename}:\n')
 
             colors_instances = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
             colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
@@ -215,8 +237,9 @@ if __name__ == '__main__':
                             colors_instances[error_both, :] = np.array([255, 0, 255])
                             colors_types[error_both, :] = np.array([255, 0, 255])
 
-            error_log = generateErrorsLog(dataset_errors[filename], max_distance_deviation, max_normal_deviation)
-            log = printAndLog(error_log, log)
+            logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_normal_deviation)
+            error_log = generateLog(logs_dict, max_distance_deviation, max_normal_deviation)
+            log += printAndReturn(error_log)
             with open(f'{log_format_folder_name}/{filename}.txt', 'w') as f:
                 f.write(log)
 
@@ -236,7 +259,8 @@ if __name__ == '__main__':
                 plt.pause(10)
                 plt.close()
 
-            full_log += log
+            full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
         
+        full_log += generateLog(full_logs_dicts, max_distance_deviation, max_normal_deviation)
         with open(f'{log_format_folder_name}/{s}.txt', 'w') as f:
             f.write(full_log)
