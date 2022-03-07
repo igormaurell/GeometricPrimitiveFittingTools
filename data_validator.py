@@ -133,7 +133,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--points_error', action='store_true', help='write segmentation ground truth.')
     parser.add_argument('-b', '--show_box_plot', action='store_true', help='show box plot of the data.')
     parser.add_argument('-md', '--max_distance_deviation', type=float, default=50, help='max distance deviation.')
-    parser.add_argument('-mn', '--max_normal_deviation', type=float, default=10, help='max normal deviation.')
+    parser.add_argument('-mn', '--max_angle_deviation', type=float, default=10, help='max normal deviation.')
 
     args = vars(parser.parse_args())
 
@@ -149,7 +149,7 @@ if __name__ == '__main__':
     write_points_error = args['points_error']
     box_plot = args['show_box_plot']
     max_distance_deviation = args['max_distance_deviation']
-    max_normal_deviation = args['max_normal_deviation']*pi/180.
+    max_angle_deviation = args['max_angle_deviation']*pi/180.
 
     parameters = {format: {}}
     dataset_format_folder_name = join(folder_name, dataset_folder_name, format)
@@ -225,7 +225,7 @@ if __name__ == '__main__':
                         colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
                         colors_types[fpi[i], :] = primitive.getColor()
                         if write_points_error:
-                            error_dist, error_ang = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_normal_deviation)
+                            error_dist, error_ang = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_angle_deviation)
                             error_both = sortedIndicesIntersection(error_dist, error_ang)
 
                             colors_instances[error_dist, :] = np.array([0, 255, 255])
@@ -237,8 +237,8 @@ if __name__ == '__main__':
                             colors_instances[error_both, :] = np.array([255, 0, 255])
                             colors_types[error_both, :] = np.array([255, 0, 255])
 
-            logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_normal_deviation)
-            error_log = generateLog(logs_dict, max_distance_deviation, max_normal_deviation)
+            logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_angle_deviation)
+            error_log = generateLog(logs_dict, max_distance_deviation, max_angle_deviation)
             log += printAndReturn(error_log)
             with open(f'{log_format_folder_name}/{filename}.txt', 'w') as f:
                 f.write(log)
@@ -261,6 +261,6 @@ if __name__ == '__main__':
 
             full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
         
-        full_log += generateLog(full_logs_dicts, max_distance_deviation, max_normal_deviation)
+        full_log += generateLog(full_logs_dicts, max_distance_deviation, max_angle_deviation)
         with open(f'{log_format_folder_name}/{s}.txt', 'w') as f:
             f.write(full_log)
