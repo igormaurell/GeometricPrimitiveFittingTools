@@ -8,25 +8,18 @@ from os.path import join, exists
 
 import numpy as np
 
-from lib.dataset_maker_factory import DatasetMakerFactory
+from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
-from lib.utils import writeColorPointCloudOBJ
+from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion
-
-def computeRGB(value):
-    r = value%256
-    value = value//256
-    g = value%256
-    b = value//256
-    return (r, g, b)
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
-    formats_txt = ','.join(DatasetMakerFactory.MAKERS_DICT.keys())
-    parser.add_argument('input_format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
     formats_txt = ','.join(DatasetReaderFactory.READERS_DICT.keys())
+    parser.add_argument('input_format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
+    formats_txt = ','.join(DatasetWriterFactory.WRITERS_DICT.keys())
     parser.add_argument('output_formats', type=str, help='')
 
     parser.add_argument('-c', '--centralize', type=bool, default = True, help='')
@@ -34,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('-nl', '--noise_limit', type=float, default = 10., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 1, help='')
 
-    for format in DatasetMakerFactory.MAKERS_DICT.keys():
+    for format in DatasetWriterFactory.WRITERS_DICT.keys():
         parser.add_argument(f'-{format}_c', f'--{format}_centralize', type=bool, help='')
         parser.add_argument(f'-{format}_a', f'--{format}_align', type=bool, help='')
         parser.add_argument(f'-{format}_nl', f'--{format}_noise_limit', type=float, help='')
@@ -101,7 +94,7 @@ if __name__ == '__main__':
 
     for format in output_formats:
 
-        assert format in DatasetMakerFactory.MAKERS_DICT.keys()
+        assert format in DatasetWriterFactory.WRITERS_DICT.keys()
 
         output_parameters[format] = {'normalization': {}}
 
@@ -126,15 +119,15 @@ if __name__ == '__main__':
         makedirs(output_data_format_folder_name, exist_ok=True)
         makedirs(output_transform_format_folder_name, exist_ok=True)
     
-    colors = np.random.permutation(256*256*256)
+    colors = getAllColorsArray()
 
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
     reader = dataset_reader_factory.getReaderByFormat(input_format)
 
-    dataset_maker_factory = DatasetMakerFactory(output_parameters)
+    dataset_writer_factory = DatasetWriterFactory(output_parameters)
     point_cloud_full = None
     reader.setCurrentSetName('test')
-    dataset_maker_factory.setCurrentSetNameAllFormats('test')
+    dataset_writer_factory.setCurrentSetNameAllFormats('test')
     print('Generating test dataset:')
     for i in tqdm(range(len(reader))):
         data = reader.step()
@@ -159,14 +152,14 @@ if __name__ == '__main__':
                             point_cloud_full = points.copy()
                         else:
                             point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
-                    dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
+                    dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                          features_data=result['features'], filename=filename_curr)
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_test.obj', point_cloud_full)
 
     point_cloud_full = None
     reader.setCurrentSetName('train')
-    dataset_maker_factory.setCurrentSetNameAllFormats('train')
+    dataset_writer_factory.setCurrentSetNameAllFormats('train')
     train_set_len = len(reader)
     div = number_train//train_set_len
     mod = number_train%train_set_len
@@ -193,9 +186,9 @@ if __name__ == '__main__':
                         point_cloud_full = points.copy()
                     else:
                         point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
-                dataset_maker_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
+                dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                      features_data=result['features'], filename=filename_curr)
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_train.obj', point_cloud_full)
     reader.finish()
-    dataset_maker_factory.finishAllFormats()
+    dataset_writer_factory.finishAllFormats()

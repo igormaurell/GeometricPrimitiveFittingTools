@@ -3,7 +3,7 @@ from copy import deepcopy
 import random
 from math import ceil, floor
 
-class BaseDatasetMaker:
+class BaseDatasetWriter:
 
     def __init__(self, parameters):
         self.setParameters(parameters)

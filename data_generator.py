@@ -11,12 +11,12 @@ from os import listdir, makedirs
 from os.path import join, isfile, exists
 
 from lib.utils import generatePCD, loadFeatures
-from lib.dataset_maker_factory import DatasetMakerFactory
+from lib.dataset_writer_factory import DatasetWriterFactory
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
-    formats_txt = ','.join(DatasetMakerFactory.MAKERS_DICT.keys())
+    formats_txt = ','.join(DatasetWriterFactory.WRITERS_DICT.keys())
     parser.add_argument('formats', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
 
     parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('-nl', '--noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
-    for format in DatasetMakerFactory.MAKERS_DICT.keys():
+    for format in DatasetWriterFactory.WRITERS_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
         parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
         parser.add_argument(f'-{format}_c', f'--{format}_centralize', type=bool, help='')
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         print('\nThere is no features folder.\n')
         exit()
     
-    dataset_maker_factory = DatasetMakerFactory(parameters)
+    dataset_writer_factory = DatasetWriterFactory(parameters)
 
     for features_filename in tqdm(features_files):
         point_position = features_filename.rfind('.')
@@ -143,5 +143,5 @@ if __name__ == '__main__':
         normals[:, 2] = pc['normal_z']
         labels = pc['label']
 
-        dataset_maker_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=True)
-    dataset_maker_factory.finishAllFormats()
+        dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=True)
+    dataset_writer_factory.finishAllFormats()

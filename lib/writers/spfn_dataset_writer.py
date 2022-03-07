@@ -9,9 +9,9 @@ import os
 from lib.normalization import normalize
 from lib.utils import filterFeaturesData, filterFeature, computeLabelsFromFace2Primitive, computeFeaturesPointIndices
 
-from .base_dataset_maker import BaseDatasetMaker
+from .base_dataset_writer import BaseDatasetWriter
 
-class SpfnDatasetMaker(BaseDatasetMaker):
+class SpfnDatasetWriter(BaseDatasetWriter):
     FEATURES_BY_TYPE = {
         'plane': ['type', 'name', 'location', 'z_axis', 'normalized'],
         'cylinder': ['type', 'name', 'location', 'z_axis', 'radius', 'normalized'],
@@ -91,7 +91,7 @@ class SpfnDatasetMaker(BaseDatasetMaker):
                     grp.create_dataset('gt_points', data=points)
                     feature['name'] = soup_name
                     feature['normalized'] = True
-                    feature = filterFeature(feature, SpfnDatasetMaker.FEATURES_BY_TYPE, SpfnDatasetMaker.FEATURES_TRANSLATION)
+                    feature = filterFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_TRANSLATION)
                     grp.attrs['meta'] = np.void(pickle.dumps(feature))
             
         return True

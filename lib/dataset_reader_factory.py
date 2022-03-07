@@ -1,4 +1,3 @@
-from lib.makers import *
 from lib.readers.spfn_dataset_reader import SpfnDatasetReader
 
 class DatasetReaderFactory:
