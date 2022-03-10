@@ -5,6 +5,7 @@ import yaml
 from numba import njit
 from os.path import exists
 from os import system
+from math import acos
 
 @njit
 def sortedIndicesIntersection(a, b):
@@ -23,6 +24,27 @@ def sortedIndicesIntersection(a, b):
             else : 
                 j+=1
     return intersect[:k]
+
+'''VECTOR'''
+def rotate(array, theta, axis):
+    axis = axis / np.sqrt(np.dot(axis, axis))
+    a = np.cos(theta / 2.0)
+    b, c, d = -axis * np.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    
+    R = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+    
+    return R @ array
+
+def angleVectors(n1, n2):
+    c = abs(np.dot(n1.T, n2))
+    c = c if c <= 1. else 1.
+    c = c if c >= -1. else -1. 
+    return acos(c)
+
 
 '''COLOR'''
 def computeRGB(value):

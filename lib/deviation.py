@@ -1,13 +1,6 @@
 import numpy as np
 from math import acos, pi, sqrt, tan
-
-# 1D
-
-def angleVectors(n1, n2):
-    c = abs(np.dot(n1.T, n2))
-    c = c if c <= 1. else 1.
-    c = c if c >= -1. else -1. 
-    return acos(c)
+from lib.utils import angleVectors
 
 # 2D
 

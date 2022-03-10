@@ -4,7 +4,10 @@ import numpy as np
 class PrimitiveSurface:
     @staticmethod
     def readParameterOnDict(key, d, old_value=None):
-        return None if key not in d.keys() and old_value is None else d[key]
+        r = None if key not in d.keys() and old_value is None else d[key]
+        if type(r) is list:
+            r = np.array(r)
+        return r
     
     @staticmethod
     def writeParameterOnDict(key, value, d):

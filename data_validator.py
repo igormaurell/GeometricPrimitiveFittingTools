@@ -207,7 +207,6 @@ if __name__ == '__main__':
                 points_curr = points[fpi[i]]
                 normals_curr = normals[fpi[i]]
                 primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
-                errors = primitive.computeErrors(points_curr, normals_curr)
                 tp = primitive.getPrimitiveType()
                 
                 if tp not in dataset_errors[filename]:
@@ -216,6 +215,7 @@ if __name__ == '__main__':
                 if len(fpi[i]) == 0:
                     dataset_errors[filename][tp]['void_primitives'].append(i)
                 else:
+                    errors = primitive.computeErrors(points_curr, normals_curr)
                     dataset_errors[filename][tp]['distances'].append(errors['distances'])
                     dataset_errors[filename][tp]['angles'].append(errors['angles'])
                     dataset_errors[filename][tp]['mean_distances'].append(np.mean(errors['distances']))
