@@ -40,3 +40,4 @@ class Plane(PrimitiveSurface):
         d = (P - A) @ n_new
         P_new = P - d
         return np.concatenate((P_new, n_new))
+        

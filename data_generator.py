@@ -10,8 +10,9 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import generatePCD, loadFeatures
+from lib.utils import generatePCD, loadFeatures, computeLabelsFromFace2Primitive
 from lib.dataset_writer_factory import DatasetWriterFactory
+from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -43,6 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('-d_dt', '--delete_old_data', action='store_true', help='')
     parser.add_argument('-d_pc', '--delete_old_pc', action='store_true', help='')
 
+    parser.add_argument('-dc', '--data_curation', action='store_true', help='')
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
     parser.add_argument('-t_p', '--train_percentage', type=int, default = 80, help='')
 
@@ -61,6 +63,7 @@ if __name__ == '__main__':
     delete_old_data = args['delete_old_data']
     delete_old_pc = args['delete_old_pc']
     train_percentage = args['train_percentage']
+    data_curation = args['data_curation']
 
     dataset_folder_name = args['dataset_folder_name']
     data_folder_name = args['data_folder_name']
@@ -143,5 +146,15 @@ if __name__ == '__main__':
         normals[:, 2] = pc['normal_z']
         labels = pc['label']
 
-        dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=True)
+        if data_curation:
+            labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data['surfaces'])
+            for i, feature in enumerate(features_data['surfaces']):
+                fpi = features_point_indices[i]
+                if len(fpi) > 0:
+                    primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
+                    if primitive is not None:
+                        points[fpi], normals[fpi] = primitive.computeCorrectPointsAndNormals(points[fpi])
+            dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=False)
+        else:
+            dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=True)
     dataset_writer_factory.finishAllFormats()

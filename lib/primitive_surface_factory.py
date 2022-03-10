@@ -1,4 +1,3 @@
-from lib import primitives
 from lib.primitives import *
 
 class PrimitiveSurfaceFactory:
@@ -12,21 +11,26 @@ class PrimitiveSurfaceFactory:
     @staticmethod
     def getTypeLabel(type):
         type = type.lower()
-        assert type in PrimitiveSurfaceFactory.PRIMITIVES_DICT
-        return list(PrimitiveSurfaceFactory.PRIMITIVES_DICT.keys()).index(type)
+        if type in PrimitiveSurfaceFactory.PRIMITIVES_DICT:
+            return list(PrimitiveSurfaceFactory.PRIMITIVES_DICT.keys()).index(type)
+        return -1
 
     @staticmethod
     def getPrimitiveClass(type):
         type = type.lower()
-        assert type in PrimitiveSurfaceFactory.PRIMITIVES_DICT
-        return PrimitiveSurfaceFactory.PRIMITIVES_DICT[type]
+        if type in PrimitiveSurfaceFactory.PRIMITIVES_DICT:
+            return PrimitiveSurfaceFactory.PRIMITIVES_DICT[type]
+        return None
     
     @staticmethod
     def primitiveFromDict(parameters: dict):
         assert 'type' in parameters
-        primitive = PrimitiveSurfaceFactory.getPrimitiveClass(parameters['type'])()
-        primitive.fromDict(parameters)
-        return primitive
+        Class = PrimitiveSurfaceFactory.getPrimitiveClass(parameters['type'])
+        if Class is not None:
+            primitive = Class()
+            primitive.fromDict(parameters)
+            return primitive
+        return None
     
     @staticmethod
     def primitivesFromListOfDicts(parameters_list: list):
