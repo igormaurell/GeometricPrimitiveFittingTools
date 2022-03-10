@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from lib.utils import angleVectors
 import numpy as np
 
 class PrimitiveSurface:
@@ -34,6 +35,10 @@ class PrimitiveSurface:
     def getColor(self):
         pass
 
+    @abstractmethod
+    def _computeCorrectPointAndNormal(self, P):
+        pass
+
     def __init__(self):
         self.vert_indices = None
         self.vert_parameters = None
@@ -51,6 +56,14 @@ class PrimitiveSurface:
         PrimitiveSurface.writeParameterOnDict('face_indices', self.face_indices, parameters)
         return parameters
 
-    @abstractmethod
+    def computeCorrectPointsAndNormals(self, points):
+        points_normals = np.array([self._computeCorrectPointAndNormal(P) for P in points], dtype=points.dtype)
+        return points_normals[:, :3], points_normals[:, 3:]
+
     def computeErrors(self, points, normals):
-        pass
+        assert len(points) > 0 and len(normals) > 0
+        new_points, new_normals = self.computeCorrectPointsAndNormals(points)
+        distances = np.array([np.linalg.norm(P - points[i], ord=2) for i, P in enumerate(new_points)], dtype=new_points.dtype)
+        angles = np.array([angleVectors(n, normals[i]) for i, n in enumerate(new_normals)], dtype=new_normals.dtype)
+        result = {'distances': distances, 'angles': angles}
+        return result

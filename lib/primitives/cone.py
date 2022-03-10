@@ -1,5 +1,5 @@
 from .primitive_surface import PrimitiveSurface
-from lib.utils import angleVectors, rotate
+from lib.utils import rotate
 import numpy as np
 
 class Cone(PrimitiveSurface):   
@@ -60,15 +60,3 @@ class Cone(PrimitiveSurface):
             v_rot = np.cross(n, n_orth)
             n_new = rotate(n_orth, self.angle, v_rot)
         return np.concatenate((P_new, n_new))
-
-    def computeCorrectPointsAndNormals(self, points):
-        points_normals = np.array([self._computeCorrectPointAndNormal(P) for P in points], dtype=points.dtype)
-        return points_normals[:, :3], points_normals[:, 3:]
-
-    def computeErrors(self, points, normals):
-        assert len(points) > 0 and len(normals) > 0
-        new_points, new_normals = self.computeCorrectPointsAndNormals(points)
-        distances = np.array([np.linalg.norm(P - points[i], ord=2) for i, P in enumerate(new_points)], dtype=new_points.dtype)
-        angles = np.array([angleVectors(n, normals[i]) for i, n in enumerate(new_normals)], dtype=new_normals.dtype)
-        result = {'distances': distances, 'angles': angles}
-        return result
