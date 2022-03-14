@@ -26,9 +26,9 @@ class PrimitiveSurface:
             angles[i] = angle
         result = {'distances': distances, 'angles': angles}
         return result
-    
+
     @abstractmethod
-    def getPrimitiveName(self):
+    def getPrimitiveType(self):
         pass
 
     @abstractmethod
@@ -39,10 +39,8 @@ class PrimitiveSurface:
     def _computeCorrectPointAndNormal(self, P):
         pass
 
-    def __init__(self):
-        self.vert_indices = None
-        self.vert_parameters = None
-        self.face_indices = None
+    def __init__(self, parameters: dict = {}):
+        self.fromDict(parameters)
 
     def fromDict(self, parameters: dict, update=False):
         self.vert_indices = PrimitiveSurface.readParameterOnDict('vert_indices', parameters, old_value=(self.vert_indices if update else None))

@@ -10,13 +10,7 @@ class Sphere(PrimitiveSurface):
         return (255, 255, 0)
 
     def __init__(self, parameters: dict = {}):
-        super().__init__()
-        self.location = None
-        self.x_axis =  None
-        self.y_axis = None
-        self.z_axis = None
-        self.coefficients = None
-        self.radius = None
+        super().__init__(parameters=parameters)
 
     def fromDict(self, parameters: dict, update=False):
         super().fromDict(parameters, update=update)

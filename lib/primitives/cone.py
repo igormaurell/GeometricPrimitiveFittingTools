@@ -1,6 +1,7 @@
 from .primitive_surface import PrimitiveSurface
 from lib.utils import rotate
 import numpy as np
+from math import tan
 
 class Cone(PrimitiveSurface):   
     def getPrimitiveType(self):
@@ -10,15 +11,7 @@ class Cone(PrimitiveSurface):
         return (0, 255, 0)
 
     def __init__(self, parameters: dict = {}):
-        super().__init__()
-        self.location = None
-        self.x_axis =  None
-        self.y_axis = None
-        self.z_axis = None
-        self.coefficients = None
-        self.radius = None
-        self.angle = None
-        self.apex = None
+        super().__init__(parameters=parameters)
 
     def fromDict(self, parameters: dict, update=False):
         super().fromDict(parameters, update=update)
@@ -49,10 +42,14 @@ class Cone(PrimitiveSurface):
         n = self.z_axis
         h = (P - A) @ n
         if h < 0:
-            pass
+            P_proj = P - h*n
+            P_projP = P - P_proj
+            n_orth = P_projP/np.linalg.norm(P_projP, ord=2)
+            P_new = A + self.radius*n_orth
+            n_new = n
         else:
             d_ab = np.linalg.norm(A - B, ord=2)
-            radius = (d_ab + h)/np.tan(self.angle)
+            radius = (d_ab + h)*tan(self.angle)
             P_proj = A + h*n
             P_projP = P - P_proj
             n_orth = P_projP/np.linalg.norm(P_projP, ord=2)
