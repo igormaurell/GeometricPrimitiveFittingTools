@@ -2,7 +2,7 @@ from abc import abstractmethod
 from lib.utils import angleVectors
 import numpy as np
 
-class PrimitiveSurface:
+class BasePrimitiveSurface:
     @staticmethod
     def readParameterOnDict(key, d, old_value=None):
         r = None if key not in d.keys() and old_value is None else d[key]
@@ -43,15 +43,15 @@ class PrimitiveSurface:
         self.fromDict(parameters)
 
     def fromDict(self, parameters: dict, update=False):
-        self.vert_indices = PrimitiveSurface.readParameterOnDict('vert_indices', parameters, old_value=(self.vert_indices if update else None))
-        self.vert_parameters = PrimitiveSurface.readParameterOnDict('vert_parameters', parameters, old_value=(self.vert_parameters if update else None))
-        self.face_indices = PrimitiveSurface.readParameterOnDict('face_indices', parameters, old_value=(self.face_indices if update else None))
+        self.vert_indices = BasePrimitiveSurface.readParameterOnDict('vert_indices', parameters, old_value=(self.vert_indices if update else None))
+        self.vert_parameters = BasePrimitiveSurface.readParameterOnDict('vert_parameters', parameters, old_value=(self.vert_parameters if update else None))
+        self.face_indices = BasePrimitiveSurface.readParameterOnDict('face_indices', parameters, old_value=(self.face_indices if update else None))
     
     def toDict(self):
         parameters = {}
-        PrimitiveSurface.writeParameterOnDict('vert_indices', self.vert_indices, parameters)
-        PrimitiveSurface.writeParameterOnDict('vert_parameters', self.vert_parameters, parameters)
-        PrimitiveSurface.writeParameterOnDict('face_indices', self.face_indices, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('vert_indices', self.vert_indices, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('vert_parameters', self.vert_parameters, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('face_indices', self.face_indices, parameters)
         return parameters
 
     def computeCorrectPointsAndNormals(self, points):

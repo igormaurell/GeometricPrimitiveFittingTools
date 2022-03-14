@@ -1,9 +1,9 @@
-from .primitive_surface import PrimitiveSurface
+from .base_primitive_surface import BasePrimitiveSurface
 from lib.utils import rotate
 import numpy as np
 from math import tan
 
-class Cone(PrimitiveSurface):   
+class Cone(BasePrimitiveSurface):   
     def getPrimitiveType(self):
         return 'cone'
     
@@ -15,26 +15,26 @@ class Cone(PrimitiveSurface):
 
     def fromDict(self, parameters: dict, update=False):
         super().fromDict(parameters, update=update)
-        self.location = PrimitiveSurface.readParameterOnDict('location', parameters, old_value=(self.location if update else None))
-        self.x_axis =  PrimitiveSurface.readParameterOnDict('x_axis', parameters, old_value=(self.x_axis if update else None))
-        self.y_axis = PrimitiveSurface.readParameterOnDict('y_axis', parameters, old_value=(self.y_axis if update else None))
-        self.z_axis = PrimitiveSurface.readParameterOnDict('z_axis', parameters, old_value=(self.z_axis if update else None))
-        self.coefficients = PrimitiveSurface.readParameterOnDict('coefficients', parameters, old_value=(self.coefficients if update else None))
-        self.radius = PrimitiveSurface.readParameterOnDict('radius', parameters, old_value=(self.radius if update else None))
-        self.angle = PrimitiveSurface.readParameterOnDict('angle', parameters, old_value=(self.angle if update else None))
-        self.apex = PrimitiveSurface.readParameterOnDict('apex', parameters, old_value=(self.apex if update else None))
+        self.location = BasePrimitiveSurface.readParameterOnDict('location', parameters, old_value=(self.location if update else None))
+        self.x_axis =  BasePrimitiveSurface.readParameterOnDict('x_axis', parameters, old_value=(self.x_axis if update else None))
+        self.y_axis = BasePrimitiveSurface.readParameterOnDict('y_axis', parameters, old_value=(self.y_axis if update else None))
+        self.z_axis = BasePrimitiveSurface.readParameterOnDict('z_axis', parameters, old_value=(self.z_axis if update else None))
+        self.coefficients = BasePrimitiveSurface.readParameterOnDict('coefficients', parameters, old_value=(self.coefficients if update else None))
+        self.radius = BasePrimitiveSurface.readParameterOnDict('radius', parameters, old_value=(self.radius if update else None))
+        self.angle = BasePrimitiveSurface.readParameterOnDict('angle', parameters, old_value=(self.angle if update else None))
+        self.apex = BasePrimitiveSurface.readParameterOnDict('apex', parameters, old_value=(self.apex if update else None))
 
     def toDict(self):
         parameters = super().toDict()
         parameters['type'] = self.getPrimitiveType()
-        PrimitiveSurface.readParameterOnDict('location', self.location, parameters)
-        PrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
-        PrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
-        PrimitiveSurface.readParameterOnDict('z_axis', self.z_axis, parameters)
-        PrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
-        PrimitiveSurface.readParameterOnDict('radius', self.radius, parameters)
-        PrimitiveSurface.readParameterOnDict('angle', self.angle, parameters)
-        PrimitiveSurface.readParameterOnDict('apex', self.apex, parameters)
+        BasePrimitiveSurface.readParameterOnDict('location', self.location, parameters)
+        BasePrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
+        BasePrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
+        BasePrimitiveSurface.readParameterOnDict('z_axis', self.z_axis, parameters)
+        BasePrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
+        BasePrimitiveSurface.readParameterOnDict('radius', self.radius, parameters)
+        BasePrimitiveSurface.readParameterOnDict('angle', self.angle, parameters)
+        BasePrimitiveSurface.readParameterOnDict('apex', self.apex, parameters)
 
     def _computeCorrectPointAndNormal(self, P):
         A = self.location
