@@ -1,44 +1,42 @@
+from .base_primitive_surface import BasePrimitiveSurface
+from lib.utils import angleVectors
 import numpy as np
 
-from .primitive_surface import PrimitiveSurface
-from lib.deviation import deviationPointCylinder
-
-class Cylinder(PrimitiveSurface):    
+class Cylinder(BasePrimitiveSurface):    
     def getPrimitiveType(self):
         return 'cylinder'
     
     def getColor(self):
         return (0, 0, 255)
 
-    def __init__(self):
-        super().__init__()
-        self.location = None
-        self.x_axis =  None
-        self.y_axis = None
-        self.z_axis = None
-        self.coefficients = None
-        self.radius = None
+    def __init__(self, parameters: dict = {}):
+        super().__init__(parameters=parameters)
 
     def fromDict(self, parameters: dict, update=False):
         super().fromDict(parameters, update=update)
-        self.location = PrimitiveSurface.readParameterOnDict('location', parameters, old_value=(self.vert_indices if update else None))
-        self.x_axis =  PrimitiveSurface.readParameterOnDict('x_axis', parameters, old_value=(self.x_axis if update else None))
-        self.y_axis = PrimitiveSurface.readParameterOnDict('y_axis', parameters, old_value=(self.y_axis if update else None))
-        self.z_axis = PrimitiveSurface.readParameterOnDict('z_axis', parameters, old_value=(self.z_axis if update else None))
-        self.coefficients = PrimitiveSurface.readParameterOnDict('coefficients', parameters, old_value=(self.coefficients if update else None))
-        self.radius = PrimitiveSurface.readParameterOnDict('radius', parameters, old_value=(self.radius if update else None))
+        self.location = BasePrimitiveSurface.readParameterOnDict('location', parameters, old_value=(self.location if update else None))
+        self.x_axis =  BasePrimitiveSurface.readParameterOnDict('x_axis', parameters, old_value=(self.x_axis if update else None))
+        self.y_axis = BasePrimitiveSurface.readParameterOnDict('y_axis', parameters, old_value=(self.y_axis if update else None))
+        self.z_axis = BasePrimitiveSurface.readParameterOnDict('z_axis', parameters, old_value=(self.z_axis if update else None))
+        self.coefficients = BasePrimitiveSurface.readParameterOnDict('coefficients', parameters, old_value=(self.coefficients if update else None))
+        self.radius = BasePrimitiveSurface.readParameterOnDict('radius', parameters, old_value=(self.radius if update else None))
     
     def toDict(self):
         parameters = super().toDict()
         parameters['type'] = self.getPrimitiveType()
-        PrimitiveSurface.readParameterOnDict('location', self.location, parameters)
-        PrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
-        PrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
-        PrimitiveSurface.readParameterOnDict('z_axis', self.z_axis, parameters)
-        PrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
-        PrimitiveSurface.readParameterOnDict('radius', self.radius, parameters)
+        BasePrimitiveSurface.readParameterOnDict('location', self.location, parameters)
+        BasePrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
+        BasePrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
+        BasePrimitiveSurface.readParameterOnDict('z_axis', self.z_axis, parameters)
+        BasePrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
+        BasePrimitiveSurface.readParameterOnDict('radius', self.radius, parameters)
     
-    def computeErrors(self, points, normals):
-        deviation_function = deviationPointCylinder
-        args = (self.location, self.z_axis, self.radius,)
-        return PrimitiveSurface.genericComputeErrors(points, normals, deviation_function, args)
+    def _computeCorrectPointAndNormal(self, P):
+        A = self.location
+        n = self.z_axis
+        h = (P - A) @ n
+        P_proj = A + h*n
+        P_projP = P - P_proj
+        n_new = P_projP/np.linalg.norm(P_projP, ord=2)
+        P_new = P_proj + self.radius*n_new
+        return np.concatenate((P_new, n_new))
