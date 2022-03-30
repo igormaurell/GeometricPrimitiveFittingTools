@@ -98,7 +98,7 @@ if __name__ == '__main__':
         if delete_old_data:
             if exists(dataset_format_folder_name):
                 rmtree(dataset_format_folder_name)
-        makedirs(dataset_folder_name, exist_ok=True)
+        makedirs(dataset_format_folder_name, exist_ok=True)
         makedirs(data_format_folder_name, exist_ok=True)
         makedirs(transform_format_folder_name, exist_ok=True)
 
