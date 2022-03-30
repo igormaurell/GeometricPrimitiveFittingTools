@@ -23,11 +23,12 @@ class Plane(BasePrimitiveSurface):
     def toDict(self):
         parameters = super().toDict()
         parameters['type'] = self.getPrimitiveType()
-        BasePrimitiveSurface.readParameterOnDict('location', self.location, parameters)
-        BasePrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
-        BasePrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
-        BasePrimitiveSurface.readParameterOnDict('z_axis', self.z_axis, parameters)
-        BasePrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('location', self.location, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('x_axis', self.x_axis, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('y_axis', self.y_axis, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('z_axis', self.z_axis, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('coefficients', self.coefficients, parameters)
+        return parameters
     
     def _computeCorrectPointAndNormal(self, P):
         A = self.location

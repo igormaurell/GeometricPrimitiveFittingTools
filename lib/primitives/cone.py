@@ -27,30 +27,26 @@ class Cone(BasePrimitiveSurface):
     def toDict(self):
         parameters = super().toDict()
         parameters['type'] = self.getPrimitiveType()
-        BasePrimitiveSurface.readParameterOnDict('location', self.location, parameters)
-        BasePrimitiveSurface.readParameterOnDict('x_axis', self.x_axis, parameters)
-        BasePrimitiveSurface.readParameterOnDict('y_axis', self.y_axis, parameters)
-        BasePrimitiveSurface.readParameterOnDict('z_axis', self.z_axis, parameters)
-        BasePrimitiveSurface.readParameterOnDict('coefficients', self.coefficients, parameters)
-        BasePrimitiveSurface.readParameterOnDict('radius', self.radius, parameters)
-        BasePrimitiveSurface.readParameterOnDict('angle', self.angle, parameters)
-        BasePrimitiveSurface.readParameterOnDict('apex', self.apex, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('location', self.location, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('x_axis', self.x_axis, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('y_axis', self.y_axis, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('z_axis', self.z_axis, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('coefficients', self.coefficients, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('radius', self.radius, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('angle', self.angle, parameters)
+        BasePrimitiveSurface.writeParameterOnDict('apex', self.apex, parameters)
+        return parameters
 
     def _computeCorrectPointAndNormal(self, P):
-        A = self.location
         B = self.apex
         n = self.z_axis
-        h = (P - A) @ n
+        h = (P - B) @ n
         if h < 0:
-            P_proj = P - h*n
-            P_projP = P - P_proj
-            n_orth = P_projP/np.linalg.norm(P_projP, ord=2)
-            P_new = A + self.radius*n_orth
-            n_new = n
+            P_new = B.copy()
+            n_new = -n
         else:
-            d_ab = np.linalg.norm(A - B, ord=2)
-            radius = (d_ab + h)*tan(self.angle)
-            P_proj = A + h*n
+            radius = h*tan(self.angle)
+            P_proj = B + h*n
             P_projP = P - P_proj
             n_orth = P_projP/np.linalg.norm(P_projP, ord=2)
             P_new = P_proj + radius*n_orth
