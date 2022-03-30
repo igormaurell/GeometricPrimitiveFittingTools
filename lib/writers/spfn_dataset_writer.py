@@ -41,6 +41,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
 
         with h5py.File(data_file_path, 'w') as h5_file:
             noise_limit = 0.
+
             if 'add_noise' in self.normalization_parameters.keys():
                 noise_limit = self.normalization_parameters['add_noise']
                 self.normalization_parameters['add_noise'] = 0.

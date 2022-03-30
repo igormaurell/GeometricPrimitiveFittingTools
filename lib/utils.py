@@ -129,7 +129,8 @@ def filterFeaturesData(features_data, surface_types, labels=None):
 
     if labels is not None:
         for i in range(len(labels)):
-            labels[i] = labels_map[labels[i]]
+            if labels[i] != -1:
+                labels[i] = labels_map[labels[i]]
         return features_data, labels
 
     return features_data
