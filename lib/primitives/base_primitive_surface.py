@@ -2,12 +2,6 @@ from abc import abstractmethod
 from lib.utils import angleVectors
 import numpy as np
 
-# I = 0
-# error = []
-# error_T = []
-# not_error = []
-# not_error_T = []
-
 class BasePrimitiveSurface:
     @staticmethod
     def readParameterOnDict(key, d, old_value=None):
@@ -61,24 +55,7 @@ class BasePrimitiveSurface:
         return parameters
 
     def computeCorrectPointsAndNormals(self, points):
-        # global I
         points_normals = np.array([self._computeCorrectPointAndNormal(P) for P in points], dtype=points.dtype)
-        # if self.getPrimitiveType() == 'cone':
-        #     points2 = points_normals[:, :3]
-        #     size1 = np.max(points2, axis=0) - np.min(points2, axis=0)
-        #     size1 = size1[0]*size1[1]*size1[2]
-        #     size2 = np.max(points2, axis=0) - np.min(points2, axis=0)
-        #     size2 = size2[0]*size2[1]*size2[2]
-        #     if len(points) >= 3000:
-        #         if size2 == 0 or size2/size1 <= 0.5:
-        #             print(f'Cone {I}, ERROR:')
-        #             print(self.toDict())
-        #         else:
-        #             print(f'Cone {I}, RIGHT:')
-        #             print(self.toDict())
-
-        #     I += 1
-
         return points_normals[:, :3], points_normals[:, 3:]
 
     def computeErrors(self, points, normals):
