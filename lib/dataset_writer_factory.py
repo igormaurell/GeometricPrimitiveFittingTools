@@ -24,9 +24,9 @@ class DatasetWriterFactory:
         for writer in self.writers.values():
             writer.setCurrentSetName(set_name)
 
-    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], filename=None, is_face_labels=False):
+    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], filename=None, features_point_indices=None):
         for writer in self.writers.values():
-            writer.step(points.copy(), normals=normals.copy(), labels=labels.copy(), features_data=deepcopy(features_data), filename=filename, is_face_labels=is_face_labels)
+            writer.step(points.copy(), normals=normals.copy(), labels=labels.copy(), features_data=deepcopy(features_data), filename=filename, features_point_indices=features_point_indices)
         self.step_num += 1
 
     def finishAllFormats(self):

@@ -19,6 +19,7 @@ class BaseDatasetWriter:
         self.transform_folder_name = parameters['transform_folder_name'] if 'transform_folder_name' in parameters.keys() else None
         self.normalization_parameters = parameters['normalization'] if 'normalization' in parameters.keys() else None
         self.train_percentage = parameters['train_percentage'] if 'train_percentage' in parameters.keys() else None
+        self.min_number_points = parameters['min_number_points'] if 'min_number_points' in parameters.keys() else None
         self.filter_features_parameters = parameters['filter_features'] if 'filter_features' in parameters.keys() else None
 
     def divisionTrainVal(self, permutation=None):
@@ -38,7 +39,7 @@ class BaseDatasetWriter:
             random.shuffle(filenames)
         else:
             filenames = [filenames[index] for index in permutation]
-        n_train = len(filenames)*(self.train_percentage/100.)
+        n_train = len(filenames)*(self.train_percentage)
         n_train = ceil(n_train) if n_train < 1 else floor(n_train)
         return filenames[:n_train], filenames[n_train:]
     
@@ -50,5 +51,5 @@ class BaseDatasetWriter:
         self.reset()
 
     @abstractmethod
-    def step(self, points, normals=None, labels=None, features_data=[], filename=None, is_face_labels=False):
+    def step(self, points, normals=None, labels=None, features_data=[], filename=None, features_point_indices=None):
         pass

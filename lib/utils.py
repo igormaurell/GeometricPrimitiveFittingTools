@@ -113,27 +113,37 @@ def filterFeature(feature_data, features_by_type, features_translation):
         feature_out[key if not key in features_translation.keys() else features_translation[key]] = feature_data[key]
     return feature_out
 
-def filterFeaturesData(features_data, surface_types, labels=None):
+def filterFeaturesData(features_data, types=None, min_number_points=None, labels=None, features_point_indices=None):
+    by_type_condition = lambda x: True
+    if types is not None:
+        by_type_condition = lambda x: x['type'].lower() in types
+
+    by_npoints_condition = lambda x: True
+    if min_number_points is not None and features_point_indices is not None:
+        by_npoints_condition = lambda x: len(x) >= min_number_points
+
     labels_map = np.zeros(len(features_data))
     i = 0
     j = 0
     while i < len(features_data):
         feature = features_data[i]
-        if feature['type'].lower() not in surface_types:
-            features_data.pop(i)
-            labels_map[j] = -1
-        else:
+        fpi = features_point_indices[i]
+        if by_type_condition(feature) and by_npoints_condition(fpi):
             labels_map[j] = i
             i+=1
+        else:
+            features_data.pop(i)
+            if features_point_indices is not None:
+                features_point_indices.pop(i)
+            labels_map[j] = -1
         j+=1
 
     if labels is not None:
         for i in range(len(labels)):
             if labels[i] != -1:
                 labels[i] = labels_map[labels[i]]
-        return features_data, labels
 
-    return features_data
+    return features_data, labels, features_point_indices
 
 def computeFeaturesPointIndices(labels, size=None):
     if size is None:

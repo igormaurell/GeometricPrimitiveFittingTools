@@ -24,7 +24,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], filename=None, is_face_labels=False):
+    def step(self, points, normals=None, labels=None, features_data=[], filename=None, features_point_indices=None):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -67,33 +67,38 @@ class SpfnDatasetWriter(BaseDatasetWriter):
             del points
             gc.collect()
 
-            if labels is not None and len(features_data) > 0:
-                features_point_indices = []
-                if is_face_labels:
-                    if self.filter_features_parameters is not None:
-                        features_data = filterFeaturesData(features_data, self.filter_features_parameters['surface_types'])
-                    labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data)
-                else:
-                    if self.filter_features_parameters is not None:
-                        features_data, labels = filterFeaturesData(features_data, self.filter_features_parameters['surface_types'], labels=labels)
+            if labels is not None:
+                
+                if features_point_indices is None:
                     features_point_indices = computeFeaturesPointIndices(labels)
 
+                min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
+                min_number_points = min_number_points if min_number_points > 0 else 1
+
+                features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
+                                                           labels=labels, features_point_indices=features_point_indices)
+                                                                               
                 h5_file.create_dataset('gt_labels', data=labels)
 
-                point_position = data_file_path.rfind('.')
-                point_position = point_position if point_position >= 0 else len(point_position)
-                bar_position = data_file_path.rfind('/')
-                bar_position = bar_position if bar_position >= 0 else 0
+                if len(features_data) > 0:
+                    point_position = data_file_path.rfind('.')
+                    point_position = point_position if point_position >= 0 else len(point_position)
+                    bar_position = data_file_path.rfind('/')
+                    bar_position = bar_position if bar_position >= 0 else 0
 
-                for i, feature in enumerate(features_data):
-                    soup_name = f'{filename}_soup_{i}'
-                    grp = h5_file.create_group(soup_name)
-                    points = gt_points[features_point_indices[i]]
-                    grp.create_dataset('gt_points', data=points)
-                    feature['name'] = soup_name
-                    feature['normalized'] = True
-                    feature = filterFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_TRANSLATION)
-                    grp.attrs['meta'] = np.void(pickle.dumps(feature))
+                    for i, feature in enumerate(features_data):
+                        soup_name = f'{filename}_soup_{i}'
+                        grp = h5_file.create_group(soup_name)
+                        points = gt_points[features_point_indices[i]]
+                        grp.create_dataset('gt_points', data=points)
+                        feature['name'] = soup_name
+                        feature['normalized'] = True
+                        feature = filterFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_TRANSLATION)
+                        grp.attrs['meta'] = np.void(pickle.dumps(feature))
+                else:
+                    print(f'ERROR: {data_file_path} has no features left.')
+            
+            
             
         return True
 

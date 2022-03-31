@@ -46,7 +46,8 @@ if __name__ == '__main__':
 
     parser.add_argument('-dc', '--data_curation', action='store_true', help='')
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
-    parser.add_argument('-t_p', '--train_percentage', type=int, default = 80, help='')
+    parser.add_argument('-t_p', '--train_percentage', type=int, default = 0.8, help='')
+    parser.add_argument('-m_np', '--min_number_points', type=float, default = 0.0001, help='filter geometries by number of points.')
 
     args = vars(parser.parse_args())
 
@@ -64,6 +65,8 @@ if __name__ == '__main__':
     delete_old_pc = args['delete_old_pc']
     train_percentage = args['train_percentage']
     data_curation = args['data_curation']
+    min_number_points = args['min_number_points']
+    min_number_points = int(min_number_points) if min_number_points > 1 else min_number_points
 
     dataset_folder_name = args['dataset_folder_name']
     data_folder_name = args['data_folder_name']
@@ -89,6 +92,7 @@ if __name__ == '__main__':
         p = args[f'{format}_cube_reescale_factor']
         parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor
         parameters[format]['train_percentage'] = train_percentage
+        parameters[format]['min_number_points'] = min_number_points
         dataset_format_folder_name = join(folder_name, dataset_folder_name, format)
         parameters[format]['dataset_folder_name'] = dataset_format_folder_name
         data_format_folder_name = join(dataset_format_folder_name, data_folder_name)
@@ -146,15 +150,16 @@ if __name__ == '__main__':
         normals[:, 2] = pc['normal_z']
         labels = pc['label']
 
+        labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data['surfaces'])
+
         if data_curation:
-            labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data['surfaces'])
             for i, feature in enumerate(features_data['surfaces']):
                 fpi = features_point_indices[i]
                 if len(fpi) > 0:
                     primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
                     if primitive is not None:
                         points[fpi], normals[fpi] = primitive.computeCorrectPointsAndNormals(points[fpi])
-            dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=False)
-        else:
-            dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, is_face_labels=True)
+        
+        dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, features_point_indices=features_point_indices)
+        
     dataset_writer_factory.finishAllFormats()
