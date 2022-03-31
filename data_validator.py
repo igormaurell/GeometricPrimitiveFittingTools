@@ -194,6 +194,9 @@ if __name__ == '__main__':
             normals = data['normals']
             labels = data['labels']
             features = data['features']
+            if points is None or normals is None or labels is None or features is None:
+                print('Invalid Model.')
+                continue
 
             dataset_errors[filename] = {}
 
