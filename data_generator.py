@@ -41,11 +41,11 @@ if __name__ == '__main__':
     parser.add_argument('--mesh_folder_name', type=str, default = 'mesh', help='mesh folder name.')
     parser.add_argument('--features_folder_name', type=str, default = 'features', help='features folder name.')
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
-    parser.add_argument('-d_dt', '--delete_old_data', action='store_true', help='')
     parser.add_argument('-d_pc', '--delete_old_pc', action='store_true', help='')
 
     parser.add_argument('-pc', '--points_curation', action='store_true', help='')
     parser.add_argument('-nc', '--normals_curation', action='store_true', help='')
+    parser.add_argument('-uon', '--use_original_noise', action='store_true', help='')
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
     parser.add_argument('-t_p', '--train_percentage', type=int, default = 0.8, help='')
     parser.add_argument('-m_np', '--min_number_points', type=float, default = 0.0001, help='filter geometries by number of points.')
@@ -62,9 +62,9 @@ if __name__ == '__main__':
     cube_reescale_factor = args['cube_reescale_factor']
 
     mps_ns = str(args['mesh_point_sampling_n_samples'])
-    delete_old_data = args['delete_old_data']
     delete_old_pc = args['delete_old_pc']
     train_percentage = args['train_percentage']
+    use_original_noise = args['use_original_noise']
     points_curation = args['points_curation']
     normals_curation = args['normals_curation']
     min_number_points = args['min_number_points']
@@ -101,9 +101,8 @@ if __name__ == '__main__':
         parameters[format]['data_folder_name'] = data_format_folder_name
         transform_format_folder_name = join(dataset_format_folder_name, transform_folder_name)
         parameters[format]['transform_folder_name'] = transform_format_folder_name
-        if delete_old_data:
-            if exists(dataset_format_folder_name):
-                rmtree(dataset_format_folder_name)
+        if exists(dataset_format_folder_name):
+            rmtree(dataset_format_folder_name)
         makedirs(dataset_format_folder_name, exist_ok=True)
         makedirs(data_format_folder_name, exist_ok=True)
         makedirs(transform_format_folder_name, exist_ok=True)
@@ -154,6 +153,7 @@ if __name__ == '__main__':
 
         labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data['surfaces'])
 
+        noisy_points = None
         if points_curation or normals_curation:
             points_new = points.copy()
             normals_new = normals.copy()
@@ -164,10 +164,12 @@ if __name__ == '__main__':
                     if primitive is not None:
                         points_new[fpi], normals_new[fpi] = primitive.computeCorrectPointsAndNormals(points[fpi])
             if points_curation:
+                if use_original_noise:
+                    noisy_points = points.copy()
                 points = points_new
             if normals_curation:
                 normals = normals_new
 
-        dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, filename=filename, features_point_indices=features_point_indices)
+        dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices)
         
     dataset_writer_factory.finishAllFormats()
