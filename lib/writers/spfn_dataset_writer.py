@@ -7,19 +7,34 @@ import uuid
 import os
 
 from lib.normalization import normalize
-from lib.utils import filterFeaturesData, filterFeature, computeLabelsFromFace2Primitive, computeFeaturesPointIndices
+from lib.utils import filterFeaturesData, translateFeature, computeLabelsFromFace2Primitive, computeFeaturesPointIndices, strLower
 
 from .base_dataset_writer import BaseDatasetWriter
 
 class SpfnDatasetWriter(BaseDatasetWriter):
     FEATURES_BY_TYPE = {
-        'plane': ['type', 'name', 'location', 'z_axis', 'normalized'],
-        'cylinder': ['type', 'name', 'location', 'z_axis', 'radius', 'normalized'],
-        'cone': ['type', 'name', 'location', 'z_axis', 'radius', 'angle', 'apex', 'normalized'],
-        'sphere': ['type', 'name', 'location', 'radius', 'normalized']
+        'plane': ['type', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'normalized'],
+        'cylinder': ['type', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'radius', 'normalized'],
+        'cone': ['type', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'radius', 'semi_angle', 'apex_x', 'apex_y', 'apex_z', 'normalized'],
+        'sphere': ['type', 'name', 'location_x', 'location_y', 'location_z', 'radius', 'normalized']
     }
 
-    FEATURES_TRANSLATION = {}
+    FEATURES_MAPPING = {
+        'type': {'type': str, 'map': 'type', 'transform': strLower},
+        'name': {'type': str, 'map': 'name'},
+        'normalized': {'type': bool, 'map': 'normalized'},
+        'location_x': {'type': float, 'map': ('location', 0)},
+        'location_y': {'type': float, 'map': ('location', 1)},
+        'location_z': {'type': float, 'map': ('location', 2)},
+        'axis_x': {'type': float, 'map': ('z_axis', 0)},
+        'axis_y': {'type': float, 'map': ('z_axis', 1)},
+        'axis_z': {'type': float, 'map': ('z_axis', 2)},
+        'apex_x': {'type': float, 'map': ('apex', 0)},
+        'apex_y': {'type': float, 'map': ('apex', 1)},
+        'apex_z': {'type': float, 'map': ('apex', 2)},
+        'semi_angle': {'type': float, 'map': 'angle'},
+        'radius': {'type': float, 'map': 'radius'},
+    }
 
     def __init__(self, parameters):
         super().__init__(parameters)
@@ -93,7 +108,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                         grp.create_dataset('gt_points', data=points)
                         feature['name'] = soup_name
                         feature['normalized'] = True
-                        feature = filterFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_TRANSLATION)
+                        feature = translateFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_MAPPING)
                         grp.attrs['meta'] = np.void(pickle.dumps(feature))
                 else:
                     print(f'ERROR: {data_file_path} has no features left.')

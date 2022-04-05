@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import numpy as np
 import pickle
 import json
@@ -104,13 +105,36 @@ def loadFeatures(features_name: str, tp: str):
     else:
         return loadJSON(f'{features_name}.{tp}')
 
-def filterFeature(feature_data, features_by_type, features_translation):
+def strUpperFirstLetter(s):
+    return s[0].upper() + s[1:]
+
+def strLower(s):
+    return s.lower()
+
+def translateFeature(feature_data, features_by_type, features_mapping):
     assert 'type' in feature_data.keys()
     tp = feature_data['type'].lower()
     assert tp in features_by_type.keys()
     feature_out = {}
-    for key in features_by_type[tp]:
-        feature_out[key if not key in features_translation.keys() else features_translation[key]] = feature_data[key]
+    for feature_key in features_by_type[tp]:
+        if feature_key in features_mapping:
+            mapping = features_mapping[feature_key]
+            feature_out[feature_key] = mapping['type']()
+            if isinstance(mapping['map'], list):
+                for elem in mapping['map']:
+                    if isinstance(elem, tuple):
+                        feature_out[feature_key].append(feature_data[elem[0]][elem[1]])
+                    else:
+                        feature_out[feature_key].append(feature_data[elem])
+            else:
+                if isinstance(mapping['map'], tuple):
+                    feature_out[feature_key] = feature_data[mapping['map'][0]][mapping['map'][1]]
+                else:
+                    feature_out[feature_key] = feature_data[mapping['map']]
+            if 'transform' in mapping:
+                feature_out[feature_key] = mapping['transform'](feature_out[feature_key])
+        elif feature_key in feature_data:
+            feature_out[feature_key] = feature_data[feature_key]
     return feature_out
 
 def filterFeaturesData(features_data, types=None, min_number_points=None, labels=None, features_point_indices=None):
