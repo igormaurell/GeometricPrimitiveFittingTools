@@ -23,8 +23,8 @@ def generateErrorsBoxPlot(errors, individual=True, all_models=False):
     else:
         for tp, e in errors.items():
             data_labels.append(tp)
-            data_distances.append(np.concatenate(e['distances']))
-            data_angles.append(np.concatenate(e['angles']))
+            data_distances.append(np.concatenate(e['distances']) if len(e['distances']) > 0 else [])
+            data_angles.append(np.concatenate(e['angles']) if len(e['angles']) > 0 else [])
     fig, (ax1, ax2) = plt.subplots(2, 1)
     fig.tight_layout(pad=2.0)
     ax1.set_title('Distance Deviation')
@@ -90,10 +90,7 @@ def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
         summa = np.sum(mean_angles)
         if tp not in logs_dict.keys():
             logs_dict[tp] = getBaseKeyLogsDict()
-        if number_of_primitives > 0 and number_of_points > 0:
-            logs_dict = sumToLogsDict(['total', tp], logs_dict, nop=number_of_primitives, novp=number_of_void_primitives, nopoints=number_of_points, ned=number_error_distances, nea=number_error_angles, sd=summd, sa=summa)
-        else:
-            print(f'WARNING: {tp} has {number_of_primitives} primitives and {number_of_points} points.')
+        logs_dict = sumToLogsDict(['total', tp], logs_dict, nop=number_of_primitives, novp=number_of_void_primitives, nopoints=number_of_points, ned=number_error_distances, nea=number_error_angles, sd=summd, sa=summa)
     return logs_dict
 
 def generateLog(logs_dict, max_distance_deviation, max_angle_deviation):
@@ -110,10 +107,10 @@ def generateLog(logs_dict, max_distance_deviation, max_angle_deviation):
         log += f'\t\t- Number of Primitives: {number_of_primitives + number_of_void_primitives}\n'
         log += f'\t\t- Number of Void Primitives: {number_of_void_primitives}\n'
         log += f'\t\t- Number of Points: {number_of_points}\n'
-        log += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {(100.0*number_error_distances)/number_of_points}%\n'
-        log += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {(100.0*number_error_angles)/number_of_points}%\n'
-        log += f'\t\t- Mean Distance Error: {sum_distances/number_of_primitives}\n'
-        log += f'\t\t- Mean Normal Error: {sum_angles/number_of_primitives}\n\n'
+        log += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {((100.0*number_error_distances)/number_of_points) if number_of_points > 0 else 0 }%\n'
+        log += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {((100.0*number_error_angles)/number_of_points) if number_of_points > 0 else 0}%\n'
+        log += f'\t\t- Mean Distance Error: {(sum_distances/number_of_primitives) if number_of_primitives > 0 else 0}\n'
+        log += f'\t\t- Mean Normal Error: {(sum_angles/number_of_primitives) if number_of_primitives > 0 else 0}\n\n'
     return log
 
 def computeErrorsArrays(indices, distances, angles, max_distance_deviation, max_angle_deviation):

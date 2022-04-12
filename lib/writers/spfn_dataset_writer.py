@@ -54,12 +54,12 @@ class SpfnDatasetWriter(BaseDatasetWriter):
 
         if labels is not None:   
             if features_point_indices is None:
-                    features_point_indices = computeFeaturesPointIndices(labels)
+                features_point_indices = computeFeaturesPointIndices(labels)
 
-                min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
-                min_number_points = min_number_points if min_number_points >= 0 else 1
+            min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
+            min_number_points = min_number_points if min_number_points >= 0 else 1
 
-                features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
+            features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
                                                            labels=labels, features_point_indices=features_point_indices)
 
             if len(features_data) == 0:
