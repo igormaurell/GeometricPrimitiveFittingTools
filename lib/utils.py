@@ -141,7 +141,6 @@ def filterFeaturesData(features_data, types=None, min_number_points=None, labels
     by_type_condition = lambda x: True
     if types is not None:
         by_type_condition = lambda x: x['type'].lower() in types
-
     by_npoints_condition = lambda x: True
     if min_number_points is not None and features_point_indices is not None:
         by_npoints_condition = lambda x: len(x) >= min_number_points
