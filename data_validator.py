@@ -90,7 +90,10 @@ def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
         summa = np.sum(mean_angles)
         if tp not in logs_dict.keys():
             logs_dict[tp] = getBaseKeyLogsDict()
-        logs_dict = sumToLogsDict(['total', tp], logs_dict, nop=number_of_primitives, novp=number_of_void_primitives, nopoints=number_of_points, ned=number_error_distances, nea=number_error_angles, sd=summd, sa=summa)
+        if number_of_primitives > 0 and number_of_points > 0:
+            logs_dict = sumToLogsDict(['total', tp], logs_dict, nop=number_of_primitives, novp=number_of_void_primitives, nopoints=number_of_points, ned=number_error_distances, nea=number_error_angles, sd=summd, sa=summa)
+        else:
+            print(f'WARNING: {tp} has {number_of_primitives} primitives and {number_of_points} points.')
     return logs_dict
 
 def generateLog(logs_dict, max_distance_deviation, max_angle_deviation):

@@ -43,8 +43,6 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         if filename is None:
             filename = str(uuid.uuid4())
         
-        self.filenames_by_set[self.current_set_name].append(filename)
-
         data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
@@ -53,6 +51,22 @@ class SpfnDatasetWriter(BaseDatasetWriter):
 
         if os.path.exists(data_file_path):
            return False
+
+        if labels is not None:   
+            if features_point_indices is None:
+                    features_point_indices = computeFeaturesPointIndices(labels)
+
+                min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
+                min_number_points = min_number_points if min_number_points >= 0 else 1
+
+                features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
+                                                           labels=labels, features_point_indices=features_point_indices)
+
+            if len(features_data) == 0:
+                print(f'ERROR: {data_file_path} has no features left.')
+                return False
+
+        self.filenames_by_set[self.current_set_name].append(filename)
 
         with h5py.File(data_file_path, 'w') as h5_file:
             noise_limit = 0.
@@ -82,38 +96,23 @@ class SpfnDatasetWriter(BaseDatasetWriter):
             gc.collect()
 
             if labels is not None:
-                
-                if features_point_indices is None:
-                    features_point_indices = computeFeaturesPointIndices(labels)
-
-                min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
-                min_number_points = min_number_points if min_number_points >= 0 else 1
-
-                features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
-                                                           labels=labels, features_point_indices=features_point_indices)
-                                                                               
                 h5_file.create_dataset('gt_labels', data=labels)
 
-                if len(features_data) > 0:
-                    point_position = data_file_path.rfind('.')
-                    point_position = point_position if point_position >= 0 else len(point_position)
-                    bar_position = data_file_path.rfind('/')
-                    bar_position = bar_position if bar_position >= 0 else 0
+                point_position = data_file_path.rfind('.')
+                point_position = point_position if point_position >= 0 else len(point_position)
+                bar_position = data_file_path.rfind('/')
+                bar_position = bar_position if bar_position >= 0 else 0
 
-                    for i, feature in enumerate(features_data):
-                        soup_name = f'{filename}_soup_{i}'
-                        grp = h5_file.create_group(soup_name)
-                        feat_points = points[features_point_indices[i]]
-                        grp.create_dataset('gt_points', data=feat_points)
-                        feature['name'] = soup_name
-                        feature['normalized'] = True
-                        feature = translateFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_MAPPING)
-                        grp.attrs['meta'] = np.void(pickle.dumps(feature))
-                else:
-                    print(f'ERROR: {data_file_path} has no features left.')
-            
-            
-            
+                for i, feature in enumerate(features_data):
+                    soup_name = f'{filename}_soup_{i}'
+                    grp = h5_file.create_group(soup_name)
+                    feat_points = points[features_point_indices[i]]
+                    grp.create_dataset('gt_points', data=feat_points)
+                    feature['name'] = soup_name
+                    feature['normalized'] = True
+                    feature = translateFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_MAPPING)
+                    grp.attrs['meta'] = np.void(pickle.dumps(feature))
+                             
         return True
 
     def finish(self, permutation=None):
