@@ -6,7 +6,7 @@ import re
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.utils import filterFeature
+from lib.utils import translateFeature, strUpperFirstLetter
 
 class SpfnDatasetReader(BaseDatasetReader):
     FEATURES_BY_TYPE = {
@@ -16,7 +16,14 @@ class SpfnDatasetReader(BaseDatasetReader):
         'sphere': ['type', 'location', 'radius']
     }
 
-    FEATURES_TRANSLATION = {}
+    FEATURES_MAPPING = {
+        'type': {'type': str, 'map': 'type', 'transform': strUpperFirstLetter},
+        'location': {'type': list, 'map': ['location_x', 'location_y', 'location_z']},
+        'z_axis': {'type': list, 'map': ['axis_x', 'axis_y', 'axis_z']},
+        'apex': {'type': list, 'map': ['apex_x', 'apex_y', 'apex_z']},
+        'angle': {'type': float, 'map': 'semi_angle'},
+        'radius': {'type': float, 'map': 'radius'},
+    }
 
     def __init__(self, parameters):
         super().__init__(parameters)
@@ -58,7 +65,7 @@ class SpfnDatasetReader(BaseDatasetReader):
             for i in range(len(found_soup_ids)):
                 g = h5_file[soup_id_to_key[i]]
                 meta = pickle.loads(g.attrs['meta'])
-                meta = filterFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_TRANSLATION)
+                meta = translateFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_MAPPING)
                 features_data.append(meta)
 
         result = {

@@ -51,5 +51,5 @@ class BaseDatasetWriter:
         self.reset()
 
     @abstractmethod
-    def step(self, points, normals=None, labels=None, features_data=[], filename=None, features_point_indices=None):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None):
         pass
