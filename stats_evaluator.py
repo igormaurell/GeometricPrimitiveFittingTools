@@ -47,7 +47,7 @@ def createNestedPieGraph(labels, in_data, out_data, title='', number_in_per_out=
     ax.pie(in_data, radius=1.1-size, colors=inner_colors, autopct=lambda pct: func(pct, in_data), pctdistance=1.15-size,
         wedgeprops=dict(width=size, edgecolor='w'))
 
-    ax.set(aspect="equal", title=title, loc='left')
+    ax.set(title=title, loc='top', bbox_to_anchor=(0.6, 0, 0.5, 1))
 
     ax.legend(wedges[0], labels,
             title="Types",
@@ -57,7 +57,7 @@ def createNestedPieGraph(labels, in_data, out_data, title='', number_in_per_out=
     return fig
 
 def createPieGraph(labels, data, title=''):
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10.5, 6))
 
     size = 0.8
 
@@ -65,19 +65,35 @@ def createPieGraph(labels, data, title=''):
     colors_array = np.arange(len(data))*2
     colors = cmap(colors_array)
 
-    def func(pct, allvals):
-        absolute = int(pct/100.*np.sum(allvals))
-        return "{:.1f}%\n({:d})".format(pct, absolute)
+    wedges = ax.pie(data, radius=1.1, colors=colors, wedgeprops=dict(width=size, edgecolor='w'))
 
-    wedges = ax.pie(data, radius=1.1, colors=colors, autopct=lambda pct: func(pct, data), pctdistance=0.65,
-        wedgeprops=dict(width=size, edgecolor='w'))
+    
+    bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
+    kw = dict(arrowprops=dict(arrowstyle="-"),
+          bbox=bbox_props, zorder=0, va="center")
 
-    ax.set(aspect="equal", title=title)
+    s = sum(data)
+    for i, p in enumerate(wedges[0]):
+        percent = data[i]/s
+        ang = (p.theta2 - p.theta1)/2. + p.theta1
+        y = np.sin(np.deg2rad(ang))
+        x = np.cos(np.deg2rad(ang))
+        if ang == 180 or ang == 0 or ang == 360:
+            ang = 0.1
+        horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
+        connectionstyle = "angle,angleA=0,angleB={}".format(ang)
+        kw["arrowprops"].update({"connectionstyle": connectionstyle})
+        ax.annotate(f'{round(percent*100, 2)}% ({data[i]})', xy=(x, y), xytext=(1.35*np.sign(x), 1.4*y),
+                    horizontalalignment=horizontalalignment, **kw)
+
+    ax.set(aspect="equal", )
+    ax.set_title(title, pad=32.0, fontsize=20)
     
     ax.legend(wedges[0], labels,
             title="Types",
             loc="lower right",
-            bbox_to_anchor=(0.85, -0.1, 0.5, 1), fontsize='large')
+            bbox_to_anchor=(1.118, -0.15, 0.5, 1), fontsize='large')
+    
     return fig
 
 def createBarGraph(columns, data, title='', y_label=''):
@@ -91,12 +107,16 @@ def createBarGraph(columns, data, title='', y_label=''):
 def saveFourFigs(fig1, fig2, fig3, fig4, folder_name):
     plt.figure(fig1.number)
     plt.savefig(f'{folder_name}/number_curves.png', transparent=True, dpi=600)
+    plt.close()
     plt.figure(fig2.number)
     plt.savefig(f'{folder_name}/number_vertices.png', transparent=True, dpi=600)
+    plt.close()
     plt.figure(fig3.number)
     plt.savefig(f'{folder_name}/number_surfaces.png', transparent=True, dpi=600)
+    plt.close()
     plt.figure(fig4.number)
     plt.savefig(f'{folder_name}/number_faces.png', transparent=True, dpi=600)
+    plt.close()
 
 def statsData2Graphs(data):
     ##curves
@@ -111,8 +131,8 @@ def statsData2Graphs(data):
         # data_small.append(d['number_curves']-d['number_small_curves'])
         # data_small.append(d['number_small_curves'])
     #fig_number_curves = createNestedPieGraph(columns_curves, data_number, data_small, title='Nuber of Curves per Type')
-    fig_number_curves = createPieGraph(columns_curves, data_number, title='Nuber of Curves per Type')
-    fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Nuber of Vertices per Type of Curve')
+    fig_number_curves = createPieGraph(columns_curves, data_number, title='Number of Curves per Type')
+    fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve')
 
     ##surfaces
     columns_surfaces = []
@@ -126,8 +146,8 @@ def statsData2Graphs(data):
         # data_small.append(d['number_surfaces']-d['number_small_surfaces'])
         # data_small.append(d['number_small_surfaces'])
     #fig_number_surfaces = createNestedPieGraph(columns_surfaces, data_number, data_small, title='Nuber of Surfaces per Type')
-    fig_number_surfaces = createPieGraph(columns_surfaces, data_number, title='Nuber of Surfaces per Type')
-    fig_number_faces = createPieGraph(columns_surfaces, data_faces,  title='Nuber of Faces per Type of Surface')
+    fig_number_surfaces = createPieGraph(columns_surfaces, data_number, title='Number of Surfaces per Type')
+    fig_number_faces = createPieGraph(columns_surfaces, data_faces,  title='Number of Faces per Type of Surface')
 
     return fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces
 
