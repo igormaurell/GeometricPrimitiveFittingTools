@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
     parameters = {}
     for format in formats:
-        parameters[format] = {'filter_features': {}, 'normalization': {}, 'input': {}}
+        parameters[format] = {'filter_features': {}, 'normalization': {}}
 
         p = args[f'{format}_curve_types']
         parameters[format]['filter_features']['curve_types'] = p if p is not None else curve_types

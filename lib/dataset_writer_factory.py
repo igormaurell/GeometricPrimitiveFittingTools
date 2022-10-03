@@ -6,6 +6,7 @@ from copy import deepcopy
 class DatasetWriterFactory:
     WRITERS_DICT = {
         'spfn': SpfnDatasetWriter,
+        'parsenet': ParsenetDatasetWriter
     }
 
     def __init__(self, parameters):

@@ -23,7 +23,7 @@ def computeGridOfRegions(points, region_size, region_axis):
     max = np.max(points, 0)
     max = np.delete(max, index)
     points_size = max - min
-    
+
     num_parts = np.ceil(points_size/size)
     num_parts = num_parts.astype('int64')
 
@@ -42,7 +42,7 @@ def computeGridOfRegions(points, region_size, region_axis):
             ur.insert(index, np.inf)
             ur = np.array(ur)
             regions[i][j] = (ll, ur)
-        
+            
     return regions
 
 def computeRegionAroundPoint(point, region_size, region_axis):
@@ -54,7 +54,7 @@ def computeRegionAroundPoint(point, region_size, region_axis):
     return ll, ur
 
 def randomSamplingPointsOnRegion(points, ll, ur, n_points):
-    inidx = np.all(np.logical_and(points >= ll, points <= ur), axis=1)
+    inidx = np.all(np.logical_and(points >= ll, points < ur), axis=1)
     indices = np.arange(0, inidx.shape[0], 1, dtype=int)
     indices = indices[inidx]
 
@@ -95,6 +95,16 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, region_si
     ll, ur = region
 
     indices = randomSamplingPointsOnRegion(points, ll, ur, n_points)
+
+    if len(indices) == 0:
+        return None
+
+    if len(indices) < n_points:
+        replicate_times = n_points//len(indices)
+        replicate_mod = n_points%len(indices)
+        indices_new = np.repeat(indices, replicate_times)
+        indices_new = np.concatenate((indices_new, indices[:replicate_mod]))
+        indices = indices_new
 
     points_part = points[indices]
     normals_part = normals[indices]
