@@ -6,13 +6,15 @@ from shutil import rmtree
 from os import makedirs
 from os.path import join, exists
 
+from math import ceil
+
 import numpy as np
 
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
-from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion
+from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, computeFootArea
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -132,6 +134,7 @@ if __name__ == '__main__':
     colors = getAllColorsArray()
 
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
+
     reader = dataset_reader_factory.getReaderByFormat(input_format)
 
     dataset_writer_factory = DatasetWriterFactory(output_parameters)
@@ -152,7 +155,7 @@ if __name__ == '__main__':
                                             relative_volume_threshold=relative_volume_threshold)
                 
                 if result is None:
-                    print(f'Point cloud has no points on region ({j},{k}).')
+                    #print(f'Point cloud has no points on region ({j},{k}).')
                     continue
                 number_test += 1
                 n_p = result['points'].shape[0]
@@ -178,16 +181,15 @@ if __name__ == '__main__':
     reader.setCurrentSetName('train')
     dataset_writer_factory.setCurrentSetNameAllFormats('train')
     train_set_len = len(reader)
-    div = number_train//train_set_len
-    mod = number_train%train_set_len
-    n_models = [div + 1 if i < mod else div for i in range(train_set_len)]
     print('Generating training dataset:')
     for i in tqdm(range(train_set_len)):
         point_cloud_full = None
         data = reader.step()
+        area = computeFootArea(data['points'], region_axis)
+        num_models = ceil(area/(np.prod(np.array(region_size))))
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         j = 0
-        while j < n_models[i]:
+        while j < num_models:
             filename_curr = f'{filename}_{j}'
             result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], region_size,
                                       region_axis, number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,

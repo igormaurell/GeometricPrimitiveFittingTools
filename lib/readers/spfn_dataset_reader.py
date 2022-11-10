@@ -6,6 +6,7 @@ import re
 
 from .base_dataset_reader import BaseDatasetReader
 
+from lib.normalization import unNormalize
 from lib.utils import translateFeature, strUpperFirstLetter
 
 class SpfnDatasetReader(BaseDatasetReader):
@@ -44,6 +45,9 @@ class SpfnDatasetReader(BaseDatasetReader):
         filename = filename[:point_position]
         transforms_file_path = join(self.transform_folder_name, f'{filename}.pkl')
 
+        with open(transforms_file_path, 'rb') as pkl_file:
+            transforms = pickle.load(pkl_file)
+
         with h5py.File(data_file_path, 'r') as h5_file:
             noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
             gt_points = h5_file['gt_points'][()] if 'gt_points' in h5_file.keys() else None
@@ -67,6 +71,9 @@ class SpfnDatasetReader(BaseDatasetReader):
                 meta = pickle.loads(g.attrs['meta'])
                 meta = translateFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_MAPPING)
                 features_data.append(meta)
+
+        gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
+        noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,

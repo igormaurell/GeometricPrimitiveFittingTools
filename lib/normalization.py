@@ -47,41 +47,40 @@ def addNoise(points, normals, limit=0.01):
     #not adding noise on normals yet
     return points
 
-def rotateFeatures(features, transform):
+def rotateUtil(points, transform, normals=None, features=[]):
+    points = (transform @ points.T).T
+    if normals is not None:
+        normals = (transform @ normals.T).T
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
                 if FEATURE_TYPE[key] == 'point' or FEATURE_TYPE[key] == 'vector':
                     features[i][key] = list((transform @ np.array(features[i][key]).T).T)
-    return features
+    return points, normals, features
 
 def alignCanonical(points, normals=None, features=[]):
     S, U = pca_numpy(points)
     smallest_ev = U[:, np.argmin(S)]
     R = rotation_matrix_a_to_b(smallest_ev, np.array([1, 0, 0]))
-    # rotate input points such that the minor principal
-    # axis aligns with x axis.
-    points = (R @ points.T).T
-    if normals is not None:
-        normals = (R @ normals.T).T
-    features = rotateFeatures(features, R)
+    points, normals, features = rotateUtil(points, R, normals=normals, features=features)
     return points, normals, features, R
 
-def translateFeatures(features, transform):
+def translateUtil(points, transform, normals=None, features=[]):
+    points = points + transform
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
                 if FEATURE_TYPE[key] == 'point':
                     features[i][key] = list(np.array(features[i][key]) + transform)
-    return features
+    return points, normals, features
 
 def centralize(points, features=[]):
     mean = np.mean(points, 0)
-    centralized_points = points - mean
-    features = translateFeatures(features, -mean)
-    return centralized_points, features, -mean
+    points, _, features = translateUtil(points, -mean, features=features)
+    return points, features, -mean
 
-def reescaleFeatures(features, factor):
+def reescaleUtil(points, factor, normals=None, features=[]):
+    points = points*factor
     for i in range(0, len(features)):
         for key in features[i].keys():
             if key in FEATURE_TYPE.keys():
@@ -89,26 +88,41 @@ def reescaleFeatures(features, factor):
                     features[i][key] = list(np.array(features[i][key])*factor)
                 if FEATURE_TYPE[key] == 'value':
                     features[i][key]*= factor
-    return features
+    return points, normals, features
 
 def rescale(points, features=[], factor=1000):
     f = factor + EPS
-    scaled_points = points*f
-    features = reescaleFeatures(features, f)
-    return scaled_points, features, f
+    points, _, features = reescaleUtil(points, f, features=features)
+    return points, features, f
 
 def cubeRescale(points, features=[], factor=1):
     std = np.max(points, 0) - np.min(points, 0)
     f = factor/(np.max(std) + EPS)
-    scaled_points = points*f
-    features = reescaleFeatures(features, f)
-    return scaled_points, features, f
+    points, _, features = reescaleUtil(points, f, features=features)
+    return points, features, f
+
+def unNormalize(points, transforms, normals=None, features=[]):
+    transform_functions = {
+        'translation': translateUtil,
+        'rotation': rotateUtil,
+        'scale': reescaleUtil
+    }
+    inverse_transforms = {
+        'translation': -transforms['translation'],
+        'rotation': transforms['rotation'].T,
+        'scale': 1./transforms['scale']
+    }
+
+    for key in transforms['sequence'][::-1]:
+        points, normals, features = transform_functions[key](points, inverse_transforms[key], normals=normals, features=features)
+
+    return points, normals, features
 
 def normalize(points, parameters,  normals=None, features=[]):
     transforms = {
         'translation': np.zeros(3),
         'rotation': np.eye(3),
-        'scale': 0.,
+        'scale': 1.,
         'sequence': ['translation', 'rotation', 'scale']
     }
 

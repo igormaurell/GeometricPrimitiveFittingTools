@@ -6,7 +6,8 @@ import re
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.utils import translateFeature, strUpperFirstLetter
+from lib.normalization import unNormalize
+from lib.utils import translateFeature
 
 class ParsenetDatasetReader(BaseDatasetReader):
     FEATURES_ID = {
@@ -58,6 +59,9 @@ class ParsenetDatasetReader(BaseDatasetReader):
                 meta = pickle.loads(g.attrs['meta'])
                 meta = translateFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_MAPPING)
                 features_data.append(meta)
+
+        gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
+        noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,

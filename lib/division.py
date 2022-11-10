@@ -4,6 +4,14 @@ import random
 
 from lib.utils import computeFeaturesPointIndices, sortedIndicesIntersection
 
+def computeFootArea(points, region_axis):
+    assert region_axis in ['x', 'y', 'z']
+    index = ['x', 'y', 'z'].index(region_axis)
+    size = np.max(points, axis=0) - np.min(points, axis=0)
+    size[index] = 1
+    return np.prod(size)
+
+
 def compute3DRegionSize(region_size, region_axis):
     assert region_axis in ['x', 'y', 'z']
     index = ['x', 'y', 'z'].index(region_axis)
@@ -135,7 +143,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, region_si
 def divideOnceRandom(points, normals, labels, features_data, region_size, region_axis, n_points,
                      filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
     
-    middle_point = points[random.randint(0, points.shape[0])]
+    middle_point = points[random.randint(0, points.shape[0] - 1)]
 
     region = computeRegionAroundPoint(middle_point, region_size, region_axis)
 
