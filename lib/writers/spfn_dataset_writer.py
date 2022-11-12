@@ -74,24 +74,25 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 noise_limit = self.normalization_parameters['add_noise']
                 self.normalization_parameters['add_noise'] = 0.
                 
-            points, gt_normals, features_data, transforms = normalize(points, self.normalization_parameters, normals=normals.copy(), features=features_data)
-            gt_normals=normals.copy()
+            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
+
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
 
-            h5_file.create_dataset('gt_points', data=points)
+            h5_file.create_dataset('gt_points', data=gt_points)
             if gt_normals is not None:
                 h5_file.create_dataset('gt_normals', data=gt_normals)
 
             if noise_limit == 0.:
-                noisy_points = points.copy()
+                noisy_points = gt_points
             else:
                 self.normalization_parameters['add_noise'] = noise_limit
-                noisy_points, _, _, _ = normalize(points, self.normalization_parameters, normals=normals.copy())
+                noisy_points, _, _, _ = normalize(points, self.normalization_parameters, normals=normals)
                 
             h5_file.create_dataset('noisy_points', data=noisy_points)
             del noisy_points
-
+            del points
+            del normals
             del gt_normals
             gc.collect()
 
@@ -106,7 +107,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 for i, feature in enumerate(features_data):
                     soup_name = f'{filename}_soup_{i}'
                     grp = h5_file.create_group(soup_name)
-                    feat_points = points[features_point_indices[i]]
+                    feat_points = gt_points[features_point_indices[i]]
                     grp.create_dataset('gt_points', data=feat_points)
                     feature['name'] = soup_name
                     feature['normalized'] = True
