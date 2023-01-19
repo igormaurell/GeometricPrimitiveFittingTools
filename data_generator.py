@@ -3,6 +3,8 @@ import argparse
 from tqdm import tqdm
 
 from pypcd import pypcd
+import trimesh
+
 
 import numpy as np
 
