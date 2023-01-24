@@ -7,23 +7,14 @@ import re
 from .base_dataset_reader import BaseDatasetReader
 
 from lib.normalization import unNormalize
-from lib.utils import translateFeature, strUpperFirstLetter
+from lib.utils import translateFeature
 
-class SpfnDatasetReader(BaseDatasetReader):
-    FEATURES_BY_TYPE = {
-        'plane': ['type', 'location', 'z_axis'],
-        'cylinder': ['type', 'location', 'z_axis', 'radius'],
-        'cone': ['type', 'location', 'z_axis', 'radius', 'angle', 'apex'],
-        'sphere': ['type', 'location', 'radius']
-    }
-
-    FEATURES_MAPPING = {
-        'type': {'type': str, 'map': 'type', 'transform': strUpperFirstLetter},
-        'location': {'type': list, 'map': ['location_x', 'location_y', 'location_z']},
-        'z_axis': {'type': list, 'map': ['axis_x', 'axis_y', 'axis_z']},
-        'apex': {'type': list, 'map': ['apex_x', 'apex_y', 'apex_z']},
-        'angle': {'type': float, 'map': 'semi_angle'},
-        'radius': {'type': float, 'map': 'radius'},
+class ParsenetDatasetReader(BaseDatasetReader):
+    FEATURES_ID = {
+        'plane': 1,
+        'cone': 3,
+        'cylinder': 4,
+        'sphere': 5
     }
 
     def __init__(self, parameters):
@@ -44,9 +35,6 @@ class SpfnDatasetReader(BaseDatasetReader):
         data_file_path = join(self.data_folder_name, filename)
         filename = filename[:point_position]
         transforms_file_path = join(self.transform_folder_name, f'{filename}.pkl')
-
-        with open(transforms_file_path, 'rb') as pkl_file:
-            transforms = pickle.load(pkl_file)
 
         with h5py.File(data_file_path, 'r') as h5_file:
             noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None

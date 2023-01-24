@@ -7,6 +7,7 @@ class DatasetWriterFactory:
     WRITERS_DICT = {
         'spfn': SpfnDatasetWriter,
         'primitivenet': PrimitivenetDatasetWriter,
+        'parsenet': ParsenetDatasetWriter
     }
 
     def __init__(self, parameters):

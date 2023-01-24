@@ -160,7 +160,7 @@ def filterFeaturesData(features_data, types=None, min_number_points=None, labels
                 features_point_indices.pop(i)
             labels_map[j] = -1
         j+=1
-
+    
     if labels is not None:
         for i in range(len(labels)):
             if labels[i] != -1:
