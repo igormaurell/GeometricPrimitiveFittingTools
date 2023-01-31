@@ -30,9 +30,9 @@ class DatasetWriterFactory:
         for writer in self.writers.values():
             writer.setCurrentSetName(set_name)
 
-    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, mesh=None):
         for writer in self.writers.values():
-            writer.step(points.copy(), normals=normals.copy(), labels=labels.copy(), features_data=deepcopy(features_data), noisy_points=noisy_points, filename=filename, features_point_indices=deepcopy(features_point_indices), **kwargs)
+            writer.step(points.copy(), normals=normals.copy(), labels=labels.copy(), features_data=deepcopy(features_data), noisy_points=noisy_points, filename=filename, features_point_indices=deepcopy(features_point_indices), mesh=mesh)
         self.step_num += 1
 
     def finishAllFormats(self):

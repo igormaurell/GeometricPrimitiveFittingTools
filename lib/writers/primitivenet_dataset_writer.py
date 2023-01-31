@@ -49,7 +49,7 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
             self.type2idx[PrimitivenetDatasetWriter.FEATURES_MAPPING['type']['transform'](k)] = i
         self.type2idx['unlabeled'] = len(type_list)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, mesh=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, mesh=None):
         if filename is None:
             filename = str(uuid.uuid4())
         

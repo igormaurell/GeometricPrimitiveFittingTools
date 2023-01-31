@@ -137,9 +137,9 @@ if __name__ == '__main__':
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
         mesh = None
-        if exists(mesh_filename):
+        if exists(mesh_filename) and 'primitivenet' in formats:
             mesh = trimesh.load_mesh(mesh_filename)
-            #print(mesh.faces[0])
+            print(mesh.faces[0])
         feature_tp =  features_filename[(point_position + 1):]
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
 
