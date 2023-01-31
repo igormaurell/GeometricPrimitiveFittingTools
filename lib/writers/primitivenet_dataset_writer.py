@@ -47,8 +47,9 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
         self.type2idx = dict()
         for i, k in enumerate(type_list):
             self.type2idx[PrimitivenetDatasetWriter.FEATURES_MAPPING['type']['transform'](k)] = i
+        self.type2idx['unlabeled'] = len(type_list)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, mesh=None, **kwargs):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -56,7 +57,6 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
         if type(features_data) == dict:
-            curves_data = features_data['curves']
             features_data = features_data['surfaces']
 
         if os.path.exists(data_file_path):
@@ -87,6 +87,9 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
                 
         points, normals, features_data, transforms = normalize(points, self.normalization_parameters, normals=normals.copy(), features=features_data)
 
+        #vertices = points
+        #vertex_normals = normals
+
         with open(transforms_file_path, 'wb') as pkl_file:
             pickle.dump(transforms, pkl_file)
 
@@ -106,40 +109,57 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
         vertex_normals = np.array(mesh.vertex_normals)
         triangles = np.array(mesh.triangles)'''
 
-        vertices = points
-        vertex_normals = normals
 
 
-
-        tree = KDTree(vertices, leaf_size=256)
+        '''tree = KDTree(vertices, leaf_size=256)
         print('Done building KDTree.')
         _, triangles = tree.query(vertices, k=3)
         print('Done querying KDTree.')
         triangles = np.unique(np.sort(triangles), axis=0)
-        print('Done findind unique triangles.')
+        print('Done findind unique triangles.')'''
 
-        vertex_types = np.zeros(shape=vertices.shape[:1], dtype=np.int32)
+        #triangles = mesh.faces
 
-        for surface, surface_indices in tqdm.tqdm(zip(features_data, features_point_indices)):
-            vertex_types[surface_indices] = self.type2idx[PrimitivenetDatasetWriter.FEATURES_MAPPING['type']['transform'](surface['type'])]
+        #face_types = np.ones(shape=triangles.shape[:1], dtype=np.int32) * self.type2idx['unlabeled']
+        surfaces_vertex_indices = []
 
+        point_types = np.ones(shape=(points.shape[0],1), dtype=np.int32) * (len(self.type2idx.keys()) - 1)
+
+        for surface in tqdm.tqdm(features_data):
+            if PrimitivenetDatasetWriter.FEATURES_MAPPING['type']['transform'](surface['type']) not in self.type2idx:
+                continue
+            #face_types[surface_indices] = self.type2idx[PrimitivenetDatasetWriter.FEATURES_MAPPING['type']['transform'](surface['type'])]
+            #surface_faces = triangles[surface_indices]
+            point_types[surface['vert_indices'],0] = self.type2idx[PrimitivenetDatasetWriter.FEATURES_MAPPING['type']['transform'](surface['type'])]
+
+            
+
+        '''vertex_instances = np.ones(shape=(vertices.shape[0],), dtype=np.int32) * -1
+        for i, (surface, vert_index) in tqdm.tqdm(enumerate(zip(surfaces_data, surfaces_vertex_indices))):
+            vertex_instances[vert_index] = i'''
+        
         npz_fields = {
-            'V': vertices,
-            'N': vertex_normals,
+            'V': points,
+            'N': normals,
             'I': labels,
-            'B': np.zeros(shape=vertices.shape[:1], dtype=np.int32),
-            'F': triangles,
-            'S': np.zeros(shape=triangles.shape[:1], dtype=np.int32),
+            'B': np.zeros(shape=(points.shape[0],), dtype=bool),
+            #'F': triangles,
+            'S': point_types,
         }
         
 
-        for idx, face in tqdm.tqdm(enumerate(triangles)):
-            v0_type = vertex_types[face[0]]
-            v1_type = vertex_types[face[1]]
-            v2_type = vertex_types[face[2]]
-            #print(npz_fields['S'].shape, idx)
-            npz_fields['S'][[idx]] = [Counter([v0_type,v1_type,v2_type]).most_common(1)[0][0]]
+        '''for idx, face in tqdm.tqdm(enumerate(triangles)):
+            v0_instance = vertex_instances[face[0]]
+            v1_instance = vertex_instances[face[1]]
+            v2_instance = vertex_instances[face[2]]
+            instance_counter = Counter([v0_instance,v1_instance,v2_instance])
+            for v_instance, v_idx in zip((v0_instance, v1_instance, v2_instance), face):
+                if instance_counter[v_instance] == 1:
+                    npz_fields['B'][v_idx] = 1'''
 
+
+        '''types_mesh = mesh.copy()
+        type_colors = np.random.sample(size=())'''
         #for curve in tqdm.tqdm(curves_data):
         #    npz_fields['B'][curve['vert_indices']] = np.ones(shape=(len(curve['vert_indices']),), dtype=np.int32)
 
