@@ -1,8 +1,10 @@
 from lib.readers.spfn_dataset_reader import SpfnDatasetReader
+from lib.readers.primitivenet_dataset_reader import PrimitivenetDatasetReader
 
 class DatasetReaderFactory:
     READERS_DICT = {
         'spfn': SpfnDatasetReader,
+        'primitivenet': PrimitivenetDatasetReader,
     }
 
     def __init__(self, parameters):
