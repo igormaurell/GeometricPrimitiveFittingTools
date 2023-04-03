@@ -132,7 +132,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--segmentation_gt', action='store_true', help='write segmentation ground truth.')
     parser.add_argument('-p', '--points_error', action='store_true', help='write segmentation ground truth.')
     parser.add_argument('-b', '--show_box_plot', action='store_true', help='show box plot of the data.')
-    parser.add_argument('-md', '--max_distance_deviation', type=float, default=50, help='max distance deviation.')
+    parser.add_argument('-md', '--max_distance_deviation', type=float, default=0.05, help='max distance deviation.')
     parser.add_argument('-mn', '--max_angle_deviation', type=float, default=10, help='max normal deviation.')
 
     args = vars(parser.parse_args())

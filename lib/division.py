@@ -4,6 +4,14 @@ import random
 
 from lib.utils import computeFeaturesPointIndices, sortedIndicesIntersection
 
+def computeFootArea(points, region_axis):
+    assert region_axis in ['x', 'y', 'z']
+    index = ['x', 'y', 'z'].index(region_axis)
+    size = np.max(points, axis=0) - np.min(points, axis=0)
+    size[index] = 1
+    return np.prod(size)
+
+
 def compute3DRegionSize(region_size, region_axis):
     assert region_axis in ['x', 'y', 'z']
     index = ['x', 'y', 'z'].index(region_axis)
@@ -23,7 +31,7 @@ def computeGridOfRegions(points, region_size, region_axis):
     max = np.max(points, 0)
     max = np.delete(max, index)
     points_size = max - min
-    
+
     num_parts = np.ceil(points_size/size)
     num_parts = num_parts.astype('int64')
 
@@ -42,7 +50,7 @@ def computeGridOfRegions(points, region_size, region_axis):
             ur.insert(index, np.inf)
             ur = np.array(ur)
             regions[i][j] = (ll, ur)
-        
+            
     return regions
 
 def computeRegionAroundPoint(point, region_size, region_axis):
@@ -54,7 +62,7 @@ def computeRegionAroundPoint(point, region_size, region_axis):
     return ll, ur
 
 def randomSamplingPointsOnRegion(points, ll, ur, n_points):
-    inidx = np.all(np.logical_and(points >= ll, points <= ur), axis=1)
+    inidx = np.all(np.logical_and(points >= ll, points < ur), axis=1)
     indices = np.arange(0, inidx.shape[0], 1, dtype=int)
     indices = indices[inidx]
 
@@ -96,6 +104,16 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, region_si
 
     indices = randomSamplingPointsOnRegion(points, ll, ur, n_points)
 
+    if len(indices) == 0:
+        return None
+
+    if len(indices) < n_points:
+        replicate_times = n_points//len(indices)
+        replicate_mod = n_points%len(indices)
+        indices_new = np.repeat(indices, replicate_times)
+        indices_new = np.concatenate((indices_new, indices[:replicate_mod]))
+        indices = indices_new
+
     points_part = points[indices]
     normals_part = normals[indices]
     labels_part = labels[indices]
@@ -125,7 +143,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, region_si
 def divideOnceRandom(points, normals, labels, features_data, region_size, region_axis, n_points,
                      filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
     
-    middle_point = points[random.randint(0, points.shape[0])]
+    middle_point = points[random.randint(0, points.shape[0] - 1)]
 
     region = computeRegionAroundPoint(middle_point, region_size, region_axis)
 

@@ -39,7 +39,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -56,14 +56,13 @@ class SpfnDatasetWriter(BaseDatasetWriter):
             if features_point_indices is None:
                 features_point_indices = computeFeaturesPointIndices(labels)
 
-            min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
+            min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
 
             features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
                                                            labels=labels, features_point_indices=features_point_indices)
-
             if len(features_data) == 0:
-                print(f'ERROR: {data_file_path} has no features left.')
+                #print(f'ERROR: {data_file_path} has no features left.')
                 return False
 
         self.filenames_by_set[self.current_set_name].append(filename)
@@ -75,23 +74,24 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 noise_limit = self.normalization_parameters['add_noise']
                 self.normalization_parameters['add_noise'] = 0.
                 
-            points, gt_normals, features_data, transforms = normalize(points, self.normalization_parameters, normals=normals.copy(), features=features_data)
-
+            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
 
-            h5_file.create_dataset('gt_points', data=points)
+            h5_file.create_dataset('gt_points', data=gt_points)
             if gt_normals is not None:
                 h5_file.create_dataset('gt_normals', data=gt_normals)
 
-            #if noise_limit != 0. or noisy_points is not None:
-            if noisy_points is None:
-                noisy_points = points.copy()
-            self.normalization_parameters['add_noise'] = noise_limit
-            noisy_points, _, _, _ = normalize(noisy_points, self.normalization_parameters, normals=normals.copy())
+            if noise_limit == 0.:
+                noisy_points = gt_points
+            else:
+                self.normalization_parameters['add_noise'] = noise_limit
+                noisy_points, _, _, _ = normalize(points, self.normalization_parameters, normals=normals)
+                
             h5_file.create_dataset('noisy_points', data=noisy_points)
             del noisy_points
-
+            del points
+            del normals
             del gt_normals
             gc.collect()
 
@@ -106,7 +106,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 for i, feature in enumerate(features_data):
                     soup_name = f'{filename}_soup_{i}'
                     grp = h5_file.create_group(soup_name)
-                    feat_points = points[features_point_indices[i]]
+                    feat_points = gt_points[features_point_indices[i]]
                     grp.create_dataset('gt_points', data=feat_points)
                     feature['name'] = soup_name
                     feature['normalized'] = True

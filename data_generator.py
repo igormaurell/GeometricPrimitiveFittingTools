@@ -4,6 +4,8 @@ from tqdm import tqdm
 
 from pypcd import pypcd
 
+import igl
+
 import numpy as np
 
 from shutil import rmtree
@@ -22,16 +24,16 @@ if __name__ == '__main__':
 
     parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
     parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
-    parser.add_argument('-c', '--centralize', type=bool, default = False, help='')
-    parser.add_argument('-a', '--align', type=bool, default = False, help='')
+    parser.add_argument('-c', '--centralize', action='store_true', help='')
+    parser.add_argument('-a', '--align', action='store_true', help='')
     parser.add_argument('-nl', '--noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
     for format in DatasetWriterFactory.WRITERS_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
         parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
-        parser.add_argument(f'-{format}_c', f'--{format}_centralize', type=bool, help='')
-        parser.add_argument(f'-{format}_a', f'--{format}_align', type=bool, help='')
+        parser.add_argument(f'-{format}_c', f'--{format}_centralize', action='store_true', help='')
+        parser.add_argument(f'-{format}_a', f'--{format}_align', action='store_true', help='')
         parser.add_argument(f'-{format}_nl', f'--{format}_noise_limit', type=float, help='')
         parser.add_argument(f'-{format}_crf', f'--{format}_cube_reescale_factor', type=float, help='')
 
@@ -79,16 +81,16 @@ if __name__ == '__main__':
 
     parameters = {}
     for format in formats:
-        parameters[format] = {'filter_features': {}, 'normalization': {}, 'input': {}}
+        parameters[format] = {'filter_features': {}, 'normalization': {}}
 
         p = args[f'{format}_curve_types']
         parameters[format]['filter_features']['curve_types'] = p if p is not None else curve_types
         p = args[f'{format}_surface_types']
         parameters[format]['filter_features']['surface_types'] = p if p is not None else surface_types
         p = args[f'{format}_centralize']
-        parameters[format]['normalization']['centralize'] = p if p is not None else centralize
+        parameters[format]['normalization']['centralize'] = p or centralize
         p = args[f'{format}_align']
-        parameters[format]['normalization']['align'] = p if p is not None else align
+        parameters[format]['normalization']['align'] = p or align
         p = args[f'{format}_noise_limit']
         parameters[format]['normalization']['add_noise'] = p if p is not None else noise_limit
         p = args[f'{format}_cube_reescale_factor']
@@ -127,14 +129,17 @@ if __name__ == '__main__':
         pc_filename = join(pc_folder_name, filename) + '.pcd'
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
               
-        if exists(pc_filename): pass
+        if exists(pc_filename):
+            pass
         elif exists(mesh_filename):
             makedirs(pc_folder_name, exist_ok=True)
             generatePCD(pc_filename, mps_ns, mesh_filename=mesh_filename)
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
-
+        mesh = None
+        if exists(mesh_filename) and 'primitivenet' in formats:
+            mesh = igl.read_triangle_mesh(mesh_filename)
         feature_tp =  features_filename[(point_position + 1):]
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
 
@@ -170,6 +175,6 @@ if __name__ == '__main__':
             if normals_curation:
                 normals = normals_new
 
-        dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices)
+        dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices, mesh=mesh)
         
     dataset_writer_factory.finishAllFormats()

@@ -2,14 +2,16 @@ import pickle
 import h5py
 import csv
 from os.path import join
+import os
 import re
+import numpy as np
 
 from .base_dataset_reader import BaseDatasetReader
 
 from lib.normalization import unNormalize
 from lib.utils import translateFeature, strUpperFirstLetter
 
-class SpfnDatasetReader(BaseDatasetReader):
+class PrimitivenetDatasetReader(BaseDatasetReader):
     FEATURES_BY_TYPE = {
         'plane': ['type', 'location', 'z_axis'],
         'cylinder': ['type', 'location', 'z_axis', 'radius'],
@@ -29,10 +31,8 @@ class SpfnDatasetReader(BaseDatasetReader):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-        with open(join(self.data_folder_name, 'train_models.csv'), 'r', newline='') as f:
-            self.filenames_by_set['train'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
-        with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
-            self.filenames_by_set['test'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
+        self.filenames_by_set['train'] = [os.path.join('train', filename) for filename in list(os.listdir(os.path.join(self.data_folder_name, 'train')))]
+        self.filenames_by_set['test'] = [os.path.join('val', filename) for filename in list(os.listdir(os.path.join(self.data_folder_name, 'val')))]
 
     def step(self):
         assert self.current_set_name in self.filenames_by_set.keys()
@@ -48,16 +48,16 @@ class SpfnDatasetReader(BaseDatasetReader):
         with open(transforms_file_path, 'rb') as pkl_file:
             transforms = pickle.load(pkl_file)
 
-        with h5py.File(data_file_path, 'r') as h5_file:
-            noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
-            gt_points = h5_file['gt_points'][()] if 'gt_points' in h5_file.keys() else None
-            gt_normals = h5_file['gt_normals'][()] if 'gt_normals' in h5_file.keys() else None
-            labels = h5_file['gt_labels'][()] if 'gt_labels' in h5_file.keys() else None
+        with np.load(data_file_path, 'r') as npz_file:
+            noisy_points = npz_file['noisy_points'] if 'noisy_points' in npz_file.keys() else None
+            gt_points = npz_file['V'] if 'V' in npz_file.keys() else None
+            gt_normals = npz_file['N'] if 'N' in npz_file.keys() else None
+            labels = npz_file['I'] if 'I' in npz_file.keys() else None
 
             found_soup_ids = []
             soup_id_to_key = {}
             soup_prog = re.compile('(.*)_soup_([0-9]+)$')
-            for key in list(h5_file.keys()):
+            for key in list(npz_file.keys()):
                 m = soup_prog.match(key)
                 if m is not None:
                     soup_id = int(m.group(2))
@@ -67,9 +67,9 @@ class SpfnDatasetReader(BaseDatasetReader):
             features_data = []            
             found_soup_ids.sort()
             for i in range(len(found_soup_ids)):
-                g = h5_file[soup_id_to_key[i]]
+                g = npz_file[soup_id_to_key[i]]
                 meta = pickle.loads(g.attrs['meta'])
-                meta = translateFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_MAPPING)
+                meta = translateFeature(meta, PrimitivenetDatasetReader.FEATURES_BY_TYPE, PrimitivenetDatasetReader.FEATURES_MAPPING)
                 features_data.append(meta)
 
         gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)

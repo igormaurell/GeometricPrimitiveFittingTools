@@ -14,13 +14,13 @@ class BaseDatasetWriter:
         self.filenames_by_set = {'train': [], 'test': []}
 
     def setParameters(self, parameters):
-        self.dataset_folder_name = parameters['dataset_folder_name'] if 'dataset_folder_name' in parameters.keys() else None
-        self.data_folder_name = parameters['data_folder_name'] if 'data_folder_name' in parameters.keys() else None
-        self.transform_folder_name = parameters['transform_folder_name'] if 'transform_folder_name' in parameters.keys() else None
-        self.normalization_parameters = parameters['normalization'] if 'normalization' in parameters.keys() else None
-        self.train_percentage = parameters['train_percentage'] if 'train_percentage' in parameters.keys() else None
-        self.min_number_points = parameters['min_number_points'] if 'min_number_points' in parameters.keys() else None
-        self.filter_features_parameters = parameters['filter_features'] if 'filter_features' in parameters.keys() else None
+        self.dataset_folder_name = parameters['dataset_folder_name'] if 'dataset_folder_name' in parameters.keys() else ''
+        self.data_folder_name = parameters['data_folder_name'] if 'data_folder_name' in parameters.keys() else ''
+        self.transform_folder_name = parameters['transform_folder_name'] if 'transform_folder_name' in parameters.keys() else ''
+        self.normalization_parameters = parameters['normalization'] if 'normalization' in parameters.keys() else {}
+        self.train_percentage = parameters['train_percentage'] if 'train_percentage' in parameters.keys() else 1.
+        self.min_number_points = parameters['min_number_points'] if 'min_number_points' in parameters.keys() else 0
+        self.filter_features_parameters = parameters['filter_features'] if 'filter_features' in parameters.keys() else {}
 
     def divisionTrainVal(self, permutation=None):
         if len(self.filenames_by_set['train']) > 0 and len(self.filenames_by_set['test']) > 0:
@@ -51,5 +51,5 @@ class BaseDatasetWriter:
         self.reset()
 
     @abstractmethod
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
         pass
