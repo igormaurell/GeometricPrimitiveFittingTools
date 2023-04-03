@@ -6,6 +6,7 @@ from copy import deepcopy
 class DatasetWriterFactory:
     WRITERS_DICT = {
         'spfn': SpfnDatasetWriter,
+        'primitivenet': PrimitivenetDatasetWriter,
         'parsenet': ParsenetDatasetWriter
     }
 
@@ -17,6 +18,10 @@ class DatasetWriterFactory:
             self.writers[format] = DatasetWriterFactory.WRITERS_DICT[format](parameters[format])
         random.seed(1234)
         self.step_num = 0
+
+    def getWriterInputTypes(self, writer):
+        assert writer in DatasetWriterFactory.WRITERS_DICT
+        return DatasetWriterFactory.WRITER_INPUT_TYPES[writer]
     
     def getWriterByFormat(self, format):
         return self.writers[format]
@@ -25,9 +30,9 @@ class DatasetWriterFactory:
         for writer in self.writers.values():
             writer.setCurrentSetName(set_name)
 
-    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None):
+    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, mesh=None):
         for writer in self.writers.values():
-            writer.step(points.copy(), normals=deepcopy(normals), labels=deepcopy(labels), features_data=deepcopy(features_data), noisy_points=deepcopy(noisy_points), filename=deepcopy(filename), features_point_indices=deepcopy(features_point_indices))
+            writer.step(points.copy(), normals=deepcopy(normals), labels=deepcopy(labels), features_data=deepcopy(features_data), noisy_points=deepcopy(noisy_points), filename=deepcopy(filename), features_point_indices=deepcopy(features_point_indices), mesh=deepcopy(mesh))
         self.step_num += 1
 
     def finishAllFormats(self):

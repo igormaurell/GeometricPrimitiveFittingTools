@@ -39,7 +39,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -75,7 +75,6 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 self.normalization_parameters['add_noise'] = 0.
                 
             gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
-
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
 

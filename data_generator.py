@@ -4,6 +4,8 @@ from tqdm import tqdm
 
 from pypcd import pypcd
 
+import igl
+
 import numpy as np
 
 from shutil import rmtree
@@ -127,14 +129,17 @@ if __name__ == '__main__':
         pc_filename = join(pc_folder_name, filename) + '.pcd'
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
               
-        if exists(pc_filename): pass
+        if exists(pc_filename):
+            pass
         elif exists(mesh_filename):
             makedirs(pc_folder_name, exist_ok=True)
             generatePCD(pc_filename, mps_ns, mesh_filename=mesh_filename)
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
-
+        mesh = None
+        if exists(mesh_filename) and 'primitivenet' in formats:
+            mesh = igl.read_triangle_mesh(mesh_filename)
         feature_tp =  features_filename[(point_position + 1):]
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
 
@@ -170,6 +175,6 @@ if __name__ == '__main__':
             if normals_curation:
                 normals = normals_new
 
-        dataset_writer_factory.stepAllFormats(points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices)
+        dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices, mesh=mesh)
         
     dataset_writer_factory.finishAllFormats()
