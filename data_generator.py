@@ -129,7 +129,8 @@ if __name__ == '__main__':
         pc_filename = join(pc_folder_name, filename) + '.pcd'
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
               
-        if exists(pc_filename): pass
+        if exists(pc_filename):
+            pass
         elif exists(mesh_filename):
             makedirs(pc_folder_name, exist_ok=True)
             generatePCD(pc_filename, mps_ns, mesh_filename=mesh_filename)

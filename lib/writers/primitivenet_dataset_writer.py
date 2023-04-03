@@ -81,8 +81,7 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
             center = (A + B + C)/3
             centers_face[i] = center
                 
-        features_vertice_indices = computeFeaturesPointIndices(labels)
-
+        features_vertice_indices = computeFeaturesPointIndices(labels, size=len(features_data['surfaces']))
 
         min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
         min_number_points = min_number_points if min_number_points >= 0 else 1
@@ -116,8 +115,8 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
             vertice_instances = labels_faces[(faces[...,0] == vertice_idx) + (faces[...,1] == vertice_idx) + (faces[...,2] == vertice_idx)].reshape((-1,))
             boundaries[vertice_idx] = len(set(vertice_instances)) > 1'''
 
-        for i, feature in enumerate(features_data['curves']):
-            boundaries[np.array(feature['vert_indices'], dtype=np.int)] = True
+        #for i, feature in enumerate(features_data['curves']):
+        #    boundaries[np.array(feature['vert_indices'], dtype=np.int)] = True
 
         vert_face_counts = np.zeros((len(vertices),1), dtype=np.int)
         for face_idx, face in enumerate(faces):
