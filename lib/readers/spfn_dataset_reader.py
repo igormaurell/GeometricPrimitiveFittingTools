@@ -82,6 +82,7 @@ class SpfnDatasetReader(BaseDatasetReader):
             'labels': labels,
             'features': features_data,
             'filename': filename,
+            'transforms': transforms
         }
 
         self.steps_by_set[self.current_set_name] += 1

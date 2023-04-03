@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 from lib.utils import sortedIndicesIntersection, computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
+from lib.normalization import unNormalize
 
 def printAndReturn(text):
     print(text)
@@ -194,6 +195,7 @@ if __name__ == '__main__':
             normals = data['normals']
             labels = data['labels']
             features = data['features']
+            transforms = data['transforms']
             if points is None or normals is None or labels is None or features is None:
                 print('Invalid Model.')
                 continue
@@ -248,6 +250,8 @@ if __name__ == '__main__':
 
             if write_segmentation_gt:
                 instances_filename = f'{filename}_instances.obj'
+
+                points, _, _ = unNormalize(points, transforms, invert=False)
                 
                 writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
 
@@ -258,9 +262,9 @@ if __name__ == '__main__':
                 fig = generateErrorsBoxPlot(dataset_errors[filename])
                 plt.figure(fig.number)
                 plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
-                plt.show(block=False)
-                plt.pause(10)
-                plt.close()
+                #plt.show(block=False)
+                #plt.pause(10)
+                #plt.close()
 
             full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
         
