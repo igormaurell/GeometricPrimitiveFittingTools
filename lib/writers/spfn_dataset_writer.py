@@ -116,7 +116,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         return True
 
     def finish(self, permutation=None):
-        train_models, test_models = self.divisionTrainVal(permutation=permutation)
+        train_models, val_models = self.divisionTrainVal(permutation=permutation)
         
         with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w', newline='') as f:
             writer = csv.writer(f, delimiter=',',
@@ -125,6 +125,6 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w', newline='') as f:
             writer = csv.writer(f, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow([f'{filename}.h5' for filename in test_models])
+            writer.writerow([f'{filename}.h5' for filename in val_models])
 
         super().finish()

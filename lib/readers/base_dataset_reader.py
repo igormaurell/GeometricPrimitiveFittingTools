@@ -14,8 +14,8 @@ class BaseDatasetReader:
 
     def reset(self):
         self.current_set_name = 'train'
-        self.filenames_by_set = {'train': [], 'test': []}
-        self.steps_by_set = {'train': 0, 'test': 0}
+        self.filenames_by_set = {'train': [], 'val': []}
+        self.steps_by_set = {'train': 0, 'val': 0}
     
     def setCurrentSetName(self, set_name):
         assert set_name in self.filenames_by_set.keys()

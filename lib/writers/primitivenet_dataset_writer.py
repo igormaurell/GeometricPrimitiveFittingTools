@@ -155,7 +155,7 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
         return True
 
     def finish(self, permutation=None):
-        train_models, test_models = self.divisionTrainVal(permutation=permutation)
+        train_models, val_models = self.divisionTrainVal(permutation=permutation)
 
         os.makedirs(os.path.join(self.data_folder_name, 'train'), exist_ok=True)
 
@@ -166,7 +166,7 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
 
         os.makedirs(os.path.join(self.data_folder_name, 'val'), exist_ok=True)
 
-        for filename in test_models:
+        for filename in val_models:
             data_source_path = os.path.join(self.data_folder_name, f'{filename}.npz')
             data_target_path = os.path.join(self.data_folder_name, 'val', f'{filename}.npz')
             shutil.move(data_source_path, data_target_path)

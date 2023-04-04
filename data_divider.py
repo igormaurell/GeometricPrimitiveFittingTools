@@ -14,7 +14,7 @@ from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
-from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, computeFootArea
+from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, randomSamplingPointsOnRegion, computeFootArea, compute3DRegionSize
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('-vrs', '--val_region_size', type=float, default=4, help='')
     parser.add_argument('-tnp', '--train_number_points', type=int, default=0, help='')
     parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
-    parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=10000, help='')
+    parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=5000, help='')
     parser.add_argument('-vmnp', '--val_min_number_points', type=int, default=0, help='')
     parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
     parser.add_argument('-rvt', '--relative_volume_threshold', type=float, default=0., help='')
@@ -189,14 +189,22 @@ if __name__ == '__main__':
     for i in tqdm(range(train_set_len)):
         point_cloud_full = None
         data = reader.step()
+
+        rs = compute3DRegionSize(train_region_size, region_axis, region_axis_value=0)
+        ll = np.min(data['points'], axis=0) - rs/2
+        ur = np.max(data['points'], axis=0) - rs/2
+        search_points = randomSamplingPointsOnRegion(data['points'], ll, ur, 0)
+
         area = computeFootArea(data['points'], region_axis)
+        
         num_models = ceil(area/(np.prod(np.array(train_region_size))))
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         j = 0
         while j < num_models:
             filename_curr = f'{filename}_{j}'
-            result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
-                                      abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
+            result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], train_region_size, region_axis, train_number_points, 
+                                      filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold, 
+                                      search_points=search_points)
         
             if result is None:
                 continue

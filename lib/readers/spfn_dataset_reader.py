@@ -32,7 +32,7 @@ class SpfnDatasetReader(BaseDatasetReader):
         with open(join(self.data_folder_name, 'train_models.csv'), 'r', newline='') as f:
             self.filenames_by_set['train'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
         with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
-            self.filenames_by_set['test'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
+            self.filenames_by_set['val'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
 
     def step(self):
         assert self.current_set_name in self.filenames_by_set.keys()

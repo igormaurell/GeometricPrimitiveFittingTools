@@ -12,11 +12,11 @@ def computeFootArea(points, region_axis):
     return np.prod(size)
 
 
-def compute3DRegionSize(region_size, region_axis):
+def compute3DRegionSize(region_size, region_axis, region_axis_value=np.inf):
     assert region_axis in ['x', 'y', 'z']
     index = ['x', 'y', 'z'].index(region_axis)
     size = list(region_size)
-    size.insert(index, np.inf)
+    size.insert(index, region_axis_value)
     size = np.array(size)
     return size
 
@@ -142,11 +142,13 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
     return result
 
 def divideOnceRandom(points, normals, labels, features_data, region_size, region_axis, n_points,
-                     filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
-    
-    middle_point = points[random.randint(0, points.shape[0] - 1)]
+                     filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2, search_points=None):
+    if search_points is None:
+        middle_point = points[random.randint(0, points.shape[0] - 1)]
+    else:
+        middle_point = search_points[random.randint(0, points.shape[0] - 1)]
 
     region = computeRegionAroundPoint(middle_point, region_size, region_axis)
 
-    return sampleDataOnRegion(region, points, normals, labels, features_data, region_size, region_axis, n_points, filter_features_by_volume=filter_features_by_volume,
+    return sampleDataOnRegion(region, points, normals, labels, features_data, n_points, filter_features_by_volume=filter_features_by_volume,
                        abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
