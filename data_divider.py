@@ -54,7 +54,6 @@ if __name__ == '__main__':
     parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
     parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=10000, help='')
     parser.add_argument('-vmnp', '--val_min_number_points', type=int, default=0, help='')
-    parser.add_argument('-nt', '--number_train', type=float, default=0.7, help='')
     parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
     parser.add_argument('-rvt', '--relative_volume_threshold', type=float, default=0., help='')
     parser.add_argument('-imnp', '--instance_min_number_points', type=float, default = 1, help='filter geometries by number of points.')
@@ -85,7 +84,6 @@ if __name__ == '__main__':
     val_region_size = [args['val_region_size'], args['val_region_size']]
     train_number_points = args['train_number_points']
     val_number_points = args['val_number_points']
-    number_train = args['number_train']
     abs_volume_threshold = args['abs_volume_threshold']
     relative_volume_threshold = args['relative_volume_threshold']
     instance_min_number_points = args['instance_min_number_points']
@@ -183,9 +181,6 @@ if __name__ == '__main__':
                                                          features_data=result['features'], filename=filename_curr)
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
-
-    number_train = int(number_train) if number_train >= 1.0 else int(number_train*(number_val/(1.0-number_train)))
-    print(f'{number_train} train models will be generated.')
 
     reader.setCurrentSetName('train')
     dataset_writer_factory.setCurrentSetNameAllFormats('train')
