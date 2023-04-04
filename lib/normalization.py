@@ -101,20 +101,24 @@ def cubeRescale(points, features=[], factor=1):
     points, _, features = reescaleUtil(points, f, features=features)
     return points, features, f
 
-def unNormalize(points, transforms, normals=None, features=[]):
+def unNormalize(points, transforms, normals=None, features=[], invert=True):
     transform_functions = {
         'translation': translateUtil,
         'rotation': rotateUtil,
         'scale': reescaleUtil
     }
-    inverse_transforms = {
-        'translation': -transforms['translation'],
-        'rotation': transforms['rotation'].T,
-        'scale': 1./transforms['scale']
-    }
+    if invert:
+        t = {
+            'translation': -transforms['translation'],
+            'rotation': transforms['rotation'].T,
+            'scale': 1./transforms['scale'],
+            'sequence': transforms['sequence'][::-1]
+        }
+    else:
+        t = transforms
 
-    for key in transforms['sequence'][::-1]:
-        points, normals, features = transform_functions[key](points, inverse_transforms[key], normals=normals, features=features)
+    for key in t['sequence'][::-1]:
+        points, normals, features = transform_functions[key](points, t[key], normals=normals, features=features)
 
     return points, normals, features
 

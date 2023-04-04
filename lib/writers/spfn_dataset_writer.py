@@ -75,7 +75,6 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 self.normalization_parameters['add_noise'] = 0.
                 
             gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
-
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
 

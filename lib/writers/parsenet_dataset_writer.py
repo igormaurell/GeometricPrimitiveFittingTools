@@ -55,9 +55,9 @@ class ParsenetDatasetWriter(BaseDatasetWriter):
 
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
-        if labels is not None:   
+        if labels is not None:
             if features_point_indices is None:
-                features_point_indices = computeFeaturesPointIndices(labels)
+                features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
 
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1

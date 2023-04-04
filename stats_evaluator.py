@@ -56,7 +56,7 @@ def createNestedPieGraph(labels, in_data, out_data, title='', number_in_per_out=
 
     return fig
 
-def createPieGraph(labels, data, title=''):
+def createPieGraph(labels, data, title='', num_models=1):
     fig, ax = plt.subplots(figsize=(10.5, 6))
 
     size = 0.8
@@ -83,7 +83,7 @@ def createPieGraph(labels, data, title=''):
         horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
         connectionstyle = "angle,angleA=0,angleB={}".format(ang)
         kw["arrowprops"].update({"connectionstyle": connectionstyle})
-        ax.annotate(f'{round(percent*100, 2)}% ({data[i]})', xy=(x, y), xytext=(1.35*np.sign(x), 1.4*y),
+        ax.annotate(f'{round(percent*100, 2)}% (\u03BC = {data[i]//num_models})', xy=(x, y), xytext=(1.35*np.sign(x), 1.4*y),
                     horizontalalignment=horizontalalignment, **kw)
 
     ax.set(aspect="equal", )
@@ -118,7 +118,7 @@ def saveFourFigs(fig1, fig2, fig3, fig4, folder_name):
     plt.savefig(f'{folder_name}/number_faces.png', transparent=True, dpi=600)
     plt.close()
 
-def statsData2Graphs(data):
+def statsData2Graphs(data, num_models=1):
     ##curves
     columns_curves = []
     data_number = []
@@ -131,8 +131,8 @@ def statsData2Graphs(data):
         # data_small.append(d['number_curves']-d['number_small_curves'])
         # data_small.append(d['number_small_curves'])
     #fig_number_curves = createNestedPieGraph(columns_curves, data_number, data_small, title='Nuber of Curves per Type')
-    fig_number_curves = createPieGraph(columns_curves, data_number, title='Number of Curves per Type')
-    fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve')
+    fig_number_curves = createPieGraph(columns_curves, data_number, title='Number of Curves per Type', num_models=num_models)
+    fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve', num_models=num_models)
 
     ##surfaces
     columns_surfaces = []
@@ -146,8 +146,8 @@ def statsData2Graphs(data):
         # data_small.append(d['number_surfaces']-d['number_small_surfaces'])
         # data_small.append(d['number_small_surfaces'])
     #fig_number_surfaces = createNestedPieGraph(columns_surfaces, data_number, data_small, title='Nuber of Surfaces per Type')
-    fig_number_surfaces = createPieGraph(columns_surfaces, data_number, title='Number of Surfaces per Type')
-    fig_number_faces = createPieGraph(columns_surfaces, data_faces,  title='Number of Faces per Type of Surface')
+    fig_number_surfaces = createPieGraph(columns_surfaces, data_number, title='Number of Surfaces per Type', num_models=num_models)
+    fig_number_faces = createPieGraph(columns_surfaces, data_faces,  title='Number of Faces per Type of Surface', num_models=num_models)
 
     return fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces
 
@@ -181,5 +181,5 @@ if __name__ == '__main__':
         fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces = statsData2Graphs(data)
         saveFourFigs(fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, model_folder_name)
         stats_full = addStats(stats_full, data)
-    fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces = statsData2Graphs(stats_full)
+    fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces = statsData2Graphs(stats_full, num_models=len(stats_files_name))
     saveFourFigs(fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, graphs_folder_name)
