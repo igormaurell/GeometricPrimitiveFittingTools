@@ -10,12 +10,14 @@ from math import ceil
 
 import numpy as np
 
+import time
+
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, randomSamplingPointsOnRegion, computeFootArea, compute3DRegionSize
-    
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
@@ -140,6 +142,8 @@ if __name__ == '__main__':
 
     colors = getAllColorsArray()
 
+    start = time.time()
+
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
 
     reader = dataset_reader_factory.getReaderByFormat(input_format)
@@ -148,70 +152,77 @@ if __name__ == '__main__':
     number_val = 0
     reader.setCurrentSetName('val')
     dataset_writer_factory.setCurrentSetNameAllFormats('val')
-    print('Generating val dataset:')
-    for i in tqdm(range(len(reader))):
+    for i in range(len(reader)):
         point_cloud_full = None
         data = reader.step()
         regions_grid = computeGridOfRegions(data['points'], val_region_size, region_axis)
         filename = data['filename'] if 'filename' in data.keys() else str(i)
-        for j in range(len(regions_grid)):
-            for k in range(len(regions_grid[j])):
-                filename_curr = f'{filename}_{j}_{k}'
-                result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'],
-                                            val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
-                                            relative_volume_threshold=relative_volume_threshold)
+        print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
+        full_len = len(regions_grid)*len(regions_grid[0])
+        for ind in tqdm(range(full_len)):
+            j = ind%len(regions_grid)
+            k = ind//len(regions_grid)
+
+            filename_curr = f'{filename}_{j}_{k}'
+            result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'],
+                                        val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
+                                        relative_volume_threshold=relative_volume_threshold)
                 
-                if result is None:
-                    #print(f'Point cloud has no points on region ({j},{k}).')
-                    continue
-                number_val += 1
-                n_p = result['points'].shape[0]
-                if n_p < val_min_number_points:
-                    print(f'Point cloud has {n_p} points. The desired amount is {val_min_number_points}')
-                else:
-                    if write_obj:
-                        points = np.zeros((result['points'].shape[0], 6))
-                        points[:, 0:3] = result['points']
-                        points[:, 3:6] = np.array(computeRGB(colors[j*len(regions_grid[j]) + k]))
-                        if point_cloud_full is None:
-                            point_cloud_full = points.copy()
-                        else:
-                            point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
-                    dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
+            if result is None:
+                #print(f'Point cloud has no points on region ({j},{k}).')
+                continue
+            number_val += 1
+            n_p = result['points'].shape[0]
+            if n_p < val_min_number_points:
+                print(f'Point cloud has {n_p} points. The desired amount is {val_min_number_points}')
+            else:
+                if write_obj:
+                    points = np.zeros((result['points'].shape[0], 6))
+                    points[:, 0:3] = result['points']
+                    points[:, 3:6] = np.array(computeRGB(colors[j*len(regions_grid[j]) + k]))
+                    if point_cloud_full is None:
+                        point_cloud_full = points.copy()
+                    else:
+                        point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
+                dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                          features_data=result['features'], filename=filename_curr)
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
 
+    val_end = time.time()
+
     reader.setCurrentSetName('train')
     dataset_writer_factory.setCurrentSetNameAllFormats('train')
     train_set_len = len(reader)
-    print('Generating training dataset:')
-    for i in tqdm(range(train_set_len)):
+    for i in range(train_set_len):
         point_cloud_full = None
         data = reader.step()
-
         rs = compute3DRegionSize(train_region_size, region_axis, region_axis_value=0)
-        ll = np.min(data['points'], axis=0) - rs/2
+        ll = np.min(data['points'], axis=0) + rs/2
         ur = np.max(data['points'], axis=0) - rs/2
-        search_points = randomSamplingPointsOnRegion(data['points'], ll, ur, 0)
+        search_indices = randomSamplingPointsOnRegion(data['points'], ll, ur, 0)
+        search_points = data['points'][search_indices]
 
         area = computeFootArea(data['points'], region_axis)
         
         num_models = ceil(area/(np.prod(np.array(train_region_size))))
         filename = data['filename'] if 'filename' in data.keys() else str(i)
-        j = 0
-        while j < num_models:
+
+        print('\nGenerating training dataset - Model {} - [{}/{}]:'.format(filename, i+1, train_set_len))
+        for j in tqdm(range(num_models)):
             filename_curr = f'{filename}_{j}'
             result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], train_region_size, region_axis, train_number_points, 
                                       filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold, 
                                       search_points=search_points)
         
             if result is None:
+                j-= 1
                 continue
 
             n_p = result['points'].shape[0]
             if n_p < train_min_number_points:
-                print(f'Point cloud has {n_p} points. The desired amount is {train_min_number_points}')
+                #print(f'Point cloud has {n_p} points. The desired amount is {train_min_number_points}')
+                j-= 1
                 continue
             else:
                 if write_obj:
@@ -224,9 +235,11 @@ if __name__ == '__main__':
                         point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
                 dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                      features_data=result['features'], filename=filename_curr)
-            j+=1
 
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_train.obj', point_cloud_full)
     reader.finish()
     dataset_writer_factory.finishAllFormats()
+
+    end = time.time()
+    print('Whole proccess took: ', end - start, 's')

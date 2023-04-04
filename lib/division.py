@@ -69,7 +69,8 @@ def randomSamplingPointsOnRegion(points, ll, ur, n_points):
     if n_points > 0:
         perm = np.random.permutation(indices.shape[0])
         indices = indices[perm[:n_points]]
-        indices.sort()
+
+    indices.sort()
 
     return indices
 
@@ -146,7 +147,7 @@ def divideOnceRandom(points, normals, labels, features_data, region_size, region
     if search_points is None:
         middle_point = points[random.randint(0, points.shape[0] - 1)]
     else:
-        middle_point = search_points[random.randint(0, points.shape[0] - 1)]
+        middle_point = search_points[random.randint(0, search_points.shape[0] - 1)]
 
     region = computeRegionAroundPoint(middle_point, region_size, region_axis)
 
