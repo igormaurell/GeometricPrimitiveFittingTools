@@ -48,12 +48,16 @@ if __name__ == '__main__':
 
     parser.add_argument('-wo', '--write_obj', action='store_true', help='')
     parser.add_argument('-ra', '--region_axis', type=str, default='y', help='')
-    parser.add_argument('-rs', '--region_size', type=str, default='4000,4000', help='')
-    parser.add_argument('-np', '--number_points', type=int, default=10000, help='')
+    parser.add_argument('-trs', '--train_region_size', type=float, default=4, help='')
+    parser.add_argument('-vrs', '--val_region_size', type=float, default=4, help='')
+    parser.add_argument('-tnp', '--train_number_points', type=int, default=0, help='')
+    parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
+    parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=10000, help='')
+    parser.add_argument('-vmnp', '--val_min_number_points', type=int, default=0, help='')
     parser.add_argument('-nt', '--number_train', type=float, default=0.7, help='')
     parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
     parser.add_argument('-rvt', '--relative_volume_threshold', type=float, default=0., help='')
-    parser.add_argument('-m_np', '--min_number_points', type=float, default = 1, help='filter geometries by number of points.')
+    parser.add_argument('-imnp', '--instance_min_number_points', type=float, default = 1, help='filter geometries by number of points.')
 
     args = vars(parser.parse_args())
 
@@ -77,13 +81,18 @@ if __name__ == '__main__':
 
     write_obj = args['write_obj']
     region_axis = args['region_axis']
-    region_size = [float(s) for s in args['region_size'].split(',')]
-    number_points = args['number_points']
+    train_region_size = [args['train_region_size'], args['train_region_size']]
+    val_region_size = [args['val_region_size'], args['val_region_size']]
+    train_number_points = args['train_number_points']
+    val_number_points = args['val_number_points']
     number_train = args['number_train']
     abs_volume_threshold = args['abs_volume_threshold']
     relative_volume_threshold = args['relative_volume_threshold']
-    min_number_points = args['min_number_points']
-    min_number_points = int(min_number_points) if min_number_points >= 1 else min_number_points
+    instance_min_number_points = args['instance_min_number_points']
+    instance_min_number_points = int(instance_min_number_points) if instance_min_number_points >= 1 else instance_min_number_points
+
+    train_min_number_points = args['train_min_number_points']
+    val_min_number_points = args['val_min_number_points']
 
     input_parameters = {}
     output_parameters = {}
@@ -116,7 +125,7 @@ if __name__ == '__main__':
         p = args[f'{format}_noise_limit']
         output_parameters[format]['normalization']['add_noise'] = p if p is not None else noise_limit
         p = args[f'{format}_cube_reescale_factor']
-        output_parameters[format]['min_number_points'] = min_number_points
+        output_parameters[format]['min_number_points'] = instance_min_number_points
         output_parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor     
         output_dataset_format_folder_name = join(folder_name, output_dataset_folder_name, format)
         output_parameters[format]['dataset_folder_name'] = output_dataset_format_folder_name
@@ -138,29 +147,29 @@ if __name__ == '__main__':
     reader = dataset_reader_factory.getReaderByFormat(input_format)
 
     dataset_writer_factory = DatasetWriterFactory(output_parameters)
-    number_test = 0
-    reader.setCurrentSetName('test')
-    dataset_writer_factory.setCurrentSetNameAllFormats('test')
-    print('Generating test dataset:')
+    number_val = 0
+    reader.setCurrentSetName('val')
+    dataset_writer_factory.setCurrentSetNameAllFormats('val')
+    print('Generating val dataset:')
     for i in tqdm(range(len(reader))):
         point_cloud_full = None
         data = reader.step()
-        regions_grid = computeGridOfRegions(data['points'], region_size, region_axis)
+        regions_grid = computeGridOfRegions(data['points'], val_region_size, region_axis)
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         for j in range(len(regions_grid)):
             for k in range(len(regions_grid[j])):
                 filename_curr = f'{filename}_{j}_{k}'
-                result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'], region_size, region_axis,
-                                            number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
+                result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'],
+                                            val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                             relative_volume_threshold=relative_volume_threshold)
                 
                 if result is None:
                     #print(f'Point cloud has no points on region ({j},{k}).')
                     continue
-                number_test += 1
+                number_val += 1
                 n_p = result['points'].shape[0]
-                if n_p < number_points:
-                    print(f'Point cloud has {n_p} points. The desired amount is {number_points}')
+                if n_p < val_min_number_points:
+                    print(f'Point cloud has {n_p} points. The desired amount is {val_min_number_points}')
                 else:
                     if write_obj:
                         points = np.zeros((result['points'].shape[0], 6))
@@ -173,9 +182,9 @@ if __name__ == '__main__':
                     dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                          features_data=result['features'], filename=filename_curr)
         if write_obj:
-            writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_test.obj', point_cloud_full)
+            writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
 
-    number_train = int(number_train) if number_train >= 1.0 else int(number_train*(number_test/(1.0-number_train)))
+    number_train = int(number_train) if number_train >= 1.0 else int(number_train*(number_val/(1.0-number_train)))
     print(f'{number_train} train models will be generated.')
 
     reader.setCurrentSetName('train')
@@ -186,21 +195,21 @@ if __name__ == '__main__':
         point_cloud_full = None
         data = reader.step()
         area = computeFootArea(data['points'], region_axis)
-        num_models = ceil(area/(np.prod(np.array(region_size))))
+        num_models = ceil(area/(np.prod(np.array(train_region_size))))
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         j = 0
         while j < num_models:
             filename_curr = f'{filename}_{j}'
-            result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], region_size,
-                                      region_axis, number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
-                                      relative_volume_threshold=relative_volume_threshold)
+            result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
+                                      abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
         
             if result is None:
                 continue
 
             n_p = result['points'].shape[0]
-            if n_p < number_points:
-                print(f'Point cloud has {n_p} points. The desired amount is {number_points}')
+            if n_p < train_min_number_points:
+                print(f'Point cloud has {n_p} points. The desired amount is {train_min_number_points}')
+                continue
             else:
                 if write_obj:
                     points = np.zeros((result['points'].shape[0], 6))

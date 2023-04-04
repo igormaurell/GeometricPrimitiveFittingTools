@@ -139,7 +139,6 @@ if __name__ == '__main__':
         mesh = None
         if exists(mesh_filename) and 'primitivenet' in formats:
             mesh = trimesh.load_mesh(mesh_filename)
-            print(mesh.faces[0])
         feature_tp =  features_filename[(point_position + 1):]
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
 

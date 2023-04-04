@@ -65,10 +65,11 @@ def randomSamplingPointsOnRegion(points, ll, ur, n_points):
     inidx = np.all(np.logical_and(points >= ll, points < ur), axis=1)
     indices = np.arange(0, inidx.shape[0], 1, dtype=int)
     indices = indices[inidx]
-
-    perm = np.random.permutation(indices.shape[0])
-    indices = indices[perm[:n_points]]
-    indices.sort()
+    
+    if n_points > 0:
+        perm = np.random.permutation(indices.shape[0])
+        indices = indices[perm[:n_points]]
+        indices.sort()
 
     return indices
 
@@ -97,8 +98,8 @@ def featuresIndicesByPointsIndices(features_point_indices, points_indices, filte
 
     return np.array(features_indices)
 
-def sampleDataOnRegion(region, points, normals, labels, features_data, region_size, region_axis, n_points,
-                   filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2):
+def sampleDataOnRegion(region, points, normals, labels, features_data, n_points, filter_features_by_volume=True,
+                       abs_volume_threshold=0., relative_volume_threshold=0.2):
     
     ll, ur = region
 
