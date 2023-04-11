@@ -1,5 +1,14 @@
 from abc import abstractmethod
 
+class DatasetReaderIterator:
+    def __init__(self, dataset_reader):
+        self.dr = dataset_reader
+
+    def __next__(self):
+        if self.dr.steps_by_set[self.dr.current_set_name] < len(self.dr.filenames_by_set[self.dr.current_set_name]):
+            return self.dr.step()
+        raise StopIteration
+
 class BaseDatasetReader:
 
     def __init__(self, parameters):
@@ -27,8 +36,9 @@ class BaseDatasetReader:
     def finish(self):
         self.reset()
 
+    def __iter__(self):
+        return DatasetReaderIterator(self)
+
     @abstractmethod
     def step(self):
-        pass
-
-   
+        pass   

@@ -11,6 +11,9 @@ from lib.dataset_reader_factory import DatasetReaderFactory
 from lib.utils import sortedIndicesIntersection, computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.normalization import unNormalize
 
+from tqdm.contrib.concurrent import process_map, thread_map
+from functools import partial
+
 def printAndReturn(text):
     print(text)
     return text
@@ -119,6 +122,82 @@ def computeErrorsArrays(indices, distances, angles, max_distance_deviation, max_
     error_ang = np.sort(indices[angles > max_angle_deviation])
     return error_dist, error_ang
 
+folder_name = ''
+dataset_folder_name = ''
+data_folder_name = ''
+result_folder_name = ''
+transform_folder_name = ''
+delete_old_data = False
+VERBOSE = False
+write_segmentation_gt = False
+write_points_error = False
+box_plot = False
+max_distance_deviation = False
+max_angle_deviation = False
+
+def process(data):
+    log = ''
+            
+    filename = data['filename'] if 'filename' in data.keys() else str(i)
+    points = data['points']
+    normals = data['normals']
+    labels = data['labels']
+    features = data['features']
+    transforms = data['transforms']
+    if points is None or normals is None or labels is None or features is None:
+        print('Invalid Model.')
+        return None
+    dataset_errors[filename] = {}
+    log += f'\n-- File {filename}:\n'
+    colors_instances = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
+    colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
+    fpi = computeFeaturesPointIndices(labels, size=len(features))
+    for i, feature in enumerate(features):
+        points_curr = points[fpi[i]]
+        normals_curr = normals[fpi[i]]
+        primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
+        tp = primitive.getPrimitiveType()             
+        if tp not in dataset_errors[filename]:
+            dataset_errors[filename][tp] = {'distances': [], 'mean_distances': [], 'angles': [], 'mean_angles': [], 'void_primitives': []}
+        if len(fpi[i]) == 0:
+            dataset_errors[filename][tp]['void_primitives'].append(i)
+        else:
+            errors = primitive.computeErrors(points_curr, normals_curr)
+            dataset_errors[filename][tp]['distances'].append(errors['distances'])
+            dataset_errors[filename][tp]['angles'].append(errors['angles'])
+            dataset_errors[filename][tp]['mean_distances'].append(np.mean(errors['distances']))
+            dataset_errors[filename][tp]['mean_angles'].append(np.mean(errors['angles']))
+            if write_segmentation_gt:
+                colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
+                colors_types[fpi[i], :] = primitive.getColor()
+                if write_points_error:
+                    error_dist, error_ang = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_angle_deviation)
+                    error_both = sortedIndicesIntersection(error_dist, error_ang)
+                    colors_instances[error_dist, :] = np.array([0, 255, 255])
+                    colors_types[error_dist, :] = np.array([0, 255, 255])
+                    colors_instances[error_ang, :] = np.array([0, 0, 0])
+                    colors_types[error_ang, :] = np.array([0, 0, 0])
+                    colors_instances[error_both, :] = np.array([255, 0, 255])
+                    colors_types[error_both, :] = np.array([255, 0, 255])
+    logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_angle_deviation)
+    logs_dict['total']['number_of_points'] += np.count_nonzero(labels==-1)
+    error_log = generateLog(logs_dict, max_distance_deviation, max_angle_deviation)
+    log += error_log
+    with open(f'{log_format_folder_name}/{filename}.txt', 'w') as f:
+        f.write(log)
+    if write_segmentation_gt:
+        instances_filename = f'{filename}_instances.obj'
+        points, _, _ = unNormalize(points, transforms, invert=False)
+        writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
+        types_filename = f'{filename}_types.obj'
+        writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
+    if box_plot:
+        fig = generateErrorsBoxPlot(dataset_errors[filename])
+        plt.figure(fig.number)
+        plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
+    
+    return logs_dict
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for methods results')
     parser.add_argument('folder', type=str, help='dataset folder.')
@@ -178,96 +257,20 @@ if __name__ == '__main__':
 
     dataset_reader_factory = DatasetReaderFactory(parameters)
     reader = dataset_reader_factory.getReaderByFormat(format)
-    sets = ['test', 'train']
+    sets = ['val', 'train']
     colors_full = getAllColorsArray()
     for s in sets:
         reader.setCurrentSetName(s)
         full_log = printAndReturn(f'\nValidation of {s} dataset:\n')
         dataset_errors = {}
         full_logs_dicts = {}
-        for i in range(len(reader)):
-            log = ''
-            
-            data = reader.step()
 
-            filename = data['filename'] if 'filename' in data.keys() else str(i)
-            points = data['points']
-            normals = data['normals']
-            labels = data['labels']
-            features = data['features']
-            transforms = data['transforms']
-            if points is None or normals is None or labels is None or features is None:
-                print('Invalid Model.')
-                continue
+        results = process_map(process, reader, max_workers=32, chunksize=1)
 
-            dataset_errors[filename] = {}
-
-            log += printAndReturn(f'\n-- File {filename}:\n')
-
-            colors_instances = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
-            colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
-
-            fpi = computeFeaturesPointIndices(labels, size=len(features))
-            for i, feature in tqdm(enumerate(features)):
-                points_curr = points[fpi[i]]
-                normals_curr = normals[fpi[i]]
-                primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
-                tp = primitive.getPrimitiveType()
-                
-                if tp not in dataset_errors[filename]:
-                    dataset_errors[filename][tp] = {'distances': [], 'mean_distances': [], 'angles': [], 'mean_angles': [], 'void_primitives': []}
-
-                if len(fpi[i]) == 0:
-                    dataset_errors[filename][tp]['void_primitives'].append(i)
-                else:
-                    errors = primitive.computeErrors(points_curr, normals_curr)
-                    dataset_errors[filename][tp]['distances'].append(errors['distances'])
-                    dataset_errors[filename][tp]['angles'].append(errors['angles'])
-                    dataset_errors[filename][tp]['mean_distances'].append(np.mean(errors['distances']))
-                    dataset_errors[filename][tp]['mean_angles'].append(np.mean(errors['angles']))
-                
-                    if write_segmentation_gt:
-                        colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
-                        colors_types[fpi[i], :] = primitive.getColor()
-                        if write_points_error:
-                            error_dist, error_ang = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_angle_deviation)
-                            error_both = sortedIndicesIntersection(error_dist, error_ang)
-
-                            colors_instances[error_dist, :] = np.array([0, 255, 255])
-                            colors_types[error_dist, :] = np.array([0, 255, 255])
-
-                            colors_instances[error_ang, :] = np.array([0, 0, 0])
-                            colors_types[error_ang, :] = np.array([0, 0, 0])
-
-                            colors_instances[error_both, :] = np.array([255, 0, 255])
-                            colors_types[error_both, :] = np.array([255, 0, 255])
-
-            logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_angle_deviation)
-            error_log = generateLog(logs_dict, max_distance_deviation, max_angle_deviation)
-            log += printAndReturn(error_log)
-            with open(f'{log_format_folder_name}/{filename}.txt', 'w') as f:
-                f.write(log)
-
-            if write_segmentation_gt:
-                instances_filename = f'{filename}_instances.obj'
-
-                points, _, _ = unNormalize(points, transforms, invert=False)
-                
-                writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
-
-                types_filename = f'{filename}_types.obj'
-                writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
-
-            if box_plot:
-                fig = generateErrorsBoxPlot(dataset_errors[filename])
-                plt.figure(fig.number)
-                plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
-                #plt.show(block=False)
-                #plt.pause(10)
-                #plt.close()
-
+        print('Accumulating...')
+        for logs_dict in tqdm(results):
             full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
-        
+
         full_log += generateLog(full_logs_dicts, max_distance_deviation, max_angle_deviation)
         with open(f'{log_format_folder_name}/{s}.txt', 'w') as f:
             f.write(full_log)
