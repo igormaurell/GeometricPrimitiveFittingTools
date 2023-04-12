@@ -7,6 +7,8 @@ from numba import njit
 from os.path import exists
 from os import system
 from math import acos
+from pypcd import pypcd
+from struct import pack
 
 @njit
 def sortedIndicesIntersection(a, b):
@@ -204,3 +206,39 @@ def computeLabelsFromFace2Primitive(labels, features_data):
     
     return labels, features_point_indices
 
+def savePCD(filename, points, colors=None, normals=None, labels=None, binary=True):
+    axis = ['x', 'y', 'z']
+    fields = [(a, np.float32) for a in axis]
+    arr = np.copy(points)
+    
+    if colors is not None:
+        print('Color not implemented yet.')
+        pass
+
+    if normals is not None:
+        fields += [('normal_{}'.format(a), np.float32) for a in axis]
+        arr = np.hstack((arr, normals))
+    
+    if labels is not None:
+       fields += [('label', np.uint32)]
+       arr = np.hstack((arr, labels[..., None]))
+
+    arr_s = np.core.records.fromarrays(arr.transpose(), dtype=fields)
+
+    pc = pypcd.PointCloud.from_array(arr_s)
+
+    metadata = pc.get_metadata()
+    if binary:
+        metadata['data'] = 'binary'
+    else:
+        metadata['data'] = 'ascii'
+
+    header = pypcd.write_header(metadata)
+
+    with open(filename, 'wb' if binary else 'w') as f:
+        if binary:
+            f.write(bytes(header.encode('ascii')))
+            f.write(arr_s.tobytes())
+        else:
+            f.write(header)
+            f.write('\n'.join([' '.join(map(str, x)) for x in arr_s]))

@@ -3,6 +3,7 @@ import argparse
 from tqdm import tqdm
 
 from pypcd import pypcd
+import open3d as o3d
 
 import igl
 
@@ -12,7 +13,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import generatePCD, loadFeatures, computeLabelsFromFace2Primitive
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
@@ -51,6 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
     parser.add_argument('-t_p', '--train_percentage', type=int, default = 0.8, help='')
     parser.add_argument('-m_np', '--min_number_points', type=float, default = 0.0001, help='filter geometries by number of points.')
+    parser.add_argument('-ls', '--leaf_size', type=float, default = 0.0, help='')
 
     args = vars(parser.parse_args())
 
@@ -63,7 +65,7 @@ if __name__ == '__main__':
     noise_limit = args['noise_limit']
     cube_reescale_factor = args['cube_reescale_factor']
 
-    mps_ns = str(args['mesh_point_sampling_n_samples'])
+    mps_ns = args['mesh_point_sampling_n_samples']
     delete_old_pc = args['delete_old_pc']
     train_percentage = args['train_percentage']
     use_original_noise = args['use_original_noise']
@@ -78,6 +80,7 @@ if __name__ == '__main__':
     mesh_folder_name = join(folder_name, args['mesh_folder_name'])
     features_folder_name = join(folder_name, args['features_folder_name'])
     pc_folder_name = join(folder_name, args['pc_folder_name'])
+    leaf_size = args['leaf_size']
 
     parameters = {}
     for format in formats:
@@ -112,6 +115,7 @@ if __name__ == '__main__':
     if delete_old_pc:
         if exists(pc_folder_name):
             rmtree(pc_folder_name)
+    makedirs(pc_folder_name, exist_ok=True)
 
     if exists(features_folder_name):
         features_files = sorted([f for f in listdir(features_folder_name) if isfile(join(features_folder_name, f))])
@@ -128,33 +132,51 @@ if __name__ == '__main__':
 
         pc_filename = join(pc_folder_name, filename) + '.pcd'
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
-              
-        if exists(pc_filename):
-            pass
-        elif exists(mesh_filename):
-            makedirs(pc_folder_name, exist_ok=True)
-            generatePCD(pc_filename, mps_ns, mesh_filename=mesh_filename)
-        else:
-            print(f'\nFeature {filename} has no PCD or OBJ to use.')
-            continue
-        mesh = None
-        if exists(mesh_filename) and 'primitivenet' in formats:
-            mesh = igl.read_triangle_mesh(mesh_filename)
+    
         feature_tp =  features_filename[(point_position + 1):]
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
 
-        pc = pypcd.PointCloud.from_path(pc_filename).pc_data
+        if exists(pc_filename):
+            pc = pypcd.PointCloud.from_path(pc_filename).pc_data
+            
+            points = np.hstack((pc['x'], pc['y'], pc['z']))
+            normals = np.hstack((pc['normal_x'], pc['normal_y'], pc['normal_z']))
+            labels = pc['label']
 
-        points = np.ndarray(shape=(pc['x'].shape[0], 3), dtype=np.float64)
-        normals = np.ndarray(shape=(pc['normal_x'].shape[0], 3), dtype=np.float64)
-        labels = np.ndarray(shape=(pc['label'].shape[0],), dtype=np.float64)
-        points[:, 0] = pc['x']
-        points[:, 1] = pc['y']
-        points[:, 2] = pc['z']
-        normals[:, 0] = pc['normal_x']
-        normals[:, 1] = pc['normal_y']
-        normals[:, 2] = pc['normal_z']
-        labels = pc['label']
+        elif exists(mesh_filename):
+            
+            # FIXME using igl because there are some vertices without any faces
+            #mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
+            #print(o3d_mesh)
+            v, f = igl.read_triangle_mesh(mesh_filename)
+            mesh = o3d.geometry.TriangleMesh()
+            mesh.vertices = o3d.utility.Vector3dVector(v)
+            mesh.triangles = o3d.utility.Vector3iVector(f)
+
+            pcd = mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+
+            scene = o3d.t.geometry.RaycastingScene()
+            mesh_tensor = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+            scene.add_triangles(mesh_tensor)
+            labels = scene.compute_closest_points(o3d.core.Tensor(np.asarray(pcd.points), dtype=o3d.core.Dtype.Float32))['primitive_ids'].numpy()
+
+            if leaf_size > 0:
+                pcd, _, id_map = pcd.voxel_down_sample_and_trace(leaf_size, pcd.get_min_bound(), pcd.get_max_bound())
+                vote_map = [list(labels[np.asarray(ids)]) for ids in id_map]
+                labels = np.array([ max(map(lambda val: (votes.count(val), val), set(votes)))[1] for votes in vote_map])
+
+            points = np.asarray(pcd.points)
+            normals = np.asarray(pcd.normals)
+
+            #voting scheme
+            
+        
+            savePCD(pc_filename,  points, normals=normals, labels=labels)
+        else:
+            print(f'\nFeature {filename} has no PCD or OBJ to use.')
+            continue
+    
+        exit()
 
         labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data['surfaces'])
 
