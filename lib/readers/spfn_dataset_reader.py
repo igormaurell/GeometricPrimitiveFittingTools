@@ -91,3 +91,6 @@ class SpfnDatasetReader(BaseDatasetReader):
     
     def finish(self):
         super().finish()
+    
+    def __iter__(self):
+        return super().__iter__()

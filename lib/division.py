@@ -66,7 +66,7 @@ def randomSamplingPointsOnRegion(points, ll, ur, n_points):
     indices = np.arange(0, inidx.shape[0], 1, dtype=int)
     indices = indices[inidx]
     
-    if n_points > 0:
+    if n_points > 0 and indices.shape[0] > n_points:
         perm = np.random.permutation(indices.shape[0])
         indices = indices[perm[:n_points]]
 
