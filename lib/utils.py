@@ -206,6 +206,19 @@ def computeLabelsFromFace2Primitive(labels, features_data):
     
     return labels, features_point_indices
 
+def downsampleByPointIndices(pcd, indices, labels, leaf_size):
+    curr_pcd = pcd.select_by_index(indices)
+    curr_pcd, _, id_map = curr_pcd.voxel_down_sample_and_trace(leaf_size, curr_pcd.get_min_bound(), curr_pcd.get_max_bound())
+    curr_labels = labels[indices]
+    
+    #voting scheme: it is needed to recover the face_index information for each point (possible FIXME for the future)
+    #each new point is generate by some points from original pcd, so we are using the most voted face_index
+    vote_map = [list(curr_labels[np.asarray(ids)]) for ids in id_map]
+    down_labels = list([ max(map(lambda val: (votes.count(val), val), set(votes)))[1] for votes in vote_map])
+
+    down_pcd = curr_pcd
+    return down_pcd, down_labels
+
 def savePCD(filename, points, colors=None, normals=None, labels=None, binary=True):
     axis = ['x', 'y', 'z']
     fields = [(a, np.float32) for a in axis]

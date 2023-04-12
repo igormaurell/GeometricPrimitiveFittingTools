@@ -13,7 +13,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
@@ -141,44 +141,59 @@ if __name__ == '__main__':
             
             points = np.hstack((pc['x'], pc['y'], pc['z']))
             normals = np.hstack((pc['normal_x'], pc['normal_y'], pc['normal_z']))
-            labels = pc['label']
+            labels_mesh = pc['label']
+
+            labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
 
         elif exists(mesh_filename):
             
             # FIXME using igl because there are some vertices without any faces
             #mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
             #print(o3d_mesh)
-            v, f = igl.read_triangle_mesh(mesh_filename)
+            vertices, faces = igl.read_triangle_mesh(mesh_filename)
             mesh = o3d.geometry.TriangleMesh()
-            mesh.vertices = o3d.utility.Vector3dVector(v)
-            mesh.triangles = o3d.utility.Vector3iVector(f)
+            mesh.vertices = o3d.utility.Vector3dVector(vertices)
+            mesh.triangles = o3d.utility.Vector3iVector(faces)
 
             pcd = mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
 
+            #getting face_index for each point using closest distance
+            #FIXME: open3d method can be modified in versions after 0.17.0 to generate this information in sample_points_uniformly function (easy to modify)
             scene = o3d.t.geometry.RaycastingScene()
             mesh_tensor = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
             scene.add_triangles(mesh_tensor)
-            labels = scene.compute_closest_points(o3d.core.Tensor(np.asarray(pcd.points), dtype=o3d.core.Dtype.Float32))['primitive_ids'].numpy()
-
-            if leaf_size > 0:
-                pcd, _, id_map = pcd.voxel_down_sample_and_trace(leaf_size, pcd.get_min_bound(), pcd.get_max_bound())
-                vote_map = [list(labels[np.asarray(ids)]) for ids in id_map]
-                labels = np.array([ max(map(lambda val: (votes.count(val), val), set(votes)))[1] for votes in vote_map])
+            labels_mesh = scene.compute_closest_points(o3d.core.Tensor(np.asarray(pcd.points), dtype=o3d.core.Dtype.Float32))['primitive_ids'].numpy()
 
             points = np.asarray(pcd.points)
             normals = np.asarray(pcd.normals)
 
-            #voting scheme
-            
+            labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+
+            #downsample is done by surface to not mix primitives that are close to each other
+            if leaf_size > 0:
+                down_pcd = o3d.geometry.PointCloud()
+                down_labels = []
+                for i, fpi in enumerate(features_point_indices):
+                    ans = downsampleByPointIndices(pcd, fpi, labels_mesh, leaf_size)
+                    down_pcd += ans[0]
+                    down_labels += ans[1]
+
+                ans = downsampleByPointIndices(pcd, np.arange(len(labels))[labels==-1], labels_mesh, leaf_size)
+                down_pcd += ans[0]
+                down_labels += ans[1]
+
+                perm = np.random.permutation(len(down_labels))
+
+                points = np.asarray(down_pcd.points)[perm]
+                normals = np.asarray(down_pcd.normals)[perm]
+                labels_mesh = np.array(down_labels)[perm]
+
+                labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])            
         
-            savePCD(pc_filename,  points, normals=normals, labels=labels)
+            savePCD(pc_filename,  points, normals=normals, labels=labels_mesh)
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
-    
-        exit()
-
-        labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data['surfaces'])
 
         noisy_points = None
         if points_curation or normals_curation:
