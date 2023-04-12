@@ -229,7 +229,12 @@ if __name__ == '__main__':
         filename = data['filename'] if 'filename' in data.keys() else str(i)
 
         print('\nGenerating training dataset - Model {} - [{}/{}]:'.format(filename, i+1, train_set_len))
-        results = process_map(partial(process_model_train, data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold), range(num_models), max_workers=max_workers, chunksize=max(1, num_models//max_workers))
+        if num_models > 1:
+            results = process_map(partial(process_model_train, data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold), range(num_models), max_workers=max_workers, chunksize=max(1, num_models//max_workers))
+        else:
+            results = [sampleDataOnRegion((np.min(data['points'], axis=0), np.max(data['points'], axis=0)), data['points'], data['normals'],
+                                           data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
+                                           abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)]
         for j, result in enumerate(results):     
             if write_obj:
                 points = np.zeros((result['points'].shape[0], 6))

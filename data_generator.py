@@ -168,8 +168,9 @@ if __name__ == '__main__':
             normals = np.asarray(pcd.normals)
 
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
-
+            import time
             #downsample is done by surface to not mix primitives that are close to each other
+            start = time.time()
             if leaf_size > 0:
                 down_pcd = o3d.geometry.PointCloud()
                 down_labels = []
@@ -188,7 +189,9 @@ if __name__ == '__main__':
                 normals = np.asarray(down_pcd.normals)[perm]
                 labels_mesh = np.array(down_labels)[perm]
 
-                labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])            
+                labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])   
+            end = time.time()
+            print(end - start)         
         
             savePCD(pc_filename,  points, normals=normals, labels=labels_mesh)
         else:
