@@ -5,8 +5,6 @@ from tqdm import tqdm
 from pypcd import pypcd
 import open3d as o3d
 
-import igl
-
 import numpy as np
 
 from shutil import rmtree
@@ -152,14 +150,12 @@ if __name__ == '__main__':
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
 
         elif exists(mesh_filename):
-            
-            # FIXME using igl because there are some vertices without any faces
-            #mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
+            mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
             #print(o3d_mesh)
-            vertices, faces = igl.read_triangle_mesh(mesh_filename)
-            mesh = o3d.geometry.TriangleMesh()
-            mesh.vertices = o3d.utility.Vector3dVector(vertices)
-            mesh.triangles = o3d.utility.Vector3iVector(faces)
+            #vertices, faces = igl.read_triangle_mesh(mesh_filename)
+            #mesh = o3d.geometry.TriangleMesh()
+            #mesh.vertices = o3d.utility.Vector3dVector(vertices)
+            #mesh.triangles = o3d.utility.Vector3iVector(faces)
 
             pcd = mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
 
@@ -197,12 +193,15 @@ if __name__ == '__main__':
                 labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])   
 
             savePCD(pc_filename,  points, normals=normals, labels=labels_mesh)
+
+            mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
             
         if mesh is None and 'primitivenet' in formats:
-            mesh = igl.read_triangle_mesh(mesh_filename)
+            mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
+            mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
 
         noisy_points = None
         if points_curation or normals_curation:
