@@ -40,6 +40,10 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         super().__init__(parameters)
 
     def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+        import time
+
+        
+
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -58,7 +62,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
 
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
-
+            
             features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
                                                            labels=labels, features_point_indices=features_point_indices)
             if len(features_data) == 0:
@@ -66,6 +70,8 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 return False
 
         self.filenames_by_set[self.current_set_name].append(filename)
+
+        
 
         with h5py.File(data_file_path, 'w') as h5_file:
             noise_limit = 0.

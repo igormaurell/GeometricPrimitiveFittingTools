@@ -134,15 +134,21 @@ if __name__ == '__main__':
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
     
         feature_tp =  features_filename[(point_position + 1):]
+        import time
+
+
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
 
+        mesh = None
         if exists(pc_filename):
             pc = pypcd.PointCloud.from_path(pc_filename).pc_data
-            
-            points = np.hstack((pc['x'], pc['y'], pc['z']))
-            normals = np.hstack((pc['normal_x'], pc['normal_y'], pc['normal_z']))
+      
+            points = np.vstack((pc['x'], pc['y'], pc['z'])).T
+            normals = np.vstack((pc['normal_x'], pc['normal_y'], pc['normal_z'])).T
             labels_mesh = pc['label']
 
+            import time
+            
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
 
         elif exists(mesh_filename):
@@ -168,9 +174,8 @@ if __name__ == '__main__':
             normals = np.asarray(pcd.normals)
 
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
-            import time
+           
             #downsample is done by surface to not mix primitives that are close to each other
-            start = time.time()
             if leaf_size > 0:
                 down_pcd = o3d.geometry.PointCloud()
                 down_labels = []
@@ -190,13 +195,14 @@ if __name__ == '__main__':
                 labels_mesh = np.array(down_labels)[perm]
 
                 labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])   
-            end = time.time()
-            print(end - start)         
-        
+
             savePCD(pc_filename,  points, normals=normals, labels=labels_mesh)
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
+            
+        if mesh is None and 'primitivenet' in formats:
+            mesh = igl.read_triangle_mesh(mesh_filename)
 
         noisy_points = None
         if points_curation or normals_curation:

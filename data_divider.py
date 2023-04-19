@@ -1,5 +1,6 @@
 import argparse
 
+from tqdm import tqdm
 from tqdm.contrib.concurrent import thread_map, process_map
 from functools import partial
 
@@ -25,8 +26,8 @@ def process_model_val(data, regions_grid, filename, val_number_points, abs_volum
 
     filename_curr = f'{filename}_{j}_{k}'
     result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'],
-                                        val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
-                                        relative_volume_threshold=relative_volume_threshold)
+                                val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
+                                relative_volume_threshold=relative_volume_threshold)
     if result is not None:
         result['filename'] = filename_curr
                     
@@ -84,6 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('-vmnp', '--val_min_number_points', type=int, default=0, help='')
     parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
     parser.add_argument('-rvt', '--relative_volume_threshold', type=float, default=0., help='')
+    parser.add_argument('-tr', '--train_random', action='store_true', help='')
     parser.add_argument('-imnp', '--instance_min_number_points', type=float, default = 1, help='filter geometries by number of points.')
 
     args = vars(parser.parse_args())
@@ -120,7 +122,9 @@ if __name__ == '__main__':
     train_min_number_points = args['train_min_number_points']
     val_min_number_points = args['val_min_number_points']
 
-    max_workers = 30
+    train_random = args['train_random']
+
+    max_workers = 16
 
     input_parameters = {}
     output_parameters = {}
@@ -191,7 +195,7 @@ if __name__ == '__main__':
 
         results = process_map(partial(process_model_val, data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold), range(full_len), max_workers=max_workers, chunksize=max(1, full_len//max_workers))
 
-        for j, result in enumerate(results):
+        for j, result in tqdm(enumerate(results)):
             if result is None:
                 #print(f'Point cloud has no points on region ({j},{k}).')
                 continue
@@ -222,20 +226,31 @@ if __name__ == '__main__':
     for i in range(train_set_len):
         point_cloud_full = None
         data = reader.step()
-
-        area = computeFootArea(data['points'], region_axis)
         
-        num_models = ceil(area/(np.prod(np.array(train_region_size))))
         filename = data['filename'] if 'filename' in data.keys() else str(i)
 
         print('\nGenerating training dataset - Model {} - [{}/{}]:'.format(filename, i+1, train_set_len))
-        if num_models > 1:
-            results = process_map(partial(process_model_train, data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold), range(num_models), max_workers=max_workers, chunksize=max(1, num_models//max_workers))
+
+        if not train_random:
+            regions_grid = computeGridOfRegions(data['points'], train_region_size, region_axis)
+            full_len = len(regions_grid)*len(regions_grid[0])
+
+            results = process_map(partial(process_model_val, data, regions_grid, filename, train_number_points, abs_volume_threshold, relative_volume_threshold), range(full_len), max_workers=max_workers, chunksize=max(1, full_len//max_workers))
         else:
-            results = [sampleDataOnRegion((np.min(data['points'], axis=0), np.max(data['points'], axis=0)), data['points'], data['normals'],
-                                           data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
-                                           abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)]
-        for j, result in enumerate(results):     
+            area = computeFootArea(data['points'], region_axis)
+            num_models = ceil(area/(np.prod(np.array(train_region_size))))
+            if num_models > 1:
+                results = process_map(partial(process_model_train, data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold), range(num_models), max_workers=max_workers, chunksize=max(1, num_models//max_workers))
+            else:
+                results = [sampleDataOnRegion((np.min(data['points'], axis=0), np.max(data['points'], axis=0)), data['points'], data['normals'],
+                                            data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
+                                            abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)]
+       
+        for j, result in tqdm(enumerate(results)):    
+            if result is None:
+                #print(f'Point cloud has no points on region ({j},{k}).')
+                continue
+             
             if write_obj:
                 points = np.zeros((result['points'].shape[0], 6))
                 points[:, 0:3] = result['points']

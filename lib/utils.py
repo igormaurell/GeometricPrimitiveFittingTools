@@ -148,32 +148,30 @@ def filterFeaturesData(features_data, types=None, min_number_points=None, labels
         by_npoints_condition = lambda x: len(x) >= min_number_points
 
     labels_map = np.zeros(len(features_data))
+    new_features_data = []
+    new_features_point_indices = []
     i = 0
-    j = 0
-    while i < len(features_data):
-        feature = features_data[i]
-        fpi = features_point_indices[i]
+    for j in range(len(features_data)):
+        feature = features_data[j]
+        fpi = features_point_indices[j]
+        labels_map[j] = -1
         if by_type_condition(feature) and by_npoints_condition(fpi):
             labels_map[j] = i
-            i+=1
-        else:
-            features_data.pop(i)
-            if features_point_indices is not None:
-                features_point_indices.pop(i)
-            labels_map[j] = -1
-        j+=1
-    
+            new_features_data.append(features_data[j])
+            new_features_point_indices.append(features_point_indices[j])
+            i+= 1            
+
     if labels is not None:
         for i in range(len(labels)):
             if labels[i] != -1:
                 labels[i] = labels_map[labels[i]]
 
-    return features_data, labels, features_point_indices
+    return new_features_data, labels, new_features_point_indices
 
 def computeFeaturesPointIndices(labels, size=None):
     if size is None:
-        size = np.max(labels)
-    features_point_indices = [[] for i in range(0, size + 2)]
+        size = np.max(labels) + 1
+    features_point_indices = [[] for i in range(0, size + 1)]
     for i in range(0, len(labels)):
         features_point_indices[labels[i]].append(i)
     features_point_indices.pop(-1)
@@ -183,22 +181,22 @@ def computeFeaturesPointIndices(labels, size=None):
 
     return features_point_indices
 
-def computeLabelsFromFace2Primitive(labels, features_data):
-    max_face = np.max(labels)
-    for feat in features_data:
-        max_face = max(0 if len(feat['face_indices']) == 0 else max(feat['face_indices']), max_face)
+def computeLabelsFromFace2Primitive(labels, features_data, max_face=None):
+    if max_face is None:
+        max_face = np.max(labels)
+        for feat in features_data:
+            max_face = max(0 if len(feat['face_indices']) == 0 else max(feat['face_indices']), max_face)
+
     face_2_primitive = np.zeros(shape=(max_face+1,), dtype=np.int32) - 1
-    face_primitive_count = np.zeros(shape=(max_face+1,), dtype=np.int32)
+
     for i, feat in enumerate(features_data):
-        for face in feat['face_indices']:
-            face_2_primitive[face] = i
-            face_primitive_count[face] += 1
-    assert len(np.unique(face_primitive_count)) <= 2
+        face_2_primitive[np.asarray(feat['face_indices'], dtype=np.int64)] = i
+
+    labels = face_2_primitive[labels]
+
     features_point_indices = [[] for i in range(0, len(features_data) + 1)]
     for i in range(0, len(labels)):
-        index = face_2_primitive[labels[i]]
-        features_point_indices[index].append(i)
-        labels[i] = index
+        features_point_indices[labels[i]].append(i)
     features_point_indices.pop(-1)
 
     for i in range(0, len(features_point_indices)):

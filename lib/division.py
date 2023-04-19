@@ -109,18 +109,11 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
     if len(indices) == 0:
         return None
 
-    if len(indices) < n_points:
-        replicate_times = n_points//len(indices)
-        replicate_mod = n_points%len(indices)
-        indices_new = np.repeat(indices, replicate_times)
-        indices_new = np.concatenate((indices_new, indices[:replicate_mod]))
-        indices = indices_new
-
     points_part = points[indices]
     normals_part = normals[indices]
     labels_part = labels[indices]
 
-    features_point_indices = computeFeaturesPointIndices(labels)
+    features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
 
     features_indices = featuresIndicesByPointsIndices(features_point_indices, indices, filter_by_volume=filter_features_by_volume, points=points,
                                                       abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
