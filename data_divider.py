@@ -18,18 +18,20 @@ from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
-from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, randomSamplingPointsOnRegion, computeFootArea, compute3DRegionSize
+from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, randomSamplingPointsOnRegion, computeFootArea
 
 def process_model_val(data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold, ind):
-    j = ind%len(regions_grid)
-    k = ind//len(regions_grid)
+    size_x, size_y, _, _, _ = regions_grid.shape
+    k = ind // (size_y * size_x)
+    j = (ind // size_x) % size_y
+    i = ind % size_x
 
-    filename_curr = f'{filename}_{j}_{k}'
-    result = sampleDataOnRegion(regions_grid[j][k], data['points'], data['normals'], data['labels'], data['features'],
+    filename_curr = f'{filename}_{i}_{j}_{k}'
+    result = sampleDataOnRegion(regions_grid[i, j, k], data['points'], data['normals'], data['labels'], data['features'],
                                 val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                 relative_volume_threshold=relative_volume_threshold)
-    if result is not None:
-        result['filename'] = filename_curr
+   
+    result['filename'] = filename_curr
                     
     return result
 
@@ -44,6 +46,20 @@ def process_model_train(data, filename, train_number_points, train_min_number_po
     result['filename'] = filename_curr
 
     return result
+
+def parse_size_arg(arg, region_axis='z'):
+    axis = ('x', 'y', 'z')
+    assert len(arg) > 0 and len(arg) <= len(axis), 'too many argments in size arg'
+    region_axis_index = axis.index(region_axis)
+    size = None
+    if len(arg) == 1:
+        size = [float(arg[0]) for i in range(3)]
+    elif len(arg) == 2:
+        size = [float(arg[i]) for i in range(2)]
+        size.insert(region_axis_index, float('inf'))
+    else:
+        size = [float(arg[i]) for i in range(3)]
+    return np.asarray(size)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -73,12 +89,11 @@ if __name__ == '__main__':
     parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
-    parser.add_argument('-d_dt', '--delete_old_data', action='store_true', help='')
 
     parser.add_argument('-wo', '--write_obj', action='store_true', help='')
-    parser.add_argument('-ra', '--region_axis', type=str, default='y', help='')
-    parser.add_argument('-trs', '--train_region_size', type=float, default=4, help='')
-    parser.add_argument('-vrs', '--val_region_size', type=float, default=4, help='')
+    parser.add_argument('-ra', '--region_axis', type=str, default='z', help='')
+    parser.add_argument('-trs','--train_region_size', nargs='+', default=[4], help='')
+    parser.add_argument('-vrs','--val_region_size', nargs='+', default=[4], help='')
     parser.add_argument('-tnp', '--train_number_points', type=int, default=0, help='')
     parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
     parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=5000, help='')
@@ -100,8 +115,6 @@ if __name__ == '__main__':
     noise_limit = args['noise_limit']
     cube_reescale_factor = args['cube_reescale_factor']
 
-    delete_old_data = args['delete_old_data']
-
     input_dataset_folder_name = args['input_dataset_folder_name']
     output_dataset_folder_name = args['output_dataset_folder_name']
     data_folder_name = args['data_folder_name']
@@ -110,8 +123,8 @@ if __name__ == '__main__':
 
     write_obj = args['write_obj']
     region_axis = args['region_axis']
-    train_region_size = [args['train_region_size'], args['train_region_size']]
-    val_region_size = [args['val_region_size'], args['val_region_size']]
+    train_region_size = parse_size_arg(args['train_region_size'], region_axis=region_axis)  
+    val_region_size = parse_size_arg(args['val_region_size'], region_axis=region_axis)
     train_number_points = args['train_number_points']
     val_number_points = args['val_number_points']
     abs_volume_threshold = args['abs_volume_threshold']
@@ -165,9 +178,8 @@ if __name__ == '__main__':
         output_parameters[format]['data_folder_name'] = output_data_format_folder_name
         output_transform_format_folder_name = join(output_dataset_format_folder_name, transform_folder_name)
         output_parameters[format]['transform_folder_name'] = output_transform_format_folder_name
-        if delete_old_data:
-            if exists(output_dataset_format_folder_name):
-                rmtree(output_dataset_format_folder_name)
+        if exists(output_dataset_format_folder_name):
+            rmtree(output_dataset_format_folder_name)
         makedirs(output_dataset_format_folder_name, exist_ok=True)
         makedirs(output_data_format_folder_name, exist_ok=True)
         makedirs(output_transform_format_folder_name, exist_ok=True)
@@ -188,20 +200,17 @@ if __name__ == '__main__':
     for i in range(len(reader)):
         point_cloud_full = None
         data = reader.step()
-        regions_grid = computeGridOfRegions(data['points'], val_region_size, region_axis)
+        regions_grid = computeGridOfRegions(data['points'], val_region_size)
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
-        full_len = len(regions_grid)*len(regions_grid[0])
+        full_len = np.prod(regions_grid.shape[:3])
 
         results = process_map(partial(process_model_val, data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold), range(full_len), max_workers=max_workers, chunksize=max(1, full_len//max_workers))
 
         for j, result in tqdm(enumerate(results)):
-            if result is None:
-                #print(f'Point cloud has no points on region ({j},{k}).')
-                continue
-            n_p = result['points'].shape[0]
-            if n_p < val_min_number_points:
-                print(f'Point cloud has {n_p} points. The desired amount is {val_min_number_points}')
+            n_p = len(result['points'])
+            if n_p <= val_min_number_points:
+                print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {val_min_number_points}")
             else:
                 if write_obj:
                     points = np.zeros((result['points'].shape[0], 6))
@@ -217,6 +226,7 @@ if __name__ == '__main__':
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
 
+    exit()
     val_end = time.time()
 
     print('\n\nTraining Set:')

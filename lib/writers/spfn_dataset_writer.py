@@ -66,12 +66,9 @@ class SpfnDatasetWriter(BaseDatasetWriter):
             features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
                                                            labels=labels, features_point_indices=features_point_indices)
             if len(features_data) == 0:
-                #print(f'ERROR: {data_file_path} has no features left.')
-                return False
+                print(f'WARNING: {data_file_path} has no features left.')
 
         self.filenames_by_set[self.current_set_name].append(filename)
-
-        
 
         with h5py.File(data_file_path, 'w') as h5_file:
             noise_limit = 0.

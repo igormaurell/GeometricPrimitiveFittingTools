@@ -4,6 +4,8 @@ import random
 
 from lib.utils import computeFeaturesPointIndices, sortedIndicesIntersection
 
+EPS = np.finfo(np.float32).eps
+
 def computeFootArea(points, region_axis):
     assert region_axis in ['x', 'y', 'z']
     index = ['x', 'y', 'z'].index(region_axis)
@@ -20,37 +22,42 @@ def compute3DRegionSize(region_size, region_axis, region_axis_value=np.inf):
     size = np.array(size)
     return size
 
-def computeGridOfRegions(points, region_size, region_axis):
-    assert region_axis in ['x', 'y', 'z']
-    index = ['x', 'y', 'z'].index(region_axis)
+def getRegionAxisMinMax(region_index, axis_min, axis_max, axis_size):
+    if axis_size == np.inf:
+        M = axis_max
+        m = axis_min
+    else:
+        M = axis_min + (region_index+1)*axis_size
+        m = M - axis_size
 
-    size = np.array(region_size)
+    return max(m, axis_min), min(M, axis_max)
 
-    min = np.min(points, 0)
-    min = np.delete(min, index)
-    max = np.max(points, 0)
-    max = np.delete(max, index)
-    points_size = max - min
+def computeGridOfRegions(points, region_size):
+    min_points = np.min(points, 0)
+    max_points = np.max(points, 0)
+    points_size = max_points - min_points
 
-    num_parts = np.ceil(points_size/size)
+    num_parts = np.ceil(points_size/region_size)
     num_parts = num_parts.astype('int64')
+    num_parts[num_parts==0] = 1
 
-    regions = [[ None for j in range(num_parts[1])] for i in range(num_parts[0])]
+    #adapting regions size to current model
+    region_size = points_size/num_parts
+
+    min_points -= EPS
+    max_points += EPS
+
+    regions = np.ndarray((num_parts[0], num_parts[1], num_parts[2], 2, 3), dtype=np.float64)
 
     for i in range(num_parts[0]):
-        m0 = min[0] + i*size[0]
-        M0 = min[0] + (i+1)*size[0]
+        m0, M0 = getRegionAxisMinMax(i, min_points[0], max_points[0], region_size[0])
         for j in range(num_parts[1]):
-            m1 = min[1] + j*size[1]
-            M1 = min[1] + (j+1)*size[1]
-            ll = [m0, m1]
-            ll.insert(index, -np.inf)
-            ll = np.array(ll)
-            ur = [M0, M1]
-            ur.insert(index, np.inf)
-            ur = np.array(ur)
-            regions[i][j] = (ll, ur)
-            
+            m1, M1 = getRegionAxisMinMax(j, min_points[1], max_points[1], region_size[1])
+            for k in range(num_parts[2]):
+                m2, M2 = getRegionAxisMinMax(k, min_points[2], max_points[2], region_size[2])
+                regions[i, j, k, 0, :] = np.array([m0, m1, m2])
+                regions[i, j, k, 1, :] = np.array([M0, M1, M2])
+
     return regions
 
 def computeRegionAroundPoint(point, region_size, region_axis):
@@ -102,12 +109,18 @@ def featuresIndicesByPointsIndices(features_point_indices, points_indices, filte
 def sampleDataOnRegion(region, points, normals, labels, features_data, n_points, filter_features_by_volume=True,
                        abs_volume_threshold=0., relative_volume_threshold=0.2):
     
-    ll, ur = region
+    ll = region[0, :]
+    ur = region[1, :]
 
     indices = randomSamplingPointsOnRegion(points, ll, ur, n_points)
 
     if len(indices) == 0:
-        return None
+        return {
+            'points': np.array([]),
+            'normals': np.array([]),
+            'labels': np.array([]),
+            'features': np.array([]),
+        }
 
     points_part = points[indices]
     normals_part = normals[indices]
