@@ -8,8 +8,6 @@ from shutil import rmtree
 from os import makedirs
 from os.path import join, exists
 
-from math import ceil
-
 import numpy as np
 
 import time
@@ -18,7 +16,7 @@ from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
-from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, randomSamplingPointsOnRegion, computeFootArea
+from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, computeSearchPoints
 
 def process_model_val(data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold, ind):
     size_x, size_y, _, _, _ = regions_grid.shape
@@ -36,12 +34,15 @@ def process_model_val(data, regions_grid, filename, val_number_points, abs_volum
     return result
 
 def process_model_train(data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold, ind):
-    result = None
+    result = {'points': np.array([])}
     filename_curr = f'{filename}_{ind}'
 
-    while result is None or result['points'].shape[0] < train_min_number_points:
-        result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], train_region_size, region_axis, train_number_points, 
-                                filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
+    search_points = data['search_points'] if 'search_points' in data.keys() else None
+
+    while result['points'].shape[0] < train_min_number_points:
+        result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], train_region_size, train_number_points,
+                                  filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
+                                  relative_volume_threshold=relative_volume_threshold, search_points=search_points)
     
     result['filename'] = filename_curr
 
@@ -100,7 +101,8 @@ if __name__ == '__main__':
     parser.add_argument('-vmnp', '--val_min_number_points', type=int, default=0, help='')
     parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
     parser.add_argument('-rvt', '--relative_volume_threshold', type=float, default=0., help='')
-    parser.add_argument('-tr', '--train_random', action='store_true', help='')
+    parser.add_argument('-tr', '--train_random_times', type=float, default=1., help='number of train regions is n = train_random_times*(model_volume/region_volume)')
+    parser.add_argument('-tg', '--train_grid', action='store_true', help='flag to use division by grid in training models, it is used by default if train_random_times is 0. It is possible to use both at the same time.')
     parser.add_argument('-imnp', '--instance_min_number_points', type=float, default = 1, help='filter geometries by number of points.')
 
     args = vars(parser.parse_args())
@@ -135,9 +137,8 @@ if __name__ == '__main__':
     train_min_number_points = args['train_min_number_points']
     val_min_number_points = args['val_min_number_points']
 
-    train_random = args['train_random']
-
-    max_workers = 16
+    train_random_times = args['train_random_times']
+    train_grid = args['train_grid']
 
     input_parameters = {}
     output_parameters = {}
@@ -205,7 +206,8 @@ if __name__ == '__main__':
         print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
         full_len = np.prod(regions_grid.shape[:3])
 
-        results = process_map(partial(process_model_val, data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold), range(full_len), max_workers=max_workers, chunksize=max(1, full_len//max_workers))
+        results = process_map(partial(process_model_val, data, regions_grid, filename, val_number_points,
+                              abs_volume_threshold, relative_volume_threshold), range(full_len))
 
         for j, result in tqdm(enumerate(results)):
             n_p = len(result['points'])
@@ -226,7 +228,6 @@ if __name__ == '__main__':
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
 
-    exit()
     val_end = time.time()
 
     print('\n\nTraining Set:')
@@ -241,35 +242,44 @@ if __name__ == '__main__':
 
         print('\nGenerating training dataset - Model {} - [{}/{}]:'.format(filename, i+1, train_set_len))
 
-        if not train_random:
-            regions_grid = computeGridOfRegions(data['points'], train_region_size, region_axis)
-            full_len = len(regions_grid)*len(regions_grid[0])
+        results = []
+        if train_random_times == 0 or train_grid:
+            regions_grid = computeGridOfRegions(data['points'], train_region_size)
+            full_len = np.prod(regions_grid.shape[:3])
 
-            results = process_map(partial(process_model_val, data, regions_grid, filename, train_number_points, abs_volume_threshold, relative_volume_threshold), range(full_len), max_workers=max_workers, chunksize=max(1, full_len//max_workers))
-        else:
-            area = computeFootArea(data['points'], region_axis)
-            num_models = ceil(area/(np.prod(np.array(train_region_size))))
+            results += process_map(partial(process_model_val, data, regions_grid, filename, train_number_points,
+                                   abs_volume_threshold, relative_volume_threshold), range(full_len))
+            
+        if train_random_times > 0:
+            size_points = np.max(data['points'], axis=0) -  np.min(data['points'], axis=0)
+            points_dim = np.prod(size_points[train_region_size != np.inf])
+            num_models = int(np.ceil(train_random_times*np.ceil((points_dim/np.prod(train_region_size[train_region_size != np.inf])))))
+            
+            data['search_points'] = computeSearchPoints(data['points'], train_region_size)
+
             if num_models > 1:
-                results = process_map(partial(process_model_train, data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold), range(num_models), max_workers=max_workers, chunksize=max(1, num_models//max_workers))
+                results += process_map(partial(process_model_train, data, filename, train_number_points,
+                                       train_min_number_points, abs_volume_threshold, relative_volume_threshold),
+                                       range(num_models))
             else:
-                results = [sampleDataOnRegion((np.min(data['points'], axis=0), np.max(data['points'], axis=0)), data['points'], data['normals'],
+                results += [sampleDataOnRegion((np.min(data['points'], axis=0), np.max(data['points'], axis=0)), data['points'], data['normals'],
                                             data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
                                             abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)]
        
-        for j, result in tqdm(enumerate(results)):    
-            if result is None:
-                #print(f'Point cloud has no points on region ({j},{k}).')
-                continue
-             
-            if write_obj:
-                points = np.zeros((result['points'].shape[0], 6))
-                points[:, 0:3] = result['points']
-                points[:, 3:6] = np.array(computeRGB(colors[j]))
-                if point_cloud_full is None:
-                    point_cloud_full = points.copy()
-                else:
-                    point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
-            dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
+        for j, result in tqdm(enumerate(results)):   
+            n_p = len(result['points'])
+            if n_p <= train_min_number_points:
+                print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {train_min_number_points}")
+            else:
+                if write_obj:
+                    points = np.zeros((result['points'].shape[0], 6))
+                    points[:, 0:3] = result['points']
+                    points[:, 3:6] = np.array(computeRGB(colors[j]))
+                    if point_cloud_full is None:
+                        point_cloud_full = points.copy()
+                    else:
+                        point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
+                dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
                                                   features_data=result['features'], filename=result['filename'])
 
         if write_obj:

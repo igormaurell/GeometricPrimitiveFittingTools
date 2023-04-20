@@ -6,22 +6,6 @@ from lib.utils import computeFeaturesPointIndices, sortedIndicesIntersection
 
 EPS = np.finfo(np.float32).eps
 
-def computeFootArea(points, region_axis):
-    assert region_axis in ['x', 'y', 'z']
-    index = ['x', 'y', 'z'].index(region_axis)
-    size = np.max(points, axis=0) - np.min(points, axis=0)
-    size[index] = 1
-    return np.prod(size)
-
-
-def compute3DRegionSize(region_size, region_axis, region_axis_value=np.inf):
-    assert region_axis in ['x', 'y', 'z']
-    index = ['x', 'y', 'z'].index(region_axis)
-    size = list(region_size)
-    size.insert(index, region_axis_value)
-    size = np.array(size)
-    return size
-
 def getRegionAxisMinMax(region_index, axis_min, axis_max, axis_size):
     if axis_size == np.inf:
         M = axis_max
@@ -42,7 +26,7 @@ def computeGridOfRegions(points, region_size):
     num_parts[num_parts==0] = 1
 
     #adapting regions size to current model
-    region_size = points_size/num_parts
+    rs = points_size/num_parts
 
     min_points -= EPS
     max_points += EPS
@@ -50,23 +34,29 @@ def computeGridOfRegions(points, region_size):
     regions = np.ndarray((num_parts[0], num_parts[1], num_parts[2], 2, 3), dtype=np.float64)
 
     for i in range(num_parts[0]):
-        m0, M0 = getRegionAxisMinMax(i, min_points[0], max_points[0], region_size[0])
+        m0, M0 = getRegionAxisMinMax(i, min_points[0], max_points[0], rs[0])
         for j in range(num_parts[1]):
-            m1, M1 = getRegionAxisMinMax(j, min_points[1], max_points[1], region_size[1])
+            m1, M1 = getRegionAxisMinMax(j, min_points[1], max_points[1], rs[1])
             for k in range(num_parts[2]):
-                m2, M2 = getRegionAxisMinMax(k, min_points[2], max_points[2], region_size[2])
+                m2, M2 = getRegionAxisMinMax(k, min_points[2], max_points[2], rs[2])
                 regions[i, j, k, 0, :] = np.array([m0, m1, m2])
                 regions[i, j, k, 1, :] = np.array([M0, M1, M2])
 
     return regions
 
-def computeRegionAroundPoint(point, region_size, region_axis):
-    size = compute3DRegionSize(region_size, region_axis)
+def computeSearchPoints(points, region_size):
+    inf_axes = (region_size == np.inf)
+    rs = region_size.copy()
+    rs[inf_axes] = 0
+    min_points = np.min(points, axis=0) + rs/2
+    max_points = np.max(points, axis=0) - rs/2
+    return points[np.all(np.logical_and(points >= min_points, points < max_points), axis=1)]
 
-    ll = point - size/2
-    ur = point + size/2
+def computeRegionAroundPoint(point, region_size):
+    bb_min_limit = point - region_size/2
+    bb_max_limit = point + region_size/2
 
-    return ll, ur
+    return np.asarray([bb_min_limit, bb_max_limit])
 
 def randomSamplingPointsOnRegion(points, ll, ur, n_points):
     inidx = np.all(np.logical_and(points >= ll, points < ur), axis=1)
@@ -148,14 +138,15 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
 
     return result
 
-def divideOnceRandom(points, normals, labels, features_data, region_size, region_axis, n_points,
-                     filter_features_by_volume=True, abs_volume_threshold=0., relative_volume_threshold=0.2, search_points=None):
+def divideOnceRandom(points, normals, labels, features_data, region_size, n_points, filter_features_by_volume=True,
+                     abs_volume_threshold=0., relative_volume_threshold=0.2, search_points=None):
+   
     if search_points is None:
         middle_point = points[random.randint(0, points.shape[0] - 1)]
     else:
         middle_point = search_points[random.randint(0, search_points.shape[0] - 1)]
 
-    region = computeRegionAroundPoint(middle_point, region_size, region_axis)
+    region = computeRegionAroundPoint(middle_point, region_size)
 
     return sampleDataOnRegion(region, points, normals, labels, features_data, n_points, filter_features_by_volume=filter_features_by_volume,
                        abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
