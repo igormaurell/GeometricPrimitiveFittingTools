@@ -45,11 +45,9 @@ def rotate(array, theta, axis):
     return R @ array
 
 def angleVectors(n1, n2):
-    c = abs(np.dot(n1.T, n2))
-    c = c if c <= 1. else 1.
-    c = c if c >= -1. else -1. 
-    return acos(c)
-
+    n1_unit = n1/np.linalg.norm(n1)
+    n2_unit = n2/np.linalg.norm(n2)
+    return np.arccos(np.clip(np.dot(n1_unit, n2_unit), -1.0, 1.0))
 
 '''COLOR'''
 def computeRGB(value):
