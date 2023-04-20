@@ -8,7 +8,9 @@ from os.path import exists
 from os import system
 from math import acos
 from pypcd import pypcd
-from struct import pack
+import open3d as o3d
+
+EPS = np.finfo(np.float64).eps
 
 @njit
 def sortedIndicesIntersection(a, b):
@@ -253,3 +255,85 @@ def savePCD(filename, points, colors=None, normals=None, labels=None, binary=Tru
         else:
             f.write(header)
             f.write('\n'.join([' '.join(map(str, x)) for x in arr_s]))
+
+# too slow, python problem???
+def samplePointsUniformlyAndTrack(mesh, number_of_points, use_triangle_normal=False):
+    surface_area = mesh.get_surface_area()
+    if surface_area <= 0:
+        print("ERROR: Invalid surface area {}, it must be > 0.".format(surface_area))
+
+    vertices = np.asarray(mesh.vertices, dtype=np.float64)
+    triangles = np.asarray(mesh.triangles, dtype=np.int32)
+    triangle_normals = np.zeros(triangles.shape, dtype=np.float64)
+    triangle_areas = np.zeros(len(mesh.triangles), dtype=np.float64)
+    from tqdm import tqdm
+
+    for i, t in tqdm(enumerate(triangles)):
+        A = vertices[t[0]]
+        B = vertices[t[1]]
+        C = vertices[t[2]]
+
+        #normal (counter-clockwise as default order)
+        v1 = A - C
+        v2 = B - C
+        normal = np.cross(v1, v2)
+        triangle_normals[i] = normal
+
+        #area
+        area = np.linalg.norm(np.cross(v1, v2))/2
+        triangle_areas[i] = area        
+
+    triangle_areas[0] /= surface_area
+    for i in range(1, len(triangles)):
+        triangle_areas[i] = triangle_areas[i] / (surface_area + triangle_areas[i - 1])
+
+    has_vert_normal = mesh.has_vertex_normals()
+    has_vert_color = mesh.has_vertex_colors()
+
+    points = np.array((number_of_points, 3), dtype=np.float64)
+    normals = np.array((number_of_points, 3), dtype=np.float64)
+    colors = np.array((number_of_points, 3), dtype=np.float64)
+    points_label = np.array(number_of_points, dtype=np.int32)
+
+    vertex_normals = mesh.vertex_normals
+    vertex_colors = mesh.vertex_colors
+
+    last_n = 0
+    for tidx, t in tqdm(enumerate(triangles)):
+        n = int(np.around(triangle_areas[tidx] * number_of_points))
+        randoms1 = np.random.uniform(size=n)
+        randoms2 = np.random.uniform(size=n)
+
+        a = 1 - np.sqrt(randoms1)
+        b = np.sqrt(randoms1) * (1 - randoms2)
+        c = np.sqrt(randoms1) * randoms2
+
+        V1, V2, V3 = vertices[t]
+
+        points[last_n:n, :] =  a*V1 + b*V2 + c*V3
+
+        if has_vert_normal and not use_triangle_normal:
+            n1, n2, n3 = vertex_normals[t]
+            normals[last_n:n, :] = a*n1 + b*n2 + c*n2
+        elif use_triangle_normal:
+            normals[last_n:n, :] = triangle_normals[tidx]
+        
+        if has_vert_color:
+            c1, c2, c3 = vertex_colors[t]
+            normals[last_n:n, :] = a*c1 + b*c2 + c*c3
+        
+        points_label[last_n:n] = tidx
+
+        last_n = n
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+
+    if has_vert_normal or use_triangle_normal:
+        normals = normals/(np.linalg.norm(normals, axis=0) + EPS)
+        pcd.normals = o3d.utility.Vector3dVector(normals)
+    
+    if has_vert_color:
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+    
+    return pcd

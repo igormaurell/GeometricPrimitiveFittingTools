@@ -11,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, samplePointsUniformlyAndTrack
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
@@ -132,8 +132,6 @@ if __name__ == '__main__':
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
     
         feature_tp =  features_filename[(point_position + 1):]
-        import time
-
 
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
 
@@ -157,14 +155,18 @@ if __name__ == '__main__':
             #mesh.vertices = o3d.utility.Vector3dVector(vertices)
             #mesh.triangles = o3d.utility.Vector3iVector(faces)
 
-            pcd = mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+            #making mesh to clockwise (open3d default)
+            mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
 
-            #getting face_index for each point using closest distance
-            #FIXME: open3d method can be modified in versions after 0.17.0 to generate this information in sample_points_uniformly function (easy to modify)
-            scene = o3d.t.geometry.RaycastingScene()
-            mesh_tensor = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
-            scene.add_triangles(mesh_tensor)
-            labels_mesh = scene.compute_closest_points(o3d.core.Tensor(np.asarray(pcd.points), dtype=o3d.core.Dtype.Float32))['primitive_ids'].numpy()
+            pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+
+            labels_mesh = np.asarray(labels_mesh)
+            # #getting face_index for each point using closest distance
+            # #FIXME: open3d method can be modified in versions after 0.17.0 to generate this information in sample_points_uniformly function (easy to modify)
+            #scene = o3d.t.geometry.RaycastingScene()
+            #mesh_tensor = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+            #scene.add_triangles(mesh_tensor)
+            #labels_mesh = scene.compute_closest_points(o3d.core.Tensor(np.asarray(pcd.points), dtype=o3d.core.Dtype.Float32))['primitive_ids'].numpy()
 
             points = np.asarray(pcd.points)
             normals = np.asarray(pcd.normals)
