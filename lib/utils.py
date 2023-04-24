@@ -6,9 +6,9 @@ import yaml
 from numba import njit
 from os.path import exists
 from os import system
-from math import acos
 from pypcd import pypcd
 import open3d as o3d
+import itertools
 
 EPS = np.finfo(np.float64).eps
 
@@ -335,3 +335,86 @@ def samplePointsUniformlyAndTrack(mesh, number_of_points, use_triangle_normal=Fa
         pcd.colors = o3d.utility.Vector3dVector(colors)
     
     return pcd
+
+def rayCastingPointCloudGeneration(mesh, distance=2):
+    scene = o3d.t.geometry.RaycastingScene()
+    _ = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
+
+    bounding_box = mesh.get_axis_aligned_bounding_box()
+
+    bb_min, bb_max = bounding_box.get_min_bound(), bounding_box.get_max_bound()
+    bb_half_size = bounding_box.get_half_extent()
+    bb_center = bounding_box.get_center()
+
+    #for laterals
+    multi_view_rays = []
+    bb_center_lat = [np.array([(bb_half_size[0] + distance)*i, (bb_half_size[1] + distance)*j, bb_half_size[2]]) + bb_min for i, j in ((0,0), (0,1), (1,0), (1,1))]
+    for point in bb_center_lat:
+        rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
+            fov_deg=270,
+            center=bb_center,
+            eye=point,
+            up=[0, 0, 1],
+            width_px=640,
+            height_px=480,
+        )
+        multi_view_rays.append(rays)
+
+    bb_center_top  = [np.array([bb_half_size[0], bb_half_size[1], 2*bb_half_size[2] + distance]) + bb_min]
+    for point in bb_center_top:
+        rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
+            fov_deg=90,
+            center=bb_center,
+            eye=point,
+            up=[0 if bb_half_size[0] > bb_half_size[1] else 1, 1 if bb_half_size[0] > bb_half_size[1] else 0 , 0],
+            width_px=640,
+            height_px=480,
+        )
+        multi_view_rays.append(rays)
+
+    
+    registered_pcd = o3d.geometry.PointCloud()
+    registered_labels_mesh = []
+    for i, rays in enumerate(multi_view_rays):
+        print(registered_pcd)
+
+        ans = scene.cast_rays(rays)
+
+        hit = ans['t_hit'].isfinite()
+
+        points = rays[hit][:,:3] + rays[hit][:,3:]*ans['t_hit'][hit].reshape((-1,1))
+        normals = ans['primitive_normals'][hit].numpy()
+
+        normals = normals/np.linalg.norm(normals)
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points.numpy())
+        pcd.normals = o3d.utility.Vector3dVector(normals)
+
+        labels_mesh = ans['primitive_ids'][hit].numpy()
+        
+        if i > 0:
+            registration_result = o3d.pipelines.registration.registration_icp(registered_pcd, pcd, 0.03)
+            corr = np.asarray(registration_result.correspondence_set)
+            pcd_inliers = registered_pcd.select_by_index(corr[:, 0])
+            pdc_1_outliers = registered_pcd.select_by_index(corr[:, 0], invert=True)
+            pcd_2_outliers = pcd.select_by_index(corr[:, 1], invert=True)
+            registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
+            
+            lm_1_inliers = registered_labels_mesh[corr[:, 0]]
+            lm_2_inliers = labels_mesh[corr[:, 1]]
+            matches = lm_1_inliers == lm_2_inliers
+            count_matches = np.count_nonzero(~matches)
+            if count_matches > 0:
+                print('Error in labels mesh registration, {} points have differente triangle ids.'.format(count_matches))
+            corr_1 = np.in1d(range(registered_labels_mesh.shape[0]), corr[:, 0])
+            lm_1_outliers = registered_labels_mesh[~corr_1]
+            corr_2 = np.in1d(range(labels_mesh.shape[0]), corr[:, 1])
+            lm_2_outliers = labels_mesh[~corr_2]
+            registered_labels_mesh = np.concatenate((lm_1_inliers, lm_1_outliers, lm_2_outliers))
+
+        else:
+            registered_pcd = pcd
+            registered_labels_mesh = labels_mesh
+
+    return registered_pcd, np.asarray(registered_labels_mesh)

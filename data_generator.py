@@ -11,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, samplePointsUniformlyAndTrack
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
@@ -156,11 +156,13 @@ if __name__ == '__main__':
             #mesh.triangles = o3d.utility.Vector3iVector(faces)
 
             #making mesh to clockwise (open3d default)
-            mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
+            #mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
 
-            pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+            pcd, labels_mesh = rayCastingPointCloudGeneration(mesh)
+            #pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
 
             labels_mesh = np.asarray(labels_mesh)
+
             # #getting face_index for each point using closest distance
             # #FIXME: open3d method can be modified in versions after 0.17.0 to generate this information in sample_points_uniformly function (easy to modify)
             #scene = o3d.t.geometry.RaycastingScene()
