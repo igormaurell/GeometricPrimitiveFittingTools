@@ -352,21 +352,17 @@ def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
     h_res_rad = h_res*np.pi/180.
     v_res_rad = v_res*np.pi/180.
 
+    rots_horz = [Rotation.from_rotvec(u*h_res_rad*h_axis).as_matrix() for u in range(int(-width_px/2), int(width_px/2))]
+    rots_vert_ec = [Rotation.from_rotvec(v*v_res_rad*v_axis).as_matrix().dot(ec) for v in range(int(-height_px/2), int(height_px/2))]
+
     lidar_data = np.zeros((width_px, height_px, 6), dtype=np.float32)
 
+    lidar_data[:, :, :3] = eye_arr
+
     for u in range(width_px):
-        u_norm = u - width_px/2
-        h_angle = u_norm*h_res_rad
-        R = Rotation.from_rotvec(h_angle*h_axis)
-        for v in range(height_px):
-            v_norm = v - height_px/2
-            v_angle = v_norm*v_res_rad
-            R_curr = Rotation.from_rotvec(v_angle*v_axis)
-            R_curr = R.as_matrix().dot(R_curr.as_matrix())
-            direction = R_curr.dot(ec)
-            lidar_data[u, v, :3] = eye_arr
-            lidar_data[u, v, 3:] = direction
-    
+        R_horz = rots_horz[u]
+        lidar_data[u, :, 3:] = np.asarray([R_horz.dot(ec) for ec in rots_vert_ec])
+        
     return o3d.core.Tensor(lidar_data)
 
 def rayCastingPointCloudGeneration(mesh, distance=10, vertical_fov=100, horizontal_fov=180, vertical_resolution=0.1, horizontal_resolution=0.1):
@@ -378,8 +374,7 @@ def rayCastingPointCloudGeneration(mesh, distance=10, vertical_fov=100, horizont
     bb_min, bb_max = bounding_box.get_min_bound(), bounding_box.get_max_bound()
     bb_half_size = bounding_box.get_half_extent()
     bb_center = bounding_box.get_center()
-    import time
-    a = time.time()
+
     # #for laterals
     multi_view_rays = []
     bb_center_lat = [np.array([(bb_half_size[0] + distance)*i, (bb_half_size[1] + distance)*j, bb_half_size[2]]) + bb_min for i, j in ((0,0), (0,1), (1,0), (1,1))]
@@ -407,8 +402,6 @@ def rayCastingPointCloudGeneration(mesh, distance=10, vertical_fov=100, horizont
             [0 if bb_half_size[0] > bb_half_size[1] else 1, 1 if bb_half_size[0] > bb_half_size[1] else 0 , 0],
         )
         multi_view_rays.append(rays)
-
-    print(time.time() - a)
     
     registered_pcd = o3d.geometry.PointCloud()
     registered_labels_mesh = []
