@@ -8,7 +8,6 @@ from os.path import exists
 from os import system
 from pypcd import pypcd
 import open3d as o3d
-import itertools
 
 EPS = np.finfo(np.float64).eps
 
@@ -336,7 +335,43 @@ def samplePointsUniformlyAndTrack(mesh, number_of_points, use_triangle_normal=Fa
     
     return pcd
 
-def rayCastingPointCloudGeneration(mesh, distance=2):
+def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
+    width_px = int(np.ceil(h_fov/h_res))
+    height_px = int(np.ceil(v_fov/v_res))
+
+    fx = 0.5 * width_px / np.tan(0.5 * (np.pi / 180) * h_fov)
+    fy = 0.5 * height_px / np.tan(0.5 * (np.pi / 180) * v_fov)
+
+    intrinsic_matrix_np = np.eye(3, dtype=np.float64)
+    intrinsic_matrix_np[0, 0] = fx
+    intrinsic_matrix_np[1, 1] = fy
+    intrinsic_matrix_np[0, 2] = 0.5*width_px
+    intrinsic_matrix_np[1, 2] = 0.5*height_px
+    intrinsic_matrix = o3d.core.Tensor(intrinsic_matrix_np)
+
+    center_arr = np.asarray(center)
+    eye_arr = np.asarray(eye)
+    up_arr = np.asarray(up)
+
+    R = np.eye(3)
+    R[1, :] = up_arr / np.linalg.norm(up_arr)
+    R[2, :] = center_arr - eye_arr
+    R[2, :] /= np.linalg.norm(R[2, :])
+    R[0, :] = np.cross(R[1, :], (R[2, :]))
+    R[0, :] /= np.linalg.norm(R[0, :])
+    R[1, :] = np.cross(R[2, :], R[0, :])
+    t = (-R @ eye_arr)[:, np.newaxis]
+
+    extrinsic_matrix_np = np.eye(4, dtype=np.float64)
+    extrinsic_matrix_np[0:3, 3] = t.T
+    extrinsic_matrix_np[0:3, 0:3] = R.T
+
+    extrinsic_matrix = o3d.core.Tensor(extrinsic_matrix_np)
+
+    return o3d.t.geometry.RaycastingScene.create_rays_pinhole(intrinsic_matrix, extrinsic_matrix, width_px, height_px)
+
+
+def rayCastingPointCloudGeneration(mesh, distance=2, vertical_fov=30, horizontal_fov=180, vertical_resolution=1, horizontal_resolution=0.1):
     scene = o3d.t.geometry.RaycastingScene()
     _ = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
 
@@ -350,25 +385,27 @@ def rayCastingPointCloudGeneration(mesh, distance=2):
     multi_view_rays = []
     bb_center_lat = [np.array([(bb_half_size[0] + distance)*i, (bb_half_size[1] + distance)*j, bb_half_size[2]]) + bb_min for i, j in ((0,0), (0,1), (1,0), (1,1))]
     for point in bb_center_lat:
-        rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
-            fov_deg=270,
-            center=bb_center,
-            eye=point,
-            up=[0, 0, 1],
-            width_px=640,
-            height_px=480,
+        rays = createRaysLidar(
+            vertical_fov,
+            horizontal_fov,
+            vertical_resolution,
+            horizontal_resolution,
+            bb_center,
+            point,
+            [0, 0, 1]
         )
         multi_view_rays.append(rays)
 
     bb_center_top  = [np.array([bb_half_size[0], bb_half_size[1], 2*bb_half_size[2] + distance]) + bb_min]
     for point in bb_center_top:
-        rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
-            fov_deg=90,
-            center=bb_center,
-            eye=point,
-            up=[0 if bb_half_size[0] > bb_half_size[1] else 1, 1 if bb_half_size[0] > bb_half_size[1] else 0 , 0],
-            width_px=640,
-            height_px=480,
+        rays = createRaysLidar(
+            vertical_fov,
+            horizontal_fov,
+            vertical_resolution,
+            horizontal_resolution,
+            bb_center,
+            point,
+            [0 if bb_half_size[0] > bb_half_size[1] else 1, 1 if bb_half_size[0] > bb_half_size[1] else 0 , 0],
         )
         multi_view_rays.append(rays)
 
@@ -383,6 +420,7 @@ def rayCastingPointCloudGeneration(mesh, distance=2):
         hit = ans['t_hit'].isfinite()
 
         points = rays[hit][:,:3] + rays[hit][:,3:]*ans['t_hit'][hit].reshape((-1,1))
+        print(len(points))
         normals = ans['primitive_normals'][hit].numpy()
 
         normals = normals/np.linalg.norm(normals)
