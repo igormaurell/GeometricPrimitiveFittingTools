@@ -8,6 +8,7 @@ from os.path import exists
 from os import system
 from pypcd import pypcd
 import open3d as o3d
+from scipy.spatial.transform import Rotation
 
 EPS = np.finfo(np.float64).eps
 
@@ -339,39 +340,36 @@ def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
     width_px = int(np.ceil(h_fov/h_res))
     height_px = int(np.ceil(v_fov/v_res))
 
-    fx = 0.5 * width_px / np.tan(0.5 * (np.pi / 180) * h_fov)
-    fy = 0.5 * height_px / np.tan(0.5 * (np.pi / 180) * v_fov)
-
-    intrinsic_matrix_np = np.eye(3, dtype=np.float64)
-    intrinsic_matrix_np[0, 0] = fx
-    intrinsic_matrix_np[1, 1] = fy
-    intrinsic_matrix_np[0, 2] = 0.5*width_px
-    intrinsic_matrix_np[1, 2] = 0.5*height_px
-    intrinsic_matrix = o3d.core.Tensor(intrinsic_matrix_np)
-
     center_arr = np.asarray(center)
     eye_arr = np.asarray(eye)
     up_arr = np.asarray(up)
 
-    R = np.eye(3)
-    R[1, :] = up_arr / np.linalg.norm(up_arr)
-    R[2, :] = center_arr - eye_arr
-    R[2, :] /= np.linalg.norm(R[2, :])
-    R[0, :] = np.cross(R[1, :], (R[2, :]))
-    R[0, :] /= np.linalg.norm(R[0, :])
-    R[1, :] = np.cross(R[2, :], R[0, :])
-    t = (-R @ eye_arr)[:, np.newaxis]
+    h_axis = up_arr/np.linalg.norm(up_arr)
+    ec = center_arr - eye_arr
+    ec /= np.linalg.norm(ec)
+    v_axis = np.cross(ec, h_axis)
 
-    extrinsic_matrix_np = np.eye(4, dtype=np.float64)
-    extrinsic_matrix_np[0:3, 3] = t.T
-    extrinsic_matrix_np[0:3, 0:3] = R.T
+    h_res_rad = h_res*np.pi/180.
+    v_res_rad = v_res*np.pi/180.
 
-    extrinsic_matrix = o3d.core.Tensor(extrinsic_matrix_np)
+    lidar_data = np.zeros((width_px, height_px, 6), dtype=np.float32)
 
-    return o3d.t.geometry.RaycastingScene.create_rays_pinhole(intrinsic_matrix, extrinsic_matrix, width_px, height_px)
+    for u in range(width_px):
+        u_norm = u - width_px/2
+        h_angle = u_norm*h_res_rad
+        R = Rotation.from_rotvec(h_angle*h_axis)
+        for v in range(height_px):
+            v_norm = v - height_px/2
+            v_angle = v_norm*v_res_rad
+            R_curr = Rotation.from_rotvec(v_angle*v_axis)
+            R_curr = R.as_matrix().dot(R_curr.as_matrix())
+            direction = R_curr.dot(ec)
+            lidar_data[u, v, :3] = eye_arr
+            lidar_data[u, v, 3:] = direction
+    
+    return o3d.core.Tensor(lidar_data)
 
-
-def rayCastingPointCloudGeneration(mesh, distance=2, vertical_fov=30, horizontal_fov=180, vertical_resolution=1, horizontal_resolution=0.1):
+def rayCastingPointCloudGeneration(mesh, distance=10, vertical_fov=100, horizontal_fov=180, vertical_resolution=0.1, horizontal_resolution=0.1):
     scene = o3d.t.geometry.RaycastingScene()
     _ = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
 
@@ -380,8 +378,9 @@ def rayCastingPointCloudGeneration(mesh, distance=2, vertical_fov=30, horizontal
     bb_min, bb_max = bounding_box.get_min_bound(), bounding_box.get_max_bound()
     bb_half_size = bounding_box.get_half_extent()
     bb_center = bounding_box.get_center()
-
-    #for laterals
+    import time
+    a = time.time()
+    # #for laterals
     multi_view_rays = []
     bb_center_lat = [np.array([(bb_half_size[0] + distance)*i, (bb_half_size[1] + distance)*j, bb_half_size[2]]) + bb_min for i, j in ((0,0), (0,1), (1,0), (1,1))]
     for point in bb_center_lat:
@@ -409,6 +408,7 @@ def rayCastingPointCloudGeneration(mesh, distance=2, vertical_fov=30, horizontal
         )
         multi_view_rays.append(rays)
 
+    print(time.time() - a)
     
     registered_pcd = o3d.geometry.PointCloud()
     registered_labels_mesh = []
