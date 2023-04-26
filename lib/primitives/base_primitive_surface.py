@@ -1,7 +1,24 @@
 from abc import abstractmethod
-from lib.utils import angleVectors
 import numpy as np
 
+'''VECTOR'''
+def rotate(array, theta, axis):
+    axis = axis / np.sqrt(np.dot(axis, axis))
+    a = np.cos(theta / 2.0)
+    b, c, d = -axis * np.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    
+    R = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+    
+    return R @ array
+
+def angleVectors(n1, n2):
+    n1_unit = n1/np.linalg.norm(n1)
+    n2_unit = n2/np.linalg.norm(n2)
+    return np.arccos(np.clip(np.dot(n1_unit, n2_unit), -1.0, 1.0))
 class BasePrimitiveSurface:
     @staticmethod
     def readParameterOnDict(key, d, old_value=None):

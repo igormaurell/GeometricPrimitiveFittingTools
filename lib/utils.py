@@ -9,6 +9,7 @@ from os import system
 from pypcd import pypcd
 import open3d as o3d
 from scipy.spatial.transform import Rotation
+from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
 EPS = np.finfo(np.float64).eps
 
@@ -29,25 +30,6 @@ def sortedIndicesIntersection(a, b):
             else : 
                 j+=1
     return intersect[:k]
-
-'''VECTOR'''
-def rotate(array, theta, axis):
-    axis = axis / np.sqrt(np.dot(axis, axis))
-    a = np.cos(theta / 2.0)
-    b, c, d = -axis * np.sin(theta / 2.0)
-    aa, bb, cc, dd = a * a, b * b, c * c, d * d
-    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-    
-    R = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
-    
-    return R @ array
-
-def angleVectors(n1, n2):
-    n1_unit = n1/np.linalg.norm(n1)
-    n2_unit = n2/np.linalg.norm(n2)
-    return np.arccos(np.clip(np.dot(n1_unit, n2_unit), -1.0, 1.0))
 
 '''COLOR'''
 def computeRGB(value):
@@ -365,55 +347,139 @@ def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
         
     return o3d.core.Tensor(lidar_data)
 
-def rayCastingPointCloudGeneration(mesh, distance=10, vertical_fov=100, horizontal_fov=180, vertical_resolution=0.1, horizontal_resolution=0.1):
+#create a dome above mesh to sample points to do the observation
+def createViews(bbox, cell_size=3, distance=2, distance_std=0):
+    bb_diagonal = bbox.get_max_bound() - bbox.get_min_bound()
+    bb_height = bb_diagonal[2]
+    bb_floor_diagonal = bb_diagonal.copy()
+    bb_floor_diagonal[2] = 0.
+    bb_floor_diagonal_len = np.linalg.norm(bb_floor_diagonal)
+
+    bb_floor_center = bbox.get_center()
+    bb_floor_center[2] = bbox.get_min_bound()[2]
+
+    #print('BB Diagonal Len:', bb_floor_diagonal_len)
+
+    if bb_floor_diagonal_len/2 > bb_height:
+        sphere_radius = bb_floor_diagonal_len/2 + distance
+    else:
+        sphere_radius = bb_height + distance
+
+    dome_len = np.pi*sphere_radius
+
+    #print('Sphere Radius:', sphere_radius)
+
+    num_cells = int(np.round(dome_len/cell_size))
+
+    #print('Number of Cells:', (num_cells, num_cells))
+
+    uls = np.linspace(0, 2*np.pi, num=num_cells)
+    vls = np.linspace(0, np.pi, num=num_cells)
+
+    us, vs = np.meshgrid(uls, vls)
+
+    us_cos = np.cos(us).flatten()[:, np.newaxis]
+    us_sin = np.sin(us).flatten()[:, np.newaxis]
+    vs_cos = np.cos(vs).flatten()[:, np.newaxis]
+    vs_sin = np.sin(vs).flatten()[:, np.newaxis]
+
+    dome_points = np.concatenate((sphere_radius*vs_cos*us_cos,
+                                  sphere_radius*vs_cos*us_sin,
+                                  sphere_radius*vs_sin), axis=1)
+
+    dome_normals = bb_floor_center - dome_points
+    dome_normals /= np.linalg.norm(dome_normals, axis=0)
+        
+    #print('Dome Points:', dome_points)
+
+    #print('Dome Normals:', dome_normals)
+
+    views = np.zeros((len(dome_points), 6), dtype=np.float64)
+    #adding gaussian noise to the height of the view
+    views[:, :3] = dome_points + dome_normals*np.random.normal(0.0, distance_std, len(views))[:, np.newaxis]
+
+    #print('Views Shape:', views.shape)
+
+    #print('Views Without Up:', views)
+
+    #computing up points to the views (I have never done this, it is needed to test)
+    bb_diagonal_dir = bb_diagonal/np.linalg.norm(bb_diagonal)
+    ortg_vectors = -(dome_normals*(np.sum(bb_diagonal_dir*dome_normals, axis=1)[:, np.newaxis])) + bb_diagonal_dir
+    ortg_vectors /= np.linalg.norm(ortg_vectors, axis=0)
+    views[:, 3:] = ortg_vectors#np.cross(dome_points, ortg_vectors)
+    #views[:, 3:] /= np.linalg.norm(views[:, 3:])
+
+    return views
+
+def IDS2RGB(ids):
+    ids_arr = np.asarray(ids, dtype=np.int32)
+    r = (0x000F & ids_arr).view(np.float64)[:, np.newaxis]
+    g = (0x000F & (ids_arr>>8)).view(np.float64)[:, np.newaxis]
+    b = (0x000F & (ids_arr>>16)).view(np.float64)[:, np.newaxis]
+    return np.concatenate((r, g, b), axis=1)
+
+def RGB2IDS(rgb):
+    rgb_arr = np.asarray(rgb, dtype=np.float64)
+    ids = rgb[:, 0].view(np.int32) + (rgb[:, 1].view(np.int32)<<8) + (rgb[:, 2].view(np.int32)<<16)
+    return ids.astype(np.int32)
+
+def rayCastingPointCloudGeneration(mesh, dome_cell_size=6, distance_std=0., distance=10, vertical_fov=100, horizontal_fov=180, vertical_resolution=0.1, horizontal_resolution=0.1):
     scene = o3d.t.geometry.RaycastingScene()
     _ = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
 
-    bounding_box = mesh.get_axis_aligned_bounding_box()
+    bbox = mesh.get_axis_aligned_bounding_box()
 
-    bb_min, bb_max = bounding_box.get_min_bound(), bounding_box.get_max_bound()
-    bb_half_size = bounding_box.get_half_extent()
-    bb_center = bounding_box.get_center()
+    views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
 
-    # #for laterals
-    multi_view_rays = []
-    bb_center_lat = [np.array([(bb_half_size[0] + distance)*i, (bb_half_size[1] + distance)*j, bb_half_size[2]]) + bb_min for i, j in ((0,0), (0,1), (1,0), (1,1))]
-    for point in bb_center_lat:
-        rays = createRaysLidar(
-            vertical_fov,
-            horizontal_fov,
-            vertical_resolution,
-            horizontal_resolution,
-            bb_center,
-            point,
-            [0, 0, 1]
-        )
-        multi_view_rays.append(rays)
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(views[:, :3])
+    # pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
 
-    bb_center_top  = [np.array([bb_half_size[0], bb_half_size[1], 2*bb_half_size[2] + distance]) + bb_min]
-    for point in bb_center_top:
-        rays = createRaysLidar(
-            vertical_fov,
-            horizontal_fov,
-            vertical_resolution,
-            horizontal_resolution,
-            bb_center,
-            point,
-            [0 if bb_half_size[0] > bb_half_size[1] else 1, 1 if bb_half_size[0] > bb_half_size[1] else 0 , 0],
-        )
-        multi_view_rays.append(rays)
+    # o3d.visualization.draw_geometries([pcd, mesh])
+
+    multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
+                                       bbox.get_center(), view[:3], view[3:]) for view in views]
+
+    # bb_min, bb_max = bounding_box.get_min_bound(), bounding_box.get_max_bound()
+    # bb_half_size = bounding_box.get_half_extent()
+    # bb_center = bounding_box.get_center()
+
+    # # #for laterals
+    # multi_view_rays = []
+    # bb_center_lat = [np.array([(bb_half_size[0] + distance)*i, (bb_half_size[1] + distance)*j, bb_half_size[2]]) + bb_min for i, j in ((0,0), (0,1), (1,0), (1,1))]
+    # for point in bb_center_lat:
+    #     rays = createRaysLidar(
+    #         vertical_fov,
+    #         horizontal_fov,
+    #         vertical_resolution,
+    #         horizontal_resolution,
+    #         bb_center,
+    #         point,
+    #         [0, 0, 1]
+    #     )
+    #     multi_view_rays.append(rays)
+
+    # bb_center_top  = [np.array([bb_half_size[0], bb_half_size[1], 2*bb_half_size[2] + distance]) + bb_min]
+    # for point in bb_center_top:
+    #     rays = createRaysLidar(
+    #         vertical_fov,
+    #         horizontal_fov,
+    #         vertical_resolution,
+    #         horizontal_resolution,
+    #         bb_center,
+    #         point,
+    #         [0 if bb_half_size[0] > bb_half_size[1] else 1, 1 if bb_half_size[0] > bb_half_size[1] else 0 , 0],
+    #     )
+    #     multi_view_rays.append(rays)
     
     registered_pcd = o3d.geometry.PointCloud()
     registered_labels_mesh = []
     for i, rays in enumerate(multi_view_rays):
-        print(registered_pcd)
-
         ans = scene.cast_rays(rays)
 
         hit = ans['t_hit'].isfinite()
 
         points = rays[hit][:,:3] + rays[hit][:,3:]*ans['t_hit'][hit].reshape((-1,1))
-        print(len(points))
         normals = ans['primitive_normals'][hit].numpy()
 
         normals = normals/np.linalg.norm(normals)
@@ -422,30 +488,39 @@ def rayCastingPointCloudGeneration(mesh, distance=10, vertical_fov=100, horizont
         pcd.points = o3d.utility.Vector3dVector(points.numpy())
         pcd.normals = o3d.utility.Vector3dVector(normals)
 
+        print('pcd:', pcd)
+
         labels_mesh = ans['primitive_ids'][hit].numpy()
-        
+
         if i > 0:
             registration_result = o3d.pipelines.registration.registration_icp(registered_pcd, pcd, 0.03)
+
             corr = np.asarray(registration_result.correspondence_set)
+
             pcd_inliers = registered_pcd.select_by_index(corr[:, 0])
             pdc_1_outliers = registered_pcd.select_by_index(corr[:, 0], invert=True)
             pcd_2_outliers = pcd.select_by_index(corr[:, 1], invert=True)
-            registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
+            registered_pcd += pcd
             
             lm_1_inliers = registered_labels_mesh[corr[:, 0]]
+            print(lm_1_inliers.shape)
             lm_2_inliers = labels_mesh[corr[:, 1]]
+            print(lm_2_inliers.shape)
             matches = lm_1_inliers == lm_2_inliers
+            print(matches.shape)
             count_matches = np.count_nonzero(~matches)
             if count_matches > 0:
                 print('Error in labels mesh registration, {} points have differente triangle ids.'.format(count_matches))
             corr_1 = np.in1d(range(registered_labels_mesh.shape[0]), corr[:, 0])
+            print(np.count_nonzero(~corr_1))
             lm_1_outliers = registered_labels_mesh[~corr_1]
             corr_2 = np.in1d(range(labels_mesh.shape[0]), corr[:, 1])
             lm_2_outliers = labels_mesh[~corr_2]
-            registered_labels_mesh = np.concatenate((lm_1_inliers, lm_1_outliers, lm_2_outliers))
+            registered_labels_mesh = np.concatenate((registered_labels_mesh, labels_mesh))
 
         else:
             registered_pcd = pcd
             registered_labels_mesh = labels_mesh
+
 
     return registered_pcd, np.asarray(registered_labels_mesh)
