@@ -412,21 +412,32 @@ def createViews(bbox, cell_size=3, distance=2, distance_std=0):
     return views
 
 def IDS2RGB(ids):
-    ids_arr = np.asarray(ids, dtype=np.int32)
-    r = (0x000F & ids_arr).view(np.float64)[:, np.newaxis]
-    g = (0x000F & (ids_arr>>8)).view(np.float64)[:, np.newaxis]
-    b = (0x000F & (ids_arr>>16)).view(np.float64)[:, np.newaxis]
-    return np.concatenate((r, g, b), axis=1)
+    ids_arr = np.asarray(ids, dtype=np.uint32)
+    r = (0xFF & ids_arr).view(np.float32)[:, np.newaxis]
+    g = (0xFF & (ids_arr>>8)).view(np.float32)[:, np.newaxis]
+    b = (0xFF & (ids_arr>>16)).view(np.float32)[:, np.newaxis]
+    return np.concatenate((r, g, b), axis=1).astype(np.float64)
 
 def RGB2IDS(rgb):
-    rgb_arr = np.asarray(rgb, dtype=np.float64)
-    ids = rgb[:, 0].view(np.int32) + (rgb[:, 1].view(np.int32)<<8) + (rgb[:, 2].view(np.int32)<<16)
-    return ids.astype(np.int32)
+    rgb_arr = np.asarray(rgb, dtype=np.float64).astype(np.float32)
+    ids = (rgb_arr[:, 2].view(np.uint32)<<16) | (rgb_arr[:, 1].view(np.uint32)<<8) | rgb_arr[:, 0].view(np.uint32)
+    return ids
 
-def rayCastingPointCloudGeneration(mesh, dome_cell_size=6, distance_std=0., distance=10, vertical_fov=100, horizontal_fov=180, vertical_resolution=0.1, horizontal_resolution=0.1):
+LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
+
+def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':100, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
+                                   dome_cell_size=6, distance_std=0., distance=10):
+    
+
+    assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
+
+    vertical_fov = lidar_data['vertical_fov']
+    horizontal_fov = lidar_data['horizontal_fov']
+    vertical_resolution = lidar_data['vertical_resolution']
+    horizontal_resolution = lidar_data['horizontal_resolution']
+    
     scene = o3d.t.geometry.RaycastingScene()
     _ = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
-
     bbox = mesh.get_axis_aligned_bounding_box()
 
     views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
@@ -439,41 +450,8 @@ def rayCastingPointCloudGeneration(mesh, dome_cell_size=6, distance_std=0., dist
 
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
                                        bbox.get_center(), view[:3], view[3:]) for view in views]
-
-    # bb_min, bb_max = bounding_box.get_min_bound(), bounding_box.get_max_bound()
-    # bb_half_size = bounding_box.get_half_extent()
-    # bb_center = bounding_box.get_center()
-
-    # # #for laterals
-    # multi_view_rays = []
-    # bb_center_lat = [np.array([(bb_half_size[0] + distance)*i, (bb_half_size[1] + distance)*j, bb_half_size[2]]) + bb_min for i, j in ((0,0), (0,1), (1,0), (1,1))]
-    # for point in bb_center_lat:
-    #     rays = createRaysLidar(
-    #         vertical_fov,
-    #         horizontal_fov,
-    #         vertical_resolution,
-    #         horizontal_resolution,
-    #         bb_center,
-    #         point,
-    #         [0, 0, 1]
-    #     )
-    #     multi_view_rays.append(rays)
-
-    # bb_center_top  = [np.array([bb_half_size[0], bb_half_size[1], 2*bb_half_size[2] + distance]) + bb_min]
-    # for point in bb_center_top:
-    #     rays = createRaysLidar(
-    #         vertical_fov,
-    #         horizontal_fov,
-    #         vertical_resolution,
-    #         horizontal_resolution,
-    #         bb_center,
-    #         point,
-    #         [0 if bb_half_size[0] > bb_half_size[1] else 1, 1 if bb_half_size[0] > bb_half_size[1] else 0 , 0],
-    #     )
-    #     multi_view_rays.append(rays)
     
     registered_pcd = o3d.geometry.PointCloud()
-    registered_labels_mesh = []
     for i, rays in enumerate(multi_view_rays):
         ans = scene.cast_rays(rays)
 
@@ -484,43 +462,29 @@ def rayCastingPointCloudGeneration(mesh, dome_cell_size=6, distance_std=0., dist
 
         normals = normals/np.linalg.norm(normals)
 
+        labels_mesh = ans['primitive_ids'][hit].numpy()
+        rgb = IDS2RGB(labels_mesh)
+
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points.numpy())
         pcd.normals = o3d.utility.Vector3dVector(normals)
+        pcd.colors = o3d.utility.Vector3dVector(rgb)
 
-        print('pcd:', pcd)
-
-        labels_mesh = ans['primitive_ids'][hit].numpy()
-
-        if i > 0:
-            registration_result = o3d.pipelines.registration.registration_icp(registered_pcd, pcd, 0.03)
-
-            corr = np.asarray(registration_result.correspondence_set)
-
-            pcd_inliers = registered_pcd.select_by_index(corr[:, 0])
-            pdc_1_outliers = registered_pcd.select_by_index(corr[:, 0], invert=True)
-            pcd_2_outliers = pcd.select_by_index(corr[:, 1], invert=True)
-            registered_pcd += pcd
-            
-            lm_1_inliers = registered_labels_mesh[corr[:, 0]]
-            print(lm_1_inliers.shape)
-            lm_2_inliers = labels_mesh[corr[:, 1]]
-            print(lm_2_inliers.shape)
-            matches = lm_1_inliers == lm_2_inliers
-            print(matches.shape)
-            count_matches = np.count_nonzero(~matches)
-            if count_matches > 0:
-                print('Error in labels mesh registration, {} points have differente triangle ids.'.format(count_matches))
-            corr_1 = np.in1d(range(registered_labels_mesh.shape[0]), corr[:, 0])
-            print(np.count_nonzero(~corr_1))
-            lm_1_outliers = registered_labels_mesh[~corr_1]
-            corr_2 = np.in1d(range(labels_mesh.shape[0]), corr[:, 1])
-            lm_2_outliers = labels_mesh[~corr_2]
-            registered_labels_mesh = np.concatenate((registered_labels_mesh, labels_mesh))
-
-        else:
+        if i == 0:
             registered_pcd = pcd
-            registered_labels_mesh = labels_mesh
+        else:
+            result_icp = o3d.pipelines.registration.registration_colored_icp(pcd, registered_pcd,
+                        0.005, estimation_method=o3d.pipelines.registration.TransformationEstimationForColoredICP(),
+                        criteria=o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-6,
+                                                                                   relative_rmse=1e-6,
+                                                                                   max_iteration=30))
+        
+            corr = np.asarray(result_icp.correspondence_set)
+            pcd_inliers = registered_pcd.select_by_index(corr[:, 1])
+            pdc_1_outliers = registered_pcd.select_by_index(corr[:, 1], invert=True)
+            pcd_2_outliers = pcd.select_by_index(corr[:, 0], invert=True)
+            registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
 
+    registered_labels_mesh = RGB2IDS(registered_pcd.colors)
 
-    return registered_pcd, np.asarray(registered_labels_mesh)
+    return registered_pcd, registered_labels_mesh
