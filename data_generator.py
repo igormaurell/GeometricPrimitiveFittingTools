@@ -44,8 +44,9 @@ if __name__ == '__main__':
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
     parser.add_argument('-d_pc', '--delete_old_pc', action='store_true', help='')
 
-    parser.add_argument('-pc', '--points_curation', action='store_true', help='')
-    parser.add_argument('-nc', '--normals_curation', action='store_true', help='')
+    parser.add_argument('--pcd_generation_method', choices=['sampling', 'lidar'], type=str, default = 'sampling', help='')
+    parser.add_argument('-ph', '--points_healing', action='store_true', help='')
+    parser.add_argument('-nh', '--normals_healing', action='store_true', help='')
     parser.add_argument('-uon', '--use_original_noise', action='store_true', help='')
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
     parser.add_argument('-t_p', '--train_percentage', type=int, default = 0.8, help='')
@@ -67,11 +68,12 @@ if __name__ == '__main__':
     delete_old_pc = args['delete_old_pc']
     train_percentage = args['train_percentage']
     use_original_noise = args['use_original_noise']
-    points_curation = args['points_curation']
-    normals_curation = args['normals_curation']
+    points_healing = args['points_healing']
+    normals_healing = args['normals_healing']
     min_number_points = args['min_number_points']
     min_number_points = int(min_number_points) if min_number_points > 1 else min_number_points
 
+    pcd_generation_method = args['pcd_generation_method']
     dataset_folder_name = args['dataset_folder_name']
     data_folder_name = args['data_folder_name']
     transform_folder_name = args['transform_folder_name']
@@ -149,26 +151,18 @@ if __name__ == '__main__':
 
         elif exists(mesh_filename):
             mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
-            #print(o3d_mesh)
-            #vertices, faces = igl.read_triangle_mesh(mesh_filename)
-            #mesh = o3d.geometry.TriangleMesh()
-            #mesh.vertices = o3d.utility.Vector3dVector(vertices)
-            #mesh.triangles = o3d.utility.Vector3iVector(faces)
 
             #making mesh to clockwise (open3d default)
-            #mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
+            mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
 
-            pcd, labels_mesh = rayCastingPointCloudGeneration(mesh)
-            #pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+            if pcd_generation_method == 'sampling':
+                pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+            elif pcd_generation_method == 'lidar':
+                pcd, labels_mesh = rayCastingPointCloudGeneration(mesh)
+            else:
+                assert False, 'Point Cloud Generation Method is invalid.'
 
             labels_mesh = np.asarray(labels_mesh)
-
-            # #getting face_index for each point using closest distance
-            # #FIXME: open3d method can be modified in versions after 0.17.0 to generate this information in sample_points_uniformly function (easy to modify)
-            #scene = o3d.t.geometry.RaycastingScene()
-            #mesh_tensor = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
-            #scene.add_triangles(mesh_tensor)
-            #labels_mesh = scene.compute_closest_points(o3d.core.Tensor(np.asarray(pcd.points), dtype=o3d.core.Dtype.Float32))['primitive_ids'].numpy()
 
             points = np.asarray(pcd.points)
             normals = np.asarray(pcd.normals)
@@ -203,12 +197,12 @@ if __name__ == '__main__':
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
             
-        if mesh is None and 'primitivenet' in formats:
+        if mesh is None:
             mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
             mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
 
         noisy_points = None
-        if points_curation or normals_curation:
+        if points_healing or normals_healing:
             points_new = points.copy()
             normals_new = normals.copy()
             for i, feature in enumerate(features_data['surfaces']):
@@ -217,11 +211,11 @@ if __name__ == '__main__':
                     primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
                     if primitive is not None:
                         points_new[fpi], normals_new[fpi] = primitive.computeCorrectPointsAndNormals(points[fpi])
-            if points_curation:
+            if points_healing:
                 if use_original_noise:
                     noisy_points = points.copy()
                 points = points_new
-            if normals_curation:
+            if normals_healing:
                 normals = normals_new
 
         dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices, mesh=mesh)

@@ -236,87 +236,63 @@ def savePCD(filename, points, colors=None, normals=None, labels=None, binary=Tru
             f.write(header)
             f.write('\n'.join([' '.join(map(str, x)) for x in arr_s]))
 
-# too slow, python problem???
-def samplePointsUniformlyAndTrack(mesh, number_of_points, use_triangle_normal=False):
-    surface_area = mesh.get_surface_area()
-    if surface_area <= 0:
-        print("ERROR: Invalid surface area {}, it must be > 0.".format(surface_area))
-
-    vertices = np.asarray(mesh.vertices, dtype=np.float64)
-    triangles = np.asarray(mesh.triangles, dtype=np.int32)
-    triangle_normals = np.zeros(triangles.shape, dtype=np.float64)
-    triangle_areas = np.zeros(len(mesh.triangles), dtype=np.float64)
-    from tqdm import tqdm
-
-    for i, t in tqdm(enumerate(triangles)):
-        A = vertices[t[0]]
-        B = vertices[t[1]]
-        C = vertices[t[2]]
-
-        #normal (counter-clockwise as default order)
-        v1 = A - C
-        v2 = B - C
-        normal = np.cross(v1, v2)
-        triangle_normals[i] = normal
-
-        #area
-        area = np.linalg.norm(np.cross(v1, v2))/2
-        triangle_areas[i] = area        
-
-    triangle_areas[0] /= surface_area
-    for i in range(1, len(triangles)):
-        triangle_areas[i] = triangle_areas[i] / (surface_area + triangle_areas[i - 1])
-
-    has_vert_normal = mesh.has_vertex_normals()
-    has_vert_color = mesh.has_vertex_colors()
-
-    points = np.array((number_of_points, 3), dtype=np.float64)
-    normals = np.array((number_of_points, 3), dtype=np.float64)
-    colors = np.array((number_of_points, 3), dtype=np.float64)
-    points_label = np.array(number_of_points, dtype=np.int32)
-
-    vertex_normals = mesh.vertex_normals
-    vertex_colors = mesh.vertex_colors
-
-    last_n = 0
-    for tidx, t in tqdm(enumerate(triangles)):
-        n = int(np.around(triangle_areas[tidx] * number_of_points))
-        randoms1 = np.random.uniform(size=n)
-        randoms2 = np.random.uniform(size=n)
-
-        a = 1 - np.sqrt(randoms1)
-        b = np.sqrt(randoms1) * (1 - randoms2)
-        c = np.sqrt(randoms1) * randoms2
-
-        V1, V2, V3 = vertices[t]
-
-        points[last_n:n, :] =  a*V1 + b*V2 + c*V3
-
-        if has_vert_normal and not use_triangle_normal:
-            n1, n2, n3 = vertex_normals[t]
-            normals[last_n:n, :] = a*n1 + b*n2 + c*n2
-        elif use_triangle_normal:
-            normals[last_n:n, :] = triangle_normals[tidx]
-        
-        if has_vert_color:
-            c1, c2, c3 = vertex_colors[t]
-            normals[last_n:n, :] = a*c1 + b*c2 + c*c3
-        
-        points_label[last_n:n] = tidx
-
-        last_n = n
-
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
-
-    if has_vert_normal or use_triangle_normal:
-        normals = normals/(np.linalg.norm(normals, axis=0) + EPS)
-        pcd.normals = o3d.utility.Vector3dVector(normals)
+def computeRotation(axis, theta):
+    axis = axis / np.sqrt(np.dot(axis, axis))
+    a = np.cos(theta / 2.0)
+    b, c, d = -axis * np.sin(theta / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
     
-    if has_vert_color:
-        pcd.colors = o3d.utility.Vector3dVector(colors)
+    R = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                    [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                    [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+
+    return R
+
+def projectRays(rays, up, view_dir):
+    shp = rays.shape
     
-    return pcd
+    x_axis = np.array([1, 0, 0])
+
+    rot_axis = np.cross(x_axis, view_dir)
+    angle = np.arccos(np.dot(x_axis, view_dir))
+    r = computeRotation(rot_axis, angle)
+    new_z = r.dot(np.array([0, 0, 1]))
+
+    # Find the projections of the vectors onto the axis
+    proj1 = np.dot(new_z, view_dir)
+    proj2 = np.dot(up, view_dir)
+
+    # Find the components of the vectors that are perpendicular to the axis
+    perp1 = new_z - proj1 * view_dir
+    perp2 = up - proj2 * view_dir
+
+    # Find the vector perpendicular to both components
+    perp = np.cross(perp1, perp2)
+
+    # Find the magnitude of the perpendicular vector
+    mag = np.linalg.norm(perp)
+
+    # Find the scalar product of the two vectors
+    scalar_prod = np.dot(new_z, up)
+
+    # Compute the angle between the two vectors with respect to the arbitrary axis
+    angle2 = 2*np.pi - np.arctan2(mag, scalar_prod)
+
+    r2 = computeRotation(view_dir, angle2)
+
+    rot = r2.dot(r)
+
+    rays_new = (rot.dot(rays.reshape(-1, 3).T).T).reshape(shp)
+
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(np.concatenate((rays_new.reshape(-1, 3),
+    #                                                         np.array([up*v for v in np.linspace(0, 1, num=1000)]),
+    #                                                         np.array([view_dir*v for v in np.linspace(0, 0.5, num=1000)]))))
+
+    # o3d.visualization.draw_geometries([pcd])
+
+    return rays_new
 
 def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
     width_px = int(np.ceil(h_fov/h_res))
@@ -329,26 +305,45 @@ def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
     h_axis = up_arr/np.linalg.norm(up_arr)
     ec = center_arr - eye_arr
     ec /= np.linalg.norm(ec)
-    v_axis = np.cross(ec, h_axis)
 
-    h_res_rad = h_res*np.pi/180.
-    v_res_rad = v_res*np.pi/180.
+    h_fov_rad = h_fov*np.pi/180.
+    v_fov_rad = v_fov*np.pi/180.
 
-    rots_horz = [Rotation.from_rotvec(u*h_res_rad*h_axis).as_matrix() for u in range(int(-width_px/2), int(width_px/2))]
-    rots_vert_ec = [Rotation.from_rotvec(v*v_res_rad*v_axis).as_matrix().dot(ec) for v in range(int(-height_px/2), int(height_px/2))]
+    uls = np.linspace(-h_fov_rad/2, h_fov_rad/2, num=width_px)
+    vls = np.linspace(-v_fov_rad/2, v_fov_rad/2, num=height_px)
 
-    lidar_data = np.zeros((width_px, height_px, 6), dtype=np.float32)
+    vs, us = np.meshgrid(vls, uls)
 
-    lidar_data[:, :, :3] = eye_arr
+    us_cos = np.cos(us)[:, :, np.newaxis]
+    us_sin = np.sin(us)[:, :, np.newaxis]
+    vs_cos = np.cos(vs)[:, :, np.newaxis]
+    vs_sin = np.sin(vs)[:, :, np.newaxis]
 
-    for u in range(width_px):
-        R_horz = rots_horz[u]
-        lidar_data[u, :, 3:] = np.asarray([R_horz.dot(ec) for ec in rots_vert_ec])
+    rays = np.zeros((width_px, height_px, 6), dtype=np.float32)
+
+    rays[:, :, :3] = eye_arr
+
+    rays_local = np.concatenate((vs_cos*us_cos, vs_cos*us_sin, vs_sin), axis=2)
+    norm = np.linalg.norm(rays_local, axis=2)[:, :, np.newaxis]
+    rays_local/= np.concatenate((norm, norm, norm), axis=2)
+
+    rays[:, :, 3:] = projectRays(rays_local, h_axis, ec)
+
+    # rots_horz = [Rotation.from_rotvec(u*h_res_rad*h_axis).as_matrix() for u in range(int(-width_px/2), int(width_px/2))]
+    # rots_vert_ec = [Rotation.from_rotvec(v*v_res_rad*v_axis).as_matrix().dot(ec) for v in range(int(-height_px/2), int(height_px/2))]
+
+    # rays = np.zeros((width_px, height_px, 6), dtype=np.float32)
+
+    # rays[:, :, :3] = eye_arr
+
+    # for u in range(width_px):
+    #     R_horz = rots_horz[u]
+    #     rays[u, :, 3:] = np.asarray([R_horz.dot(ec) for ec in rots_vert_ec])
         
-    return o3d.core.Tensor(lidar_data)
+    return o3d.core.Tensor(rays)
 
 #create a dome above mesh to sample points to do the observation
-def createViews(bbox, cell_size=3, distance=2, distance_std=0):
+def createViews(bbox, cell_size=6, distance=2, distance_std=0):
     bb_diagonal = bbox.get_max_bound() - bbox.get_min_bound()
     bb_height = bb_diagonal[2]
     bb_floor_diagonal = bb_diagonal.copy()
@@ -369,7 +364,7 @@ def createViews(bbox, cell_size=3, distance=2, distance_std=0):
 
     #print('Sphere Radius:', sphere_radius)
 
-    num_cells = int(np.round(dome_len/cell_size))
+    num_cells = max(3, int(np.round(dome_len/cell_size)))
 
     #print('Number of Cells:', (num_cells, num_cells))
 
@@ -425,8 +420,8 @@ def RGB2IDS(rgb):
 
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
-def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':100, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
-                                   dome_cell_size=6, distance_std=0., distance=10):
+def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
+                                   dome_cell_size=6, distance_std=0., distance=3):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
@@ -440,17 +435,18 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':100, 'horizo
     _ = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
     bbox = mesh.get_axis_aligned_bounding_box()
 
+
     views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
 
-    # pcd = o3d.geometry.PointCloud()
-    # pcd.points = o3d.utility.Vector3dVector(views[:, :3])
-    # pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(views[:, :3])
+    pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
 
-    # o3d.visualization.draw_geometries([pcd, mesh])
+    o3d.visualization.draw_geometries([pcd, mesh])
 
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
                                        bbox.get_center(), view[:3], view[3:]) for view in views]
-    
+        
     registered_pcd = o3d.geometry.PointCloud()
     for i, rays in enumerate(multi_view_rays):
         ans = scene.cast_rays(rays)
