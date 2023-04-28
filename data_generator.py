@@ -131,7 +131,7 @@ if __name__ == '__main__':
         point_position = features_filename.rfind('.')
         filename = features_filename[:point_position]
 
-        print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index, len(features_files)))
+        print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index + 1, len(features_files)))
 
         pc_filename = join(pc_folder_name, filename) + '.pcd'
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
@@ -157,6 +157,7 @@ if __name__ == '__main__':
         elif exists(mesh_filename):
             print('Opening Mesh:')
             mesh = o3d.io.read_triangle_mesh(mesh_filename, print_progress=True)
+            print('Done.\n')
 
             #making mesh to clockwise (open3d default)
             mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])

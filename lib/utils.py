@@ -435,6 +435,13 @@ def RGB2IDS(rgb):
     ids = (rgb_arr[:, 2].view(np.uint32)<<16) | (rgb_arr[:, 1].view(np.uint32)<<8) | rgb_arr[:, 0].view(np.uint32)
     return ids
 
+def pairWiseRegistration(source, target, distance_threshold=0.01):
+    distances = np.asarray(target.compute_point_cloud_distance(source))
+    valid_indices = np.arange(len(distances))[distances > distance_threshold]
+    target_outlier_pcd = target.select_by_index(valid_indices)
+    source += target_outlier_pcd
+    return source
+
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
 def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
@@ -491,17 +498,18 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
         if i == 0:
             registered_pcd = pcd
         else:
-            result_icp = o3d.pipelines.registration.registration_colored_icp(pcd, registered_pcd,
-                        0.005, estimation_method=o3d.pipelines.registration.TransformationEstimationForColoredICP(),
-                        criteria=o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-6,
-                                                                                   relative_rmse=1e-6,
-                                                                                   max_iteration=30))
+            registered_pcd = pairWiseRegistration(registered_pcd, pcd)
+            # result_icp = o3d.pipelines.registration.registration_colored_icp(pcd, registered_pcd,
+            #             0.005, estimation_method=o3d.pipelines.registration.TransformationEstimationForColoredICP(),
+            #             criteria=o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-6,
+            #                                                                        relative_rmse=1e-6,
+            #                                                                        max_iteration=30))
         
-            corr = np.asarray(result_icp.correspondence_set)
-            pcd_inliers = registered_pcd.select_by_index(corr[:, 1])
-            pdc_1_outliers = registered_pcd.select_by_index(corr[:, 1], invert=True)
-            pcd_2_outliers = pcd.select_by_index(corr[:, 0], invert=True)
-            registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
+            # corr = np.asarray(result_icp.correspondence_set)
+            # pcd_inliers = registered_pcd.select_by_index(corr[:, 1])
+            # pdc_1_outliers = registered_pcd.select_by_index(corr[:, 1], invert=True)
+            # pcd_2_outliers = pcd.select_by_index(corr[:, 0], invert=True)
+            # registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
 
     registered_labels_mesh = RGB2IDS(registered_pcd.colors)
     funif(print, verbose)('Done.\n')
