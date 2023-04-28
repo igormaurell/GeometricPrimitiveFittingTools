@@ -11,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
@@ -126,16 +126,21 @@ if __name__ == '__main__':
     
     dataset_writer_factory = DatasetWriterFactory(parameters)
 
-    for features_filename in tqdm(features_files):
+    for index, features_filename in enumerate(features_files):
+
         point_position = features_filename.rfind('.')
         filename = features_filename[:point_position]
+
+        print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index, len(features_files)))
 
         pc_filename = join(pc_folder_name, filename) + '.pcd'
         mesh_filename = join(mesh_folder_name, filename) + '.obj'
     
         feature_tp =  features_filename[(point_position + 1):]
 
+        funif(print, True)('Loading Features...')
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
+        funif(print, True)('Done.\n')
 
         mesh = None
         if exists(pc_filename):
@@ -150,7 +155,8 @@ if __name__ == '__main__':
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
 
         elif exists(mesh_filename):
-            mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
+            print('Opening Mesh:')
+            mesh = o3d.io.read_triangle_mesh(mesh_filename, print_progress=True)
 
             #making mesh to clockwise (open3d default)
             mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])

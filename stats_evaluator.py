@@ -127,11 +127,12 @@ def statsData2Graphs(data, num_models=1):
     data_number = []
     data_vertices = []
     for tp, d in data['curves'].items():
-        columns_curves.append(tp)
-        data_number.append(d['number_curves'])
-        data_vertices.append(d['number_vertices'])
-        # data_small.append(d['number_curves']-d['number_small_curves'])
-        # data_small.append(d['number_small_curves'])
+        if type(d) == dict:
+            columns_curves.append(tp)
+            data_number.append(d['number_curves'])
+            data_vertices.append(d['number_vertices'])
+            # data_small.append(d['number_curves']-d['number_small_curves'])
+            # data_small.append(d['number_small_curves'])
     #fig_number_curves = createNestedPieGraph(columns_curves, data_number, data_small, title='Nuber of Curves per Type')
     fig_number_curves = createPieGraph(columns_curves, data_number, title='Number of Curves per Type', num_models=num_models)
     fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve', num_models=num_models)
@@ -142,10 +143,11 @@ def statsData2Graphs(data, num_models=1):
     data_faces = []
     data_area = []
     for tp, d in data['surfaces'].items():
-        columns_surfaces.append(tp)
-        data_number.append(d['number_surfaces'])
-        data_faces.append(d['number_faces'])
-        data_area.append(d['area'])
+        if type(d) == dict:
+            columns_surfaces.append(tp)
+            data_number.append(d['number_surfaces'])
+            data_faces.append(d['number_faces'])
+            data_area.append(d['area'])
         # data_small.append(d['number_surfaces']-d['number_small_surfaces'])
         # data_small.append(d['number_small_surfaces'])
     #fig_number_surfaces = createNestedPieGraph(columns_surfaces, data_number, data_small, title='Nuber of Surfaces per Type')

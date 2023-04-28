@@ -10,8 +10,12 @@ from pypcd import pypcd
 import open3d as o3d
 from scipy.spatial.transform import Rotation
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
+from tqdm import tqdm
 
 EPS = np.finfo(np.float64).eps
+
+def funif(fun, var: bool):
+    return fun if var else lambda x: x
 
 @njit
 def sortedIndicesIntersection(a, b):
@@ -434,7 +438,7 @@ def RGB2IDS(rgb):
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
 def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
-                                   dome_cell_size=6, distance_std=0., distance=3):
+                                   dome_cell_size=6, distance_std=0., distance=3, verbose=True):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
@@ -449,7 +453,9 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
     bbox = mesh.get_axis_aligned_bounding_box()
 
 
+    funif(print, verbose)('Generating Views...')
     views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
+    funif(print, verbose)('Done.\n')
 
     #pcd = o3d.geometry.PointCloud()
     #pcd.points = o3d.utility.Vector3dVector(views[:, :3])
@@ -457,11 +463,14 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
 
     #o3d.visualization.draw_geometries([pcd, mesh])
 
+    funif(print, verbose)('Generating Rays...')
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
-                                       bbox.get_center(), view[:3], view[3:]) for view in views]
+                                       bbox.get_center(), view[:3], view[3:]) for view in funif(tqdm, verbose)(views)]
+    funif(print, verbose)('Done.\n')
         
+    funif(print, verbose)('Casting Rays and Registering...')
     registered_pcd = o3d.geometry.PointCloud()
-    for i, rays in enumerate(multi_view_rays):
+    for i, rays in funif(tqdm, verbose)(enumerate(multi_view_rays)):
         ans = scene.cast_rays(rays)
 
         hit = ans['t_hit'].isfinite()
@@ -495,5 +504,6 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
             registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
 
     registered_labels_mesh = RGB2IDS(registered_pcd.colors)
+    funif(print, verbose)('Done.\n')
 
     return registered_pcd, registered_labels_mesh
