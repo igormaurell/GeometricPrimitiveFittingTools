@@ -435,17 +435,25 @@ def RGB2IDS(rgb):
     ids = (rgb_arr[:, 2].view(np.uint32)<<16) | (rgb_arr[:, 1].view(np.uint32)<<8) | rgb_arr[:, 0].view(np.uint32)
     return ids
 
-pcd_tree = None
+
+import scipy.spatial    
+
 def pairWiseRegistration(source, target, distance_threshold=0.01):
-    global pcd_tree
-    if pcd_tree is None:
-        pcd_tree = o3d.geometry.KDTreeFlann(source)
-    [k, idx, dist] = [pcd_tree.search_knn_vector_3d(point, 0.2) for point in target.points]
-    print(k)
-    # distances = np.asarray(target.compute_point_cloud_distance(source))
-    # valid_indices = np.arange(len(distances))[distances > distance_threshold]
-    # target_outlier_pcd = target.select_by_index(valid_indices)
-    # source += target_outlier_pcd
+    source_tree = o3d.geometry.KDTreeFlann(source)
+    _, indices, distances = zip(*[source_tree.search_knn_vector_3d(point, 1) for point in tqdm(target.points)])
+    indices = np.asarray(indices)[:, 0]
+    distances = np.sqrt(np.asarray(distances)[:, 0])
+
+    source_colors = np.asarray(source.colors)[indices]
+    source_ids = RGB2IDS(source_colors)
+    target_colors = np.asarray(target.colors)
+    target_ids = RGB2IDS(target_colors)
+
+    valid_indices = np.arange(len(distances))[np.logical_or(distances > distance_threshold, source_ids != target_ids)]
+
+    target_outlier_pcd = target.select_by_index(valid_indices)
+    source += target_outlier_pcd
+
     return source
 
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
@@ -483,8 +491,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
         
     funif(print, verbose)('Casting Rays and Registering...')
     registered_pcd = o3d.geometry.PointCloud()
-    vector = []
-    for i, rays in funif(tqdm, verbose)(enumerate(multi_view_rays)):
+    for i, rays in funif(tqdm, False)(enumerate(multi_view_rays)):
         ans = scene.cast_rays(rays)
 
         hit = ans['t_hit'].isfinite()

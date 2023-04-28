@@ -149,8 +149,6 @@ if __name__ == '__main__':
             points = np.vstack((pc['x'], pc['y'], pc['z'])).T
             normals = np.vstack((pc['normal_x'], pc['normal_y'], pc['normal_z'])).T
             labels_mesh = pc['label']
-
-            import time
             
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
 
