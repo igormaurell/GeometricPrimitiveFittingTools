@@ -342,8 +342,21 @@ def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
         
     return o3d.core.Tensor(rays)
 
-#create a dome above mesh to sample points to do the observation
 def createViews(bbox, cell_size=6, distance=2, distance_std=0):
+    '''
+    A spherical dome is created above the mesh and views are grid sampled in the dome
+
+    Params:
+    - cell_size: each area of cell_size X cell_size in the dome will recieve a view point
+    - distance: the distance from the center of mesh to the dome surface is half of the greatest lenght of mesh plus the distance param
+    - distance_std: standart deviation of the noise in sensor height
+
+    Return:
+    - views(NX6):
+        - view_points (NX:3)
+        - up_direction (NX3:)
+    '''
+
     bb_diagonal = bbox.get_max_bound() - bbox.get_min_bound()
     bb_height = bb_diagonal[2]
     bb_floor_diagonal = bb_diagonal.copy()
@@ -438,11 +451,11 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
 
     views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(views[:, :3])
-    pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
+    #pcd = o3d.geometry.PointCloud()
+    #pcd.points = o3d.utility.Vector3dVector(views[:, :3])
+    #pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
 
-    o3d.visualization.draw_geometries([pcd, mesh])
+    #o3d.visualization.draw_geometries([pcd, mesh])
 
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
                                        bbox.get_center(), view[:3], view[3:]) for view in views]
