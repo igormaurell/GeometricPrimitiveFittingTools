@@ -435,23 +435,29 @@ def RGB2IDS(rgb):
     ids = (rgb_arr[:, 2].view(np.uint32)<<16) | (rgb_arr[:, 1].view(np.uint32)<<8) | rgb_arr[:, 0].view(np.uint32)
     return ids
 
-def pairWiseRegistration(source, target, distance_threshold=0.01):
+def pairWiseRegistration(source, target, source_labels, target_labels, distance_threshold=0.01):
     source_tree = o3d.geometry.KDTreeFlann(source)
     _, indices, distances = zip(*[source_tree.search_knn_vector_3d(point, 1) for point in target.points])
     indices = np.asarray(indices)[:, 0]
     distances = np.sqrt(np.asarray(distances)[:, 0])
 
-    source_colors = np.asarray(source.colors)[indices]
-    source_ids = RGB2IDS(source_colors)
-    target_colors = np.asarray(target.colors)
-    target_ids = RGB2IDS(target_colors)
+    #source_colors = np.asarray(source.colors)[indices]
+    source_ids = source_labels[indices]
+    #source_ids = RGB2IDS(source_colors)
+    #target_colors = np.asarray(target.colors)
+    #target_ids = RGB2IDS(target_colors)
+    target_ids = target_labels.copy()
 
     valid_indices = np.arange(len(distances))[np.logical_or(distances > distance_threshold, source_ids != target_ids)]
 
     target_outlier_pcd = target.select_by_index(valid_indices)
-    source += target_outlier_pcd
+    target_outlier_labels = target_labels[valid_indices]
 
-    return source
+    source += target_outlier_pcd
+    source_labels = np.concatenate((source_labels, target_outlier_labels))
+    
+
+    return source, source_labels
 
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
@@ -487,8 +493,9 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
     funif(print, verbose)('Done.\n')
         
     funif(print, verbose)('Casting Rays and Registering...')
-    registered_pcd = o3d.geometry.PointCloud()
-    for i, rays in funif(tqdm, verbose)(enumerate(multi_view_rays)):
+    registered_pcd = None
+    registered_labels_mesh = None
+    for i, rays in enumerate(funif(tqdm, verbose)(multi_view_rays)):
         ans = scene.cast_rays(rays)
 
         hit = ans['t_hit'].isfinite()
@@ -499,17 +506,18 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
         normals = normals/np.linalg.norm(normals)
 
         labels_mesh = ans['primitive_ids'][hit].numpy()
-        rgb = IDS2RGB(labels_mesh)
+        #rgb = IDS2RGB(labels_mesh)
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points.numpy())
         pcd.normals = o3d.utility.Vector3dVector(normals)
-        pcd.colors = o3d.utility.Vector3dVector(rgb)
+        #pcd.colors = o3d.utility.Vector3dVector(rgb)
 
         if i == 0:
             registered_pcd = pcd
+            registered_labels_mesh = labels_mesh
         else:
-            registered_pcd = pairWiseRegistration(registered_pcd, pcd)
+            registered_pcd, registered_labels_mesh = pairWiseRegistration(registered_pcd, pcd, registered_labels_mesh, labels_mesh)
             # result_icp = o3d.pipelines.registration.registration_colored_icp(pcd, registered_pcd,
             #             0.005, estimation_method=o3d.pipelines.registration.TransformationEstimationForColoredICP(),
             #             criteria=o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-6,
@@ -522,7 +530,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
             # pcd_2_outliers = pcd.select_by_index(corr[:, 0], invert=True)
             # registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
 
-    registered_labels_mesh = RGB2IDS(registered_pcd.colors)
+    #registered_labels_mesh = RGB2IDS(registered_pcd.colors)
     funif(print, verbose)('Done.\n')
 
     return registered_pcd, registered_labels_mesh
