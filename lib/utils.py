@@ -435,12 +435,9 @@ def RGB2IDS(rgb):
     ids = (rgb_arr[:, 2].view(np.uint32)<<16) | (rgb_arr[:, 1].view(np.uint32)<<8) | rgb_arr[:, 0].view(np.uint32)
     return ids
 
-
-import scipy.spatial    
-
 def pairWiseRegistration(source, target, distance_threshold=0.01):
     source_tree = o3d.geometry.KDTreeFlann(source)
-    _, indices, distances = zip(*[source_tree.search_knn_vector_3d(point, 1) for point in tqdm(target.points)])
+    _, indices, distances = zip(*[source_tree.search_knn_vector_3d(point, 1) for point in target.points])
     indices = np.asarray(indices)[:, 0]
     distances = np.sqrt(np.asarray(distances)[:, 0])
 
@@ -491,7 +488,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
         
     funif(print, verbose)('Casting Rays and Registering...')
     registered_pcd = o3d.geometry.PointCloud()
-    for i, rays in funif(tqdm, False)(enumerate(multi_view_rays)):
+    for i, rays in funif(tqdm, verbose)(enumerate(multi_view_rays)):
         ans = scene.cast_rays(rays)
 
         hit = ans['t_hit'].isfinite()
