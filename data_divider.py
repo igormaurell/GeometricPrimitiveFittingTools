@@ -262,9 +262,11 @@ if __name__ == '__main__':
                                        train_min_number_points, abs_volume_threshold, relative_volume_threshold),
                                        range(num_models))
             else:
-                results += [sampleDataOnRegion((np.min(data['points'], axis=0), np.max(data['points'], axis=0)), data['points'], data['normals'],
+                res = sampleDataOnRegion(np.asarray((np.min(data['points'], axis=0), np.max(data['points'], axis=0))), data['points'], data['normals'],
                                             data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
-                                            abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)]
+                                            abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
+                res['filename'] = f'{filename}_0'
+                results += [res]
        
         for j, result in tqdm(enumerate(results)):   
             n_p = len(result['points'])

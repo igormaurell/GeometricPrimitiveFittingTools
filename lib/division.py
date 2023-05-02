@@ -50,6 +50,12 @@ def computeSearchPoints(points, region_size):
     rs[inf_axes] = 0
     min_points = np.min(points, axis=0) + rs/2
     max_points = np.max(points, axis=0) - rs/2
+
+    error_indices = min_points >= max_points
+    
+    min_points[error_indices] -= rs[error_indices]/2
+    max_points[error_indices] += rs[error_indices]/2
+
     return points[np.all(np.logical_and(points >= min_points, points < max_points), axis=1)]
 
 def computeRegionAroundPoint(point, region_size):
@@ -98,7 +104,6 @@ def featuresIndicesByPointsIndices(features_point_indices, points_indices, filte
 
 def sampleDataOnRegion(region, points, normals, labels, features_data, n_points, filter_features_by_volume=True,
                        abs_volume_threshold=0., relative_volume_threshold=0.2):
-    
     ll = region[0, :]
     ur = region[1, :]
 
