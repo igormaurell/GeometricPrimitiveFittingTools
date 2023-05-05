@@ -361,32 +361,22 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0):
         - up_direction (NX3:)
     '''
 
-    bb_diagonal = bbox.get_max_bound() - bbox.get_min_bound()
-    bb_height = bb_diagonal[2]
-    bb_floor_diagonal = bb_diagonal.copy()
-    bb_floor_diagonal[2] = 0.
-    bb_floor_diagonal_len = np.linalg.norm(bb_floor_diagonal)
+    # a semi dome touching the ground is needed, so I need to multiply the height by 2
+    ell_p = (bbox.get_max_bound() - bbox.get_min_bound())/2
+    ell_p[2] = ell_p[2]*2
 
-    bb_floor_center = bbox.get_center()
-    bb_floor_center[2] = bbox.get_min_bound()[2]
+    ga, gb = np.max(ell_p[0:2]), np.min(ell_p[0:2])
+    LG = 2*np.pi*(3*ga + 2*gb - np.sqrt(ga*gb))
 
-    #print('BB Diagonal Len:', bb_floor_diagonal_len)
+    LH = 2*np.pi*ell_p[2]
 
-    if bb_floor_diagonal_len/2 > bb_height:
-        sphere_radius = bb_floor_diagonal_len/2 + distance
-    else:
-        sphere_radius = bb_height + distance
-
-    dome_len = np.pi*sphere_radius
-
-    #print('Sphere Radius:', sphere_radius)
-
-    num_cells = max(3, int(np.round(dome_len/cell_size)))
+    num_cells_g = max(3, int(np.round(LG/cell_size)))
+    num_cells_h = max(3, int(np.round(LH/cell_size)))
 
     #print('Number of Cells:', (num_cells, num_cells))
 
-    uls = np.linspace(0, 2*np.pi, num=num_cells)
-    vls = np.linspace(0, np.pi, num=num_cells)
+    uls = np.linspace(0, 2*np.pi, num=num_cells_g)
+    vls = np.linspace(0, np.pi, num=num_cells_h)
 
     us, vs = np.meshgrid(uls, vls)
 
@@ -395,9 +385,12 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0):
     vs_cos = np.cos(vs).flatten()[:, np.newaxis]
     vs_sin = np.sin(vs).flatten()[:, np.newaxis]
 
-    dome_points = np.concatenate((sphere_radius*vs_cos*us_cos,
-                                  sphere_radius*vs_cos*us_sin,
-                                  sphere_radius*vs_sin), axis=1)
+    dome_points = np.concatenate((ell_p[0]*vs_cos*us_cos,
+                                  ell_p[1]*vs_cos*us_sin,
+                                  ell_p[2]*vs_sin), axis=1)
+    
+    bb_floor_center = bbox.get_center()
+    bb_floor_center[2] = bbox.get_min_bound()[2]
 
     dome_normals = bb_floor_center - dome_points
     dome_normals /= np.linalg.norm(dome_normals, axis=0)
@@ -481,11 +474,11 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
     views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
     funif(print, verbose)('Done.\n')
 
-    #pcd = o3d.geometry.PointCloud()
-    #pcd.points = o3d.utility.Vector3dVector(views[:, :3])
-    #pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(views[:, :3])
+    pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
 
-    #o3d.visualization.draw_geometries([pcd, mesh])
+    o3d.visualization.draw_geometries([pcd, mesh])
 
     funif(print, verbose)('Generating Rays...')
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
