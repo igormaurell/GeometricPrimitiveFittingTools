@@ -8,8 +8,7 @@ from os.path import exists
 from os import system
 from pypcd import pypcd
 import open3d as o3d
-from scipy.spatial.transform import Rotation
-from lib.primitive_surface_factory import PrimitiveSurfaceFactory
+from scipy.optimize import least_squares
 from tqdm import tqdm
 
 EPS = np.finfo(np.float64).eps
@@ -346,9 +345,43 @@ def createRaysLidar(v_fov, h_fov, v_res, h_res, center, eye, up):
         
     return o3d.core.Tensor(rays)
 
-def createViews(bbox, cell_size=6, distance=2, distance_std=0):
+def ellipsoid_fit(X):
+    x1, y1, z1 = X[0]
+    x2, y2, z2 = X[1]
+    x3, y3, z3 = X[2]
+
+    # Check if the three points are coplanar
+    v1 = np.array([x2 - x1, y2 - y1, z2 - z1])
+    v2 = np.array([x3 - x1, y3 - y1, z3 - z1])
+    cp = np.cross(v1, v2)
+    if np.allclose(cp, [0, 0, 0]):
+        raise ValueError("The three points are coplanar.")
+
+    denominator_a = y1**2+z1**2
+    denominator_b = x1**2+z1**2
+    denominator_c = x1**2+y1**2
+
+    if denominator_a == 0 or denominator_b == 0 or denominator_c == 0:
+        raise ValueError("The three points are collinear.")
+
+
+    def ellipsoid_equations(p):
+        a, b, c = p
+        e1 = (x1**2/a**2 + y1**2/b**2 + z1**2/c**2 - 1)
+        e2 = (x2**2/a**2 + y2**2/b**2 + z2**2/c**2 - 1)
+        e3 = (x3**2/a**2 + y3**2/b**2 + z3**2/c**2 - 1)
+        return np.array([e1, e2, e3])
+
+    a, b, c = least_squares(ellipsoid_equations, np.ones(3)).x
+
+    #print("Semi-axes lengths: a={}, b={}, c={}".format(a, b, c))
+
+    return a, b, c
+
+
+def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distance=0.5, spherical=False):
     '''
-    A spherical dome is created above the mesh and views are grid sampled in the dome
+    A dome is created above the mesh and views are grid sampled in the dome
 
     Params:
     - cell_size: each area of cell_size X cell_size in the dome will recieve a view point
@@ -361,34 +394,48 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0):
         - up_direction (NX3:)
     '''
 
-    # a semi dome touching the ground is needed, so I need to multiply the height by 2
-    ell_p = (bbox.get_max_bound() - bbox.get_min_bound())/2
-    ell_p[2] = ell_p[2]*2
+    bbox_vertices = np.asarray(bbox.get_box_points())
+    center_ground = bbox.get_center()
+    center_ground[2] = 0
+    distances_from_center = np.asarray([np.linalg.norm(vertex-center_ground) for vertex in bbox_vertices])
+    farthest_vertex = bbox_vertices[np.argmax(distances_from_center)]
+    farthest_vertex = farthest_vertex + distance*(farthest_vertex/np.linalg.norm(farthest_vertex))    
 
-    ga, gb = np.max(ell_p[0:2]), np.min(ell_p[0:2])
-    LG = 2*np.pi*(3*ga + 2*gb - np.sqrt(ga*gb))
+    if not spherical:
+        p1 = farthest_vertex
+        p2 = farthest_vertex.copy()
+        p2[0] = -p2[0]
+        p3 = farthest_vertex.copy()
+        p3[1] = -p3[1]
 
-    LH = 2*np.pi*ell_p[2]
+        X =  np.concatenate((p1[np.newaxis, :], p2[np.newaxis, :], p3[np.newaxis, :]), axis=0)
+        radii = np.asarray(list(ellipsoid_fit(X)))
+    else:
+        radii = np.zeros(3) + np.linalg.norm(farthest_vertex)
 
-    num_cells_g = max(3, int(np.round(LG/cell_size)))
-    num_cells_h = max(3, int(np.round(LH/cell_size)))
+    LH = np.pi*radii[2]/2
 
-    #print('Number of Cells:', (num_cells, num_cells))
+    num_cells_h = max(2, int(np.ceil(LH/cell_size)))
+    ground_angle = -np.pi/2 + np.arctan2(min_ground_distance, radii[2])
+    vs = np.linspace(ground_angle, 0, num=num_cells_h)
 
-    uls = np.linspace(0, 2*np.pi, num=num_cells_g)
-    vls = np.linspace(0, np.pi, num=num_cells_h)
+    dome_points = []
+    for i in range(len(vs)):
+        a, b, c = np.sin(vs[i])*radii[0], np.sin(vs[i])*radii[1], radii[2]
+        a_abs, b_abs = abs(a), abs(b)
+        LG = 2*np.pi*(1.5*(a_abs + b_abs) - np.sqrt(a_abs*b_abs)) + np.finfo(np.float64).eps
+        num_cells_g = int(np.ceil(LG/cell_size))
 
-    us, vs = np.meshgrid(uls, vls)
+        us = np.linspace(0, 2*np.pi - 2*np.pi/num_cells_g, num=num_cells_g)
 
-    us_cos = np.cos(us).flatten()[:, np.newaxis]
-    us_sin = np.sin(us).flatten()[:, np.newaxis]
-    vs_cos = np.cos(vs).flatten()[:, np.newaxis]
-    vs_sin = np.sin(vs).flatten()[:, np.newaxis]
+        xs = a*np.cos(us)[:, np.newaxis]
+        ys = b*np.sin(us)[:, np.newaxis]
+        zs = (np.ones(num_cells_g)*c*np.cos(vs[i]))[:, np.newaxis]
 
-    dome_points = np.concatenate((ell_p[0]*vs_cos*us_cos,
-                                  ell_p[1]*vs_cos*us_sin,
-                                  ell_p[2]*vs_sin), axis=1)
-    
+        dome_points += np.concatenate((xs, ys, zs), axis=1).tolist()
+
+    dome_points = np.asarray(dome_points)
+        
     bb_floor_center = bbox.get_center()
     bb_floor_center[2] = bbox.get_min_bound()[2]
 
@@ -408,7 +455,8 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0):
     #print('Views Without Up:', views)
 
     #computing up points to the views (I have never done this, it is needed to test)
-    bb_diagonal_dir = bb_diagonal/np.linalg.norm(bb_diagonal)
+    size = bbox.get_max_bound() - bbox.get_min_bound()
+    bb_diagonal_dir = size/np.linalg.norm(size)
     ortg_vectors = -(dome_normals*(np.sum(bb_diagonal_dir*dome_normals, axis=1)[:, np.newaxis])) + bb_diagonal_dir
     ortg_vectors /= np.linalg.norm(ortg_vectors, axis=0)
     views[:, 3:] = ortg_vectors#np.cross(dome_points, ortg_vectors)
@@ -474,11 +522,11 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
     views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
     funif(print, verbose)('Done.\n')
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(views[:, :3])
-    pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(views[:, :3])
+    # pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
 
-    o3d.visualization.draw_geometries([pcd, mesh])
+    # o3d.visualization.draw_geometries([pcd, mesh])
 
     funif(print, verbose)('Generating Rays...')
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
