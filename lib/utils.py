@@ -426,6 +426,9 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distan
         LG = 2*np.pi*(1.5*(a_abs + b_abs) - np.sqrt(a_abs*b_abs)) + np.finfo(np.float64).eps
         num_cells_g = int(np.ceil(LG/cell_size))
 
+        if i < (len(vs) - 1):
+            num_cells_g = max(4, num_cells_g)
+
         us = np.linspace(0, 2*np.pi - 2*np.pi/num_cells_g, num=num_cells_g)
 
         xs = a*np.cos(us)[:, np.newaxis]
