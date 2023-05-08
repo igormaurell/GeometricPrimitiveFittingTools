@@ -10,11 +10,23 @@ from pypcd import pypcd
 import open3d as o3d
 from scipy.optimize import least_squares
 from tqdm import tqdm
+import random
+import colorsys
+from typing import List, Tuple
+import functools
+from copy import deepcopy
 
 EPS = np.finfo(np.float64).eps
 
 def funif(fun, var: bool):
     return fun if var else lambda x: x
+
+@functools.lru_cache(1000)
+def get_evenly_distributed_colors(count: int) -> List[Tuple[np.uint8, np.uint8, np.uint8]]:
+    # lru cache caches color tuples
+    HSV_tuples = [(x/count, 1.0, 1.0) for x in range(count)]
+    random.shuffle(HSV_tuples)
+    return list(map(lambda x: (np.array(colorsys.hsv_to_rgb(*x))*255).astype(np.uint8), HSV_tuples))
 
 @njit
 def sortedIndicesIntersection(a, b):
@@ -423,7 +435,7 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distan
     for i in range(len(vs)):
         a, b, c = np.sin(vs[i])*radii[0], np.sin(vs[i])*radii[1], radii[2]
         a_abs, b_abs = abs(a), abs(b)
-        LG = 2*np.pi*(1.5*(a_abs + b_abs) - np.sqrt(a_abs*b_abs)) + np.finfo(np.float64).eps
+        LG = np.pi*(1.5*(a_abs + b_abs) - np.sqrt(a_abs*b_abs)) + np.finfo(np.float64).eps
         num_cells_g = int(np.ceil(LG/cell_size))
 
         if i < (len(vs) - 1):
@@ -505,8 +517,8 @@ def pairWiseRegistration(source, target, source_labels, target_labels, distance_
 
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
-def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
-                                   dome_cell_size=6, distance_std=0., distance=3, verbose=True):
+def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
+                                   dome_cell_size=10, distance_std=0., distance=3, verbose=True, view_pcd=False):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
@@ -525,11 +537,19 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
     views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
     funif(print, verbose)('Done.\n')
 
-    # pcd = o3d.geometry.PointCloud()
-    # pcd.points = o3d.utility.Vector3dVector(views[:, :3])
-    # pcd.normals = o3d.utility.Vector3dVector(views[:, 3:])
-
-    # o3d.visualization.draw_geometries([pcd, mesh])
+    if view_pcd:
+        drone_mesh = o3d.io.read_triangle_mesh('./resources/drone.stl')
+        vertices_arr = np.asarray(drone_mesh.vertices)
+        drone_mesh.vertices = o3d.utility.Vector3dVector(vertices_arr - np.mean(vertices_arr, axis=0))
+        colors = np.asarray(get_evenly_distributed_colors(len(views)))/255.
+        drones = []
+        for i, view in enumerate(views):
+            drone_curr = deepcopy(drone_mesh)
+            vertices_arr_curr = np.asarray(drone_curr.vertices)
+            drone_curr.vertices = o3d.utility.Vector3dVector(vertices_arr_curr + view[:3])
+            drone_curr.vertex_colors = o3d.utility.Vector3dVector(np.zeros((len(vertices_arr_curr), 3)) + colors[i])
+            drones.append(drone_curr)
+        o3d.visualization.draw_geometries([mesh] + drones)
 
     funif(print, verbose)('Generating Rays...')
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
@@ -550,7 +570,18 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
         normals = normals/np.linalg.norm(normals)
 
         labels_mesh = ans['primitive_ids'][hit].numpy()
-        #rgb = IDS2RGB(labels_mesh)
+
+        if view_pcd:
+            color = colors[i]
+            pcd_view = o3d.geometry.PointCloud()
+            pcd_view.points = o3d.utility.Vector3dVector(points.numpy())
+            pcd_view.normals = o3d.utility.Vector3dVector(normals)
+            pcd_view.colors = o3d.utility.Vector3dVector(np.zeros((len(normals),  3)) + color)
+            drones_pcd = o3d.geometry.PointCloud()
+            indices = np.concatenate((np.arange(0, i), np.arange(i + 1, len(views)))) 
+            drones_pcd.points = o3d.utility.Vector3dVector(views[indices, :3])
+            drones_pcd.colors = o3d.utility.Vector3dVector(colors[indices])
+            o3d.visualization.draw_geometries([pcd_view, mesh, drones_pcd, drones[i]])
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points.numpy())
@@ -573,6 +604,9 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':40, 'horizon
             # pdc_1_outliers = registered_pcd.select_by_index(corr[:, 1], invert=True)
             # pcd_2_outliers = pcd.select_by_index(corr[:, 0], invert=True)
             # registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
+        
+    if view_pcd:
+        o3d.visualization.draw_geometries([registered_pcd, mesh])
 
     #registered_labels_mesh = RGB2IDS(registered_pcd.colors)
     funif(print, verbose)('Done.\n')
