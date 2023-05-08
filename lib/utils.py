@@ -391,7 +391,7 @@ def ellipsoid_fit(X):
     return a, b, c
 
 
-def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distance=0.5, spherical=False):
+def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distance=0.5, spherical=True):
     '''
     A dome is created above the mesh and views are grid sampled in the dome
 
@@ -491,7 +491,7 @@ def RGB2IDS(rgb):
     ids = (rgb_arr[:, 2].view(np.uint32)<<16) | (rgb_arr[:, 1].view(np.uint32)<<8) | rgb_arr[:, 0].view(np.uint32)
     return ids
 
-def pairWiseRegistration(source, target, source_labels, target_labels, distance_threshold=0.01):
+def pairWiseRegistration(source, target, source_labels, target_labels, distance_threshold=0.005):
     source_tree = o3d.geometry.KDTreeFlann(source)
     _, indices, distances = zip(*[source_tree.search_knn_vector_3d(point, 1) for point in target.points])
     indices = np.asarray(indices)[:, 0]
@@ -517,7 +517,7 @@ def pairWiseRegistration(source, target, source_labels, target_labels, distance_
 
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
-def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180, 'vertical_resolution':0.1, 'horizontal_resolution':0.1},
+def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180, 'vertical_resolution':0.09, 'horizontal_resolution':0.09},
                                    dome_cell_size=10, distance_std=0., distance=3, verbose=True, view_pcd=False):
     
 
