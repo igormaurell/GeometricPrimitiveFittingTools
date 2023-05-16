@@ -391,7 +391,7 @@ def ellipsoid_fit(X):
     return a, b, c
 
 
-def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distance=0.5, spherical=True):
+def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distance=0.5, spherical=False, view_cell_size=2):
     '''
     A dome is created above the mesh and views are grid sampled in the dome
 
@@ -477,7 +477,40 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distan
     views[:, 3:] = ortg_vectors#np.cross(dome_points, ortg_vectors)
     #views[:, 3:] /= np.linalg.norm(views[:, 3:])
 
-    return views
+
+    #generating dome lines for visualization purpose
+    radii = np.abs(radii)
+    LG = np.pi*(1.5*(radii[0] + radii[1]) - np.sqrt(radii[0]*radii[1])) + np.finfo(np.float64).eps
+    num_view_cells_h = max(2, int(np.ceil(LH/view_cell_size)))
+    num_view_cells_g = max(4, int(np.ceil(LG/view_cell_size)))
+
+    view_us_ls = np.linspace(0, 2*np.pi, num_view_cells_g)
+    view_vs_ls = np.linspace(-np.pi/2, 0, num_view_cells_h)
+
+    view_us, view_vs = np.meshgrid(view_us_ls, view_vs_ls)
+
+    view_vertices = np.concatenate(((radii[0]*np.cos(view_us)*np.sin(view_vs))[:, :, np.newaxis],
+                                    (radii[1]*np.sin(view_us)*np.sin(view_vs))[:, :, np.newaxis],
+                                    (radii[2]*np.cos(view_vs))[:, :, np.newaxis]), axis=2)
+    
+    view_lines = []
+    for i in range(view_vertices.shape[0] - 1):
+        for j in range(view_vertices.shape[1]):
+            i_nxt = i + 1
+            j_nxt = j + 1 if (j + 1) <= view_vertices.shape[1] else 0
+            fn = lambda x, y: x*view_vertices.shape[1] + y
+            view_lines.append([fn(i,j), fn(i_nxt,j)])
+            view_lines.append([fn(i,j), fn(i,j_nxt)])
+            view_lines.append([fn(i_nxt,j_nxt), fn(i_nxt,j)])
+            view_lines.append([fn(i_nxt,j_nxt), fn(i,j_nxt)])
+
+    #colors = [[0, 0, 1] for i in range(len(lines))]
+    dome_lines = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(view_vertices.reshape((-1, 3))),
+        lines=o3d.utility.Vector2iVector(view_lines),
+    )
+
+    return views, dome_lines
 
 def IDS2RGB(ids):
     ids_arr = np.asarray(ids, dtype=np.uint32)
@@ -518,7 +551,7 @@ def pairWiseRegistration(source, target, source_labels, target_labels, distance_
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
 def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180, 'vertical_resolution':0.09, 'horizontal_resolution':0.09},
-                                   dome_cell_size=10, distance_std=0., distance=3, verbose=True, view_pcd=False):
+                                   dome_cell_size=14, distance_std=0., distance=3, verbose=True, view_pcd=True):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
@@ -532,15 +565,15 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
     _ = scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
     bbox = mesh.get_axis_aligned_bounding_box()
 
-
     funif(print, verbose)('Generating Views...')
-    views = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
+    views, dome_lines = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
     funif(print, verbose)('Done.\n')
 
     if view_pcd:
+        o3d.visualization.draw_geometries([mesh, dome_lines], mesh_show_wireframe=True)
         drone_mesh = o3d.io.read_triangle_mesh('./resources/drone.stl')
         vertices_arr = np.asarray(drone_mesh.vertices)
-        drone_mesh.vertices = o3d.utility.Vector3dVector(vertices_arr - np.mean(vertices_arr, axis=0))
+        drone_mesh.vertices = o3d.utility.Vector3dVector((vertices_arr - np.mean(vertices_arr, axis=0))*2)
         colors = np.asarray(get_evenly_distributed_colors(len(views)))/255.
         drones = []
         for i, view in enumerate(views):
@@ -549,7 +582,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
             drone_curr.vertices = o3d.utility.Vector3dVector(vertices_arr_curr + view[:3])
             drone_curr.vertex_colors = o3d.utility.Vector3dVector(np.zeros((len(vertices_arr_curr), 3)) + colors[i])
             drones.append(drone_curr)
-        o3d.visualization.draw_geometries([mesh] + drones)
+        o3d.visualization.draw_geometries([mesh, dome_lines] + drones)
 
     funif(print, verbose)('Generating Rays...')
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
@@ -581,7 +614,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
             indices = np.concatenate((np.arange(0, i), np.arange(i + 1, len(views)))) 
             drones_pcd.points = o3d.utility.Vector3dVector(views[indices, :3])
             drones_pcd.colors = o3d.utility.Vector3dVector(colors[indices])
-            o3d.visualization.draw_geometries([pcd_view, mesh, drones_pcd, drones[i]])
+            o3d.visualization.draw_geometries([pcd_view, mesh, dome_lines, drones_pcd, drones[i]])
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points.numpy())
