@@ -504,11 +504,12 @@ def createViews(bbox, cell_size=6, distance=2, distance_std=0, min_ground_distan
             view_lines.append([fn(i_nxt,j_nxt), fn(i_nxt,j)])
             view_lines.append([fn(i_nxt,j_nxt), fn(i,j_nxt)])
 
-    #colors = [[0, 0, 1] for i in range(len(lines))]
+    dome_colors = [[131/255., 148/255., 161/255.] for i in range(len(view_lines))]
     dome_lines = o3d.geometry.LineSet(
         points=o3d.utility.Vector3dVector(view_vertices.reshape((-1, 3))),
         lines=o3d.utility.Vector2iVector(view_lines),
     )
+    dome_lines.colors = o3d.utility.Vector3dVector(dome_colors)
 
     return views, dome_lines
 
@@ -551,7 +552,7 @@ def pairWiseRegistration(source, target, source_labels, target_labels, distance_
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
 def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180, 'vertical_resolution':0.09, 'horizontal_resolution':0.09},
-                                   dome_cell_size=14, distance_std=0., distance=3, verbose=True, view_pcd=True):
+                                   dome_cell_size=14, distance_std=0., distance=3, verbose=True, view_pcd=False):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
@@ -570,7 +571,14 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
     funif(print, verbose)('Done.\n')
 
     if view_pcd:
-        o3d.visualization.draw_geometries([mesh, dome_lines], mesh_show_wireframe=True)
+        bbox_size = bbox.get_max_bound() - bbox.get_min_bound()
+        view_lookat = np.array([0, -0.25*bbox_size[1], 1.3*distance + bbox_size[2]])
+        view_front = view_lookat #-  bbox.get_center()
+        view_params = {'lookat': view_lookat, 
+                       'up': np.array([0, 0, 1]), 
+                       'front': view_front/np.linalg.norm(view_front), 'zoom': 0.3}
+        
+        o3d.visualization.draw_geometries([mesh, dome_lines], mesh_show_wireframe=True, **view_params)
         drone_mesh = o3d.io.read_triangle_mesh('./resources/drone.stl')
         vertices_arr = np.asarray(drone_mesh.vertices)
         drone_mesh.vertices = o3d.utility.Vector3dVector((vertices_arr - np.mean(vertices_arr, axis=0))*2)
@@ -582,7 +590,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
             drone_curr.vertices = o3d.utility.Vector3dVector(vertices_arr_curr + view[:3])
             drone_curr.vertex_colors = o3d.utility.Vector3dVector(np.zeros((len(vertices_arr_curr), 3)) + colors[i])
             drones.append(drone_curr)
-        o3d.visualization.draw_geometries([mesh, dome_lines] + drones)
+        o3d.visualization.draw_geometries([mesh, dome_lines] + drones, **view_params)
 
     funif(print, verbose)('Generating Rays...')
     multi_view_rays = [createRaysLidar(vertical_fov, horizontal_fov, vertical_resolution, horizontal_resolution,
@@ -614,7 +622,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
             indices = np.concatenate((np.arange(0, i), np.arange(i + 1, len(views)))) 
             drones_pcd.points = o3d.utility.Vector3dVector(views[indices, :3])
             drones_pcd.colors = o3d.utility.Vector3dVector(colors[indices])
-            o3d.visualization.draw_geometries([pcd_view, mesh, dome_lines, drones_pcd, drones[i]])
+            o3d.visualization.draw_geometries([pcd_view, mesh, dome_lines, drones_pcd, drones[i]], **view_params)
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points.numpy())
@@ -639,7 +647,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
             # registered_pcd = pcd_inliers + pdc_1_outliers + pcd_2_outliers
         
     if view_pcd:
-        o3d.visualization.draw_geometries([registered_pcd, mesh])
+        o3d.visualization.draw_geometries([registered_pcd, mesh], **view_params)
 
     #registered_labels_mesh = RGB2IDS(registered_pcd.colors)
     funif(print, verbose)('Done.\n')
