@@ -72,6 +72,8 @@ def createPieGraph(labels, data, title='', num_models=1):
     kw = dict(arrowprops=dict(arrowstyle="-"),
           bbox=bbox_props, zorder=0, va="center")
 
+    char = '\u03BC' if num_models > 1 else 'n'
+    
     s = sum(data)
     for i, p in enumerate(wedges[0]):
         percent = data[i]/s
@@ -83,11 +85,11 @@ def createPieGraph(labels, data, title='', num_models=1):
         horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
         connectionstyle = "angle,angleA=0,angleB={}".format(ang)
         kw["arrowprops"].update({"connectionstyle": connectionstyle})
-        ax.annotate(f'{round(percent*100, 2)}% (\u03BC = {data[i]//num_models})', xy=(x, y), xytext=(1.35*np.sign(x), 1.4*y),
+        ax.annotate(f'{round(percent*100, 2)}% ({char} = {data[i]//num_models})', xy=(x, y), xytext=(1.35*np.sign(x), 1.4*y),
                     horizontalalignment=horizontalalignment, **kw)
 
     ax.set(aspect="equal", )
-    ax.set_title(title, pad=32.0, fontsize=20)
+    #ax.set_title(title, pad=32.0, fontsize=20)
     
     ax.legend(wedges[0], labels,
             title="Types",

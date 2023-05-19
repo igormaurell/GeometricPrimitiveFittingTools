@@ -228,6 +228,23 @@ if __name__ == '__main__':
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
 
+            import open3d as o3d
+
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(point_cloud_full[:, :3])
+            pcd.colors = o3d.utility.Vector3dVector(point_cloud_full[:, 3:]/255.)
+
+            bbox_size = pcd.get_max_bound() - pcd.get_min_bound()
+            view_lookat = np.array([0, -0.25*bbox_size[1], 3.9 + bbox_size[2]])
+            view_front = view_lookat #-  bbox.get_center()
+            view_params = {'lookat': view_lookat, 
+                        'up': np.array([0, 0, 1]), 
+                        'front': view_front/np.linalg.norm(view_front), 'zoom': 0.3}
+            
+            print(view_params)
+            
+            o3d.visualization.draw_geometries([pcd], **view_params)
+
     val_end = time.time()
 
     print('\n\nTraining Set:')

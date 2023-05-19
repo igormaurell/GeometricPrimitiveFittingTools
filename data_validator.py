@@ -135,13 +135,32 @@ box_plot = False
 max_distance_deviation = False
 max_angle_deviation = False
 
+import open3d as o3d
+pcd_show=None
+
 def process(data):
+    global pcd_show
     log = ''
             
     filename = data['filename'] if 'filename' in data.keys() else str(i)
     points = data['points']
     normals = data['normals']
     labels = data['labels']
+        
+
+    pcd = o3d.geometry.PointCloud()
+    center = np.mean(points, axis=0)
+    cent_points = points - center
+
+    pcd.points = o3d.utility.Vector3dVector(cent_points/1.3 + center)
+    colors = np.random.uniform(size=(np.max(labels) + 1, 3))
+    pcd.colors = o3d.utility.Vector3dVector(colors[labels])
+
+    if pcd_show is None:
+        pcd_show = pcd
+    else:
+        pcd_show += pcd
+
     features = data['features']
     transforms = data['transforms']
     if points is None or normals is None or labels is None or features is None:
@@ -265,7 +284,14 @@ if __name__ == '__main__':
         dataset_errors = {}
         full_logs_dicts = {}
 
-        results = process_map(process, reader, max_workers=32, chunksize=1)
+        results = [process(data) for data in reader]#process_map(process, reader, max_workers=32, chunksize=1)
+
+        view_params = {'lookat': np.array([ 0.        , -3.64212584,  7.48100042]),
+                   'up': np.array([0, 0, 1]),
+                   'front': np.array([ 0.        , -0.43773007,  0.89910644]),
+                   'zoom': 0.3}
+    
+        o3d.visualization.draw_geometries([pcd_show], **view_params)
 
         print('Accumulating...')
         for logs_dict in tqdm(results):

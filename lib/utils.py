@@ -538,7 +538,7 @@ def pairWiseRegistration(source, target, source_labels, target_labels, distance_
     #target_ids = RGB2IDS(target_colors)
     target_ids = target_labels.copy()
 
-    valid_indices = np.arange(len(distances))[np.logical_or(distances > distance_threshold, source_ids != target_ids)]
+    valid_indices = np.arange(len(distances))[distances > distance_threshold]#[np.logical_or(distances > distance_threshold, source_ids != target_ids)]
 
     target_outlier_pcd = target.select_by_index(valid_indices)
     target_outlier_labels = target_labels[valid_indices]
@@ -570,6 +570,13 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
     views, dome_lines = createViews(bbox, distance=distance, cell_size=dome_cell_size, distance_std=distance_std)
     funif(print, verbose)('Done.\n')
 
+    bbox_size = bbox.get_max_bound() - bbox.get_min_bound()
+    view_lookat = np.array([0, -0.25*bbox_size[1], 1.3*distance + bbox_size[2]])
+    view_front = view_lookat #-  bbox.get_center()
+    view_params = {'lookat': view_lookat, 
+                'up': np.array([0, 0, 1]), 
+                'front': view_front/np.linalg.norm(view_front), 'zoom': 0.3}
+
     if view_pcd:
         bbox_size = bbox.get_max_bound() - bbox.get_min_bound()
         view_lookat = np.array([0, -0.25*bbox_size[1], 1.3*distance + bbox_size[2]])
@@ -577,6 +584,8 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
         view_params = {'lookat': view_lookat, 
                        'up': np.array([0, 0, 1]), 
                        'front': view_front/np.linalg.norm(view_front), 'zoom': 0.3}
+        
+        o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True, **view_params)
         
         o3d.visualization.draw_geometries([mesh, dome_lines], mesh_show_wireframe=True, **view_params)
         drone_mesh = o3d.io.read_triangle_mesh('./resources/drone.stl')
@@ -649,7 +658,13 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
     if view_pcd:
         o3d.visualization.draw_geometries([registered_pcd, mesh], **view_params)
 
+        registered_pcd_cp = deepcopy(registered_pcd)
+        colors = np.random.uniform(size=(np.max(registered_labels_mesh) + 1, 3))
+        registered_pcd_cp.colors = o3d.utility.Vector3dVector(colors[registered_labels_mesh])
+
+        o3d.visualization.draw_geometries([registered_pcd_cp, mesh], **view_params)
+
     #registered_labels_mesh = RGB2IDS(registered_pcd.colors)
     funif(print, verbose)('Done.\n')
 
-    return registered_pcd, registered_labels_mesh
+    return registered_pcd, registered_labels_mesh, view_params

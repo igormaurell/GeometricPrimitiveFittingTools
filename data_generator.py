@@ -11,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif, get_evenly_distributed_colors
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
@@ -163,7 +163,7 @@ if __name__ == '__main__':
             if pcd_generation_method == 'sampling':
                 pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
             elif pcd_generation_method == 'lidar':
-                pcd, labels_mesh = rayCastingPointCloudGeneration(mesh)
+                pcd, labels_mesh, view_params = rayCastingPointCloudGeneration(mesh)
             else:
                 assert False, 'Point Cloud Generation Method is invalid.'
 
@@ -173,6 +173,21 @@ if __name__ == '__main__':
             normals = np.asarray(pcd.normals)
 
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+
+            from copy import deepcopy
+
+            pcd_cp = deepcopy(pcd)
+            colors = np.random.uniform(size=(np.max(labels) + 1, 3))
+            pcd_cp.colors = o3d.utility.Vector3dVector(colors[labels])
+
+            o3d.visualization.draw_geometries([pcd_cp, mesh], **view_params)
+
+            colors_dict = {'Plane': [1, 0, 0], 'Cylinder': [0, 0 , 1], 'Cone': [0, 1, 0], 'Sphere': [1, 1, 0], 'BSpline': [255,0,255], 'Torus': [0,255,255]}
+
+            colors_type = np.asarray([colors_dict[features_data['surfaces'][l]['type']] for l in labels])
+            pcd_cp.colors = o3d.utility.Vector3dVector(colors_type)
+
+            o3d.visualization.draw_geometries([pcd_cp, mesh], **view_params)
            
             #downsample is done by surface to not mix primitives that are close to each other
             if leaf_size > 0:
