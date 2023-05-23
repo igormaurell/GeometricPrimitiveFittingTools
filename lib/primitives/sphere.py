@@ -1,5 +1,4 @@
 from .base_primitive_surface import BasePrimitiveSurface
-from lib.utils import angleVectors
 import numpy as np
 
 class Sphere(BasePrimitiveSurface):    

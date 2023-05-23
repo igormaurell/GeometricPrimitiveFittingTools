@@ -32,7 +32,7 @@ class PrimitivenetDatasetReader(BaseDatasetReader):
         super().__init__(parameters)
 
         self.filenames_by_set['train'] = [os.path.join('train', filename) for filename in list(os.listdir(os.path.join(self.data_folder_name, 'train')))]
-        self.filenames_by_set['test'] = [os.path.join('val', filename) for filename in list(os.listdir(os.path.join(self.data_folder_name, 'val')))]
+        self.filenames_by_set['val'] = [os.path.join('val', filename) for filename in list(os.listdir(os.path.join(self.data_folder_name, 'val')))]
 
     def step(self):
         assert self.current_set_name in self.filenames_by_set.keys()

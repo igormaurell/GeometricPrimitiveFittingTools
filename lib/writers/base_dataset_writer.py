@@ -11,7 +11,7 @@ class BaseDatasetWriter:
     
     def reset(self):
         self.current_set_name = 'train'
-        self.filenames_by_set = {'train': [], 'test': []}
+        self.filenames_by_set = {'train': [], 'val': []}
 
     def setParameters(self, parameters):
         self.dataset_folder_name = parameters['dataset_folder_name'] if 'dataset_folder_name' in parameters.keys() else ''
@@ -23,16 +23,16 @@ class BaseDatasetWriter:
         self.filter_features_parameters = parameters['filter_features'] if 'filter_features' in parameters.keys() else {}
 
     def divisionTrainVal(self, permutation=None):
-        if len(self.filenames_by_set['train']) > 0 and len(self.filenames_by_set['test']) > 0:
-            return self.filenames_by_set['train'], self.filenames_by_set['test']
+        if len(self.filenames_by_set['train']) > 0 and len(self.filenames_by_set['val']) > 0:
+            return self.filenames_by_set['train'], self.filenames_by_set['val']
         elif len(self.filenames_by_set['train']) > 0:
             if self.train_percentage is None:
                 return self.filenames_by_set['train'], []
             filenames = self.filenames_by_set['train']
-        elif len(self.filenames_by_set['test']) > 0:
+        elif len(self.filenames_by_set['val']) > 0:
             if self.train_percentage is None:
-                return [], self.filenames_by_set['test']
-            filenames = self.filenames_by_set['test']
+                return [], self.filenames_by_set['val']
+            filenames = self.filenames_by_set['val']
         else:
             return [], []
         if permutation is None:

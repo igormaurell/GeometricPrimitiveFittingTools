@@ -90,14 +90,14 @@ class ParsenetDatasetWriter(BaseDatasetWriter):
         return True
 
     def finish(self, permutation=None):
-        train_models, test_models = self.divisionTrainVal(permutation=permutation)
+        train_models, val_models = self.divisionTrainVal(permutation=permutation)
         
         tl = itemgetter(*train_models)(self.names) if len(train_models) > 0 else []
         tl = tl if isinstance(tl, Iterable) else [tl]
         train_labels = np.array(tl, dtype=np.int64)
-        tl = itemgetter(*test_models)(self.names) if len(test_models) > 0 else []
+        tl = itemgetter(*val_models)(self.names) if len(val_models) > 0 else []
         tl = tl if isinstance(tl, Iterable) else [tl]
-        test_labels = np.array(tl, dtype=np.int64)
+        val_labels = np.array(tl, dtype=np.int64)
 
         points = np.array(self.points)
         normals = np.array(self.normals)
@@ -110,10 +110,10 @@ class ParsenetDatasetWriter(BaseDatasetWriter):
             with h5py.File(os.path.join(self.data_folder_name, 'train_data.h5'), 'w') as h5_file:
                 ParsenetDatasetWriter.fillH5File(h5_file, train_labels, points, normals, labels, primitives)
 
-        if len(test_labels) > 0:
+        if len(val_labels) > 0:
             with open(os.path.join(self.data_folder_name, 'val_ids.txt'), 'w') as f:
-                f.write('\n'.join(test_models))
+                f.write('\n'.join(val_models))
             with h5py.File(os.path.join(self.data_folder_name, 'val_data.h5'), 'w') as h5_file:
-                ParsenetDatasetWriter.fillH5File(h5_file, test_labels, points, normals, labels, primitives)
+                ParsenetDatasetWriter.fillH5File(h5_file, val_labels, points, normals, labels, primitives)
 
         super().finish()

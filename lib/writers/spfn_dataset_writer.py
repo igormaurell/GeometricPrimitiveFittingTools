@@ -40,6 +40,10 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         super().__init__(parameters)
 
     def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+        import time
+
+        
+
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -58,12 +62,11 @@ class SpfnDatasetWriter(BaseDatasetWriter):
 
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
-
+            
             features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
                                                            labels=labels, features_point_indices=features_point_indices)
             if len(features_data) == 0:
-                #print(f'ERROR: {data_file_path} has no features left.')
-                return False
+                print(f'WARNING: {data_file_path} has no features left.')
 
         self.filenames_by_set[self.current_set_name].append(filename)
 
@@ -116,7 +119,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         return True
 
     def finish(self, permutation=None):
-        train_models, test_models = self.divisionTrainVal(permutation=permutation)
+        train_models, val_models = self.divisionTrainVal(permutation=permutation)
         
         with open(os.path.join(self.data_folder_name, 'train_models.csv'), 'w', newline='') as f:
             writer = csv.writer(f, delimiter=',',
@@ -125,6 +128,6 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         with open(os.path.join(self.data_folder_name, 'test_models.csv'), 'w', newline='') as f:
             writer = csv.writer(f, delimiter=',',
                             quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow([f'{filename}.h5' for filename in test_models])
+            writer.writerow([f'{filename}.h5' for filename in val_models])
 
         super().finish()

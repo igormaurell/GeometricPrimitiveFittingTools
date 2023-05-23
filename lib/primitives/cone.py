@@ -1,5 +1,4 @@
-from .base_primitive_surface import BasePrimitiveSurface
-from lib.utils import rotate
+from .base_primitive_surface import BasePrimitiveSurface, rotate
 import numpy as np
 from math import tan
 

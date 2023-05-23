@@ -3,8 +3,7 @@ import argparse
 from tqdm import tqdm
 
 from pypcd import pypcd
-
-import igl
+import open3d as o3d
 
 import numpy as np
 
@@ -12,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import generatePCD, loadFeatures, computeLabelsFromFace2Primitive
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif
 from lib.dataset_writer_factory import DatasetWriterFactory
 from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 
@@ -45,12 +44,14 @@ if __name__ == '__main__':
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
     parser.add_argument('-d_pc', '--delete_old_pc', action='store_true', help='')
 
-    parser.add_argument('-pc', '--points_curation', action='store_true', help='')
-    parser.add_argument('-nc', '--normals_curation', action='store_true', help='')
+    parser.add_argument('--pcd_generation_method', choices=['sampling', 'lidar'], type=str, default = 'sampling', help='')
+    parser.add_argument('-ph', '--points_healing', action='store_true', help='')
+    parser.add_argument('-nh', '--normals_healing', action='store_true', help='')
     parser.add_argument('-uon', '--use_original_noise', action='store_true', help='')
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
     parser.add_argument('-t_p', '--train_percentage', type=int, default = 0.8, help='')
     parser.add_argument('-m_np', '--min_number_points', type=float, default = 0.0001, help='filter geometries by number of points.')
+    parser.add_argument('-ls', '--leaf_size', type=float, default = 0.0, help='')
 
     args = vars(parser.parse_args())
 
@@ -63,21 +64,23 @@ if __name__ == '__main__':
     noise_limit = args['noise_limit']
     cube_reescale_factor = args['cube_reescale_factor']
 
-    mps_ns = str(args['mesh_point_sampling_n_samples'])
+    mps_ns = args['mesh_point_sampling_n_samples']
     delete_old_pc = args['delete_old_pc']
     train_percentage = args['train_percentage']
     use_original_noise = args['use_original_noise']
-    points_curation = args['points_curation']
-    normals_curation = args['normals_curation']
+    points_healing = args['points_healing']
+    normals_healing = args['normals_healing']
     min_number_points = args['min_number_points']
     min_number_points = int(min_number_points) if min_number_points > 1 else min_number_points
 
+    pcd_generation_method = args['pcd_generation_method']
     dataset_folder_name = args['dataset_folder_name']
     data_folder_name = args['data_folder_name']
     transform_folder_name = args['transform_folder_name']
     mesh_folder_name = join(folder_name, args['mesh_folder_name'])
     features_folder_name = join(folder_name, args['features_folder_name'])
     pc_folder_name = join(folder_name, args['pc_folder_name'])
+    leaf_size = args['leaf_size']
 
     parameters = {}
     for format in formats:
@@ -112,6 +115,7 @@ if __name__ == '__main__':
     if delete_old_pc:
         if exists(pc_folder_name):
             rmtree(pc_folder_name)
+    makedirs(pc_folder_name, exist_ok=True)
 
     if exists(features_folder_name):
         features_files = sorted([f for f in listdir(features_folder_name) if isfile(join(features_folder_name, f))])
@@ -119,47 +123,101 @@ if __name__ == '__main__':
     else:
         print('\nThere is no features folder.\n')
         exit()
+
+    if exists(mesh_folder_name):
+        mesh_files, mesh_exts = zip(*[(f[:f.rfind('.')], f[f.rfind('.'):]) 
+                                        for f in listdir(mesh_folder_name) if isfile(join(mesh_folder_name, f))])
+    else:
+        print('\nThere is no mesh folder.\n')
     
     dataset_writer_factory = DatasetWriterFactory(parameters)
 
-    for features_filename in tqdm(features_files):
+    for index, features_filename in enumerate(features_files):
+
         point_position = features_filename.rfind('.')
         filename = features_filename[:point_position]
 
+        print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index + 1, len(features_files)))
+
         pc_filename = join(pc_folder_name, filename) + '.pcd'
-        mesh_filename = join(mesh_folder_name, filename) + '.obj'
-              
+
+        mesh_filename = None
+        if filename in mesh_files:
+            mesh_index = mesh_files.index(filename)
+            mesh_filename = join(mesh_folder_name, filename) + mesh_exts[mesh_index]
+    
+        feature_tp =  features_filename[(point_position + 1):]
+
+        funif(print, True)('Loading Features...')
+        features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
+        funif(print, True)('Done.\n')
+
+        mesh = None
         if exists(pc_filename):
-            pass
-        elif exists(mesh_filename):
-            makedirs(pc_folder_name, exist_ok=True)
-            generatePCD(pc_filename, mps_ns, mesh_filename=mesh_filename)
+            pc = pypcd.PointCloud.from_path(pc_filename).pc_data
+      
+            points = np.vstack((pc['x'], pc['y'], pc['z'])).T
+            normals = np.vstack((pc['normal_x'], pc['normal_y'], pc['normal_z'])).T
+            labels_mesh = pc['label']
+            
+            labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+
+        elif mesh_filename is not None:
+            print('Opening Mesh:')
+            mesh = o3d.io.read_triangle_mesh(mesh_filename, print_progress=True)
+            print('Done.\n')
+
+            #making mesh to clockwise (open3d default)
+            mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
+
+            if pcd_generation_method == 'sampling':
+                pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+            elif pcd_generation_method == 'lidar':
+                pcd, labels_mesh = rayCastingPointCloudGeneration(mesh)
+            else:
+                assert False, 'Point Cloud Generation Method is invalid.'
+
+            labels_mesh = np.asarray(labels_mesh)
+
+            points = np.asarray(pcd.points)
+            normals = np.asarray(pcd.normals)
+
+            labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+           
+            #downsample is done by surface to not mix primitives that are close to each other
+            if leaf_size > 0:
+                down_pcd = o3d.geometry.PointCloud()
+                down_labels = []
+                for i, fpi in enumerate(features_point_indices):
+                    ans = downsampleByPointIndices(pcd, fpi, labels_mesh, leaf_size)
+                    down_pcd += ans[0]
+                    down_labels += ans[1]
+
+                ans = downsampleByPointIndices(pcd, np.arange(len(labels))[labels==-1], labels_mesh, leaf_size)
+                down_pcd += ans[0]
+                down_labels += ans[1]
+
+                perm = np.random.permutation(len(down_labels))
+
+                points = np.asarray(down_pcd.points)[perm]
+                normals = np.asarray(down_pcd.normals)[perm]
+                labels_mesh = np.array(down_labels)[perm]
+
+                labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])   
+
+            savePCD(pc_filename,  points, normals=normals, labels=labels_mesh)
+
+            mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
-        mesh = None
-        if exists(mesh_filename) and 'primitivenet' in formats:
-            mesh = igl.read_triangle_mesh(mesh_filename)
-        feature_tp =  features_filename[(point_position + 1):]
-        features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
-
-        pc = pypcd.PointCloud.from_path(pc_filename).pc_data
-
-        points = np.ndarray(shape=(pc['x'].shape[0], 3), dtype=np.float64)
-        normals = np.ndarray(shape=(pc['normal_x'].shape[0], 3), dtype=np.float64)
-        labels = np.ndarray(shape=(pc['label'].shape[0],), dtype=np.float64)
-        points[:, 0] = pc['x']
-        points[:, 1] = pc['y']
-        points[:, 2] = pc['z']
-        normals[:, 0] = pc['normal_x']
-        normals[:, 1] = pc['normal_y']
-        normals[:, 2] = pc['normal_z']
-        labels = pc['label']
-
-        labels, features_point_indices = computeLabelsFromFace2Primitive(labels, features_data['surfaces'])
+            
+        if mesh is None:
+            mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
+            mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
 
         noisy_points = None
-        if points_curation or normals_curation:
+        if points_healing or normals_healing:
             points_new = points.copy()
             normals_new = normals.copy()
             for i, feature in enumerate(features_data['surfaces']):
@@ -168,11 +226,11 @@ if __name__ == '__main__':
                     primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
                     if primitive is not None:
                         points_new[fpi], normals_new[fpi] = primitive.computeCorrectPointsAndNormals(points[fpi])
-            if points_curation:
+            if points_healing:
                 if use_original_noise:
                     noisy_points = points.copy()
                 points = points_new
-            if normals_curation:
+            if normals_healing:
                 normals = normals_new
 
         dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices, mesh=mesh)
