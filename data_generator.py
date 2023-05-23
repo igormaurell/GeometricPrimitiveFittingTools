@@ -123,6 +123,12 @@ if __name__ == '__main__':
     else:
         print('\nThere is no features folder.\n')
         exit()
+
+    if exists(mesh_folder_name):
+        mesh_files, mesh_exts = zip(*[(f[:f.rfind('.')], f[f.rfind('.'):]) 
+                                        for f in listdir(mesh_folder_name) if isfile(join(mesh_folder_name, f))])
+    else:
+        print('\nThere is no mesh folder.\n')
     
     dataset_writer_factory = DatasetWriterFactory(parameters)
 
@@ -134,7 +140,11 @@ if __name__ == '__main__':
         print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index + 1, len(features_files)))
 
         pc_filename = join(pc_folder_name, filename) + '.pcd'
-        mesh_filename = join(mesh_folder_name, filename) + '.obj'
+
+        mesh_filename = None
+        if filename in mesh_files:
+            mesh_index = mesh_files.index(filename)
+            mesh_filename = join(mesh_folder_name, filename) + mesh_exts[mesh_index]
     
         feature_tp =  features_filename[(point_position + 1):]
 
@@ -152,7 +162,7 @@ if __name__ == '__main__':
             
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
 
-        elif exists(mesh_filename):
+        elif mesh_filename is not None:
             print('Opening Mesh:')
             mesh = o3d.io.read_triangle_mesh(mesh_filename, print_progress=True)
             print('Done.\n')
