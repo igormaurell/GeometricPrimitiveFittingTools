@@ -1,5 +1,8 @@
 import numpy as np
 
+#TODO: do the normalization again using asGeometryOCCWrapper (smaller code)
+
+
 FEATURE_TYPE = {
     'location'  : 'point',
     'direction' : 'vector',
