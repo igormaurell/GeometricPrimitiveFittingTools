@@ -13,10 +13,10 @@ from .base_dataset_writer import BaseDatasetWriter
 
 class SpfnDatasetWriter(BaseDatasetWriter):
     FEATURES_BY_TYPE = {
-        'plane': ['type', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'normalized'],
-        'cylinder': ['type', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'radius', 'normalized'],
-        'cone': ['type', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'radius', 'semi_angle', 'apex_x', 'apex_y', 'apex_z', 'normalized'],
-        'sphere': ['type', 'name', 'location_x', 'location_y', 'location_z', 'radius', 'normalized']
+        'plane': ['type', 'foward', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'normalized'],
+        'cylinder': ['type', 'foward', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'radius', 'normalized'],
+        'cone': ['type', 'foward', 'name', 'location_x', 'location_y', 'location_z', 'axis_x', 'axis_y', 'axis_z', 'radius', 'semi_angle', 'apex_x', 'apex_y', 'apex_z', 'normalized'],
+        'sphere': ['type', 'foward', 'name', 'location_x', 'location_y', 'location_z', 'radius', 'normalized']
     }
 
     FEATURES_MAPPING = {
@@ -34,6 +34,7 @@ class SpfnDatasetWriter(BaseDatasetWriter):
         'apex_z': {'type': float, 'map': ('apex', 2)},
         'semi_angle': {'type': float, 'map': 'angle'},
         'radius': {'type': float, 'map': 'radius'},
+        'foward': {'type': str, 'map': 'foward'}
     }
 
     def __init__(self, parameters):
@@ -41,8 +42,6 @@ class SpfnDatasetWriter(BaseDatasetWriter):
 
     def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
         import time
-
-        
 
         if filename is None:
             filename = str(uuid.uuid4())

@@ -11,10 +11,10 @@ from lib.utils import translateFeature, strUpperFirstLetter
 
 class SpfnDatasetReader(BaseDatasetReader):
     FEATURES_BY_TYPE = {
-        'plane': ['type', 'location', 'z_axis'],
-        'cylinder': ['type', 'location', 'z_axis', 'radius'],
-        'cone': ['type', 'location', 'z_axis', 'radius', 'angle', 'apex'],
-        'sphere': ['type', 'location', 'radius']
+        'plane': ['type', 'foward', 'location', 'z_axis'],
+        'cylinder': ['type', 'foward', 'location', 'z_axis', 'radius'],
+        'cone': ['type', 'foward', 'location', 'z_axis', 'radius', 'angle', 'apex'],
+        'sphere': ['type', 'foward', 'location', 'radius']
     }
 
     FEATURES_MAPPING = {
@@ -24,6 +24,7 @@ class SpfnDatasetReader(BaseDatasetReader):
         'apex': {'type': list, 'map': ['apex_x', 'apex_y', 'apex_z']},
         'angle': {'type': float, 'map': 'semi_angle'},
         'radius': {'type': float, 'map': 'radius'},
+        'foward': {'type': str, 'map': 'foward'}
     }
 
     def __init__(self, parameters):

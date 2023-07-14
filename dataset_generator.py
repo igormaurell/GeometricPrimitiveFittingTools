@@ -13,7 +13,8 @@ from os.path import join, isfile, exists
 
 from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif
 from lib.dataset_writer_factory import DatasetWriterFactory
-from lib.primitive_surface_factory import PrimitiveSurfaceFactory
+
+from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -223,9 +224,9 @@ if __name__ == '__main__':
             for i, feature in enumerate(features_data['surfaces']):
                 fpi = features_point_indices[i]
                 if len(fpi) > 0:
-                    primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
+                    primitive = SurfaceFactory.fromDict(feature)
                     if primitive is not None:
-                        points_new[fpi], normals_new[fpi] = primitive.computeCorrectPointsAndNormals(points[fpi])
+                        points_new[fpi], normals_new[fpi], _ = primitive.projectPointsOnGeometry(points[fpi])
             if points_healing:
                 if use_original_noise:
                     noisy_points = points.copy()

@@ -6,10 +6,11 @@ from math import pi
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from lib.primitive_surface_factory import PrimitiveSurfaceFactory
 from lib.dataset_reader_factory import DatasetReaderFactory
 from lib.utils import sortedIndicesIntersection, computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.normalization import unNormalize
+
+from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
 from tqdm.contrib.concurrent import process_map, thread_map
 from functools import partial
@@ -155,23 +156,23 @@ def process(data):
     for i, feature in enumerate(features):
         points_curr = points[fpi[i]]
         normals_curr = normals[fpi[i]]
-        primitive = PrimitiveSurfaceFactory.primitiveFromDict(feature)
-        tp = primitive.getPrimitiveType()             
+        primitive = SurfaceFactory.fromDict(feature)
+        tp = primitive.getType()             
         if tp not in dataset_errors[filename]:
             dataset_errors[filename][tp] = {'distances': [], 'mean_distances': [], 'angles': [], 'mean_angles': [], 'void_primitives': []}
         if len(fpi[i]) == 0:
             dataset_errors[filename][tp]['void_primitives'].append(i)
         else:
-            errors = primitive.computeErrors(points_curr, normals_curr)
-            dataset_errors[filename][tp]['distances'].append(errors['distances'])
-            dataset_errors[filename][tp]['angles'].append(errors['angles'])
-            dataset_errors[filename][tp]['mean_distances'].append(np.mean(errors['distances']))
-            dataset_errors[filename][tp]['mean_angles'].append(np.mean(errors['angles']))
+            distances, angles = primitive.computeErrors(points_curr, normals=normals_curr)
+            dataset_errors[filename][tp]['distances'].append(distances)
+            dataset_errors[filename][tp]['angles'].append(angles)
+            dataset_errors[filename][tp]['mean_distances'].append(np.mean(distances))
+            dataset_errors[filename][tp]['mean_angles'].append(np.mean(angles))
             if write_segmentation_gt:
                 colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
                 colors_types[fpi[i], :] = primitive.getColor()
                 if write_points_error:
-                    error_dist, error_ang = computeErrorsArrays(fpi[i], errors['distances'], errors['angles'], max_distance_deviation, max_angle_deviation)
+                    error_dist, error_ang = computeErrorsArrays(fpi[i], distances, angles, max_distance_deviation, max_angle_deviation)
                     error_both = sortedIndicesIntersection(error_dist, error_ang)
                     colors_instances[error_dist, :] = np.array([0, 255, 255])
                     colors_types[error_dist, :] = np.array([0, 255, 255])
