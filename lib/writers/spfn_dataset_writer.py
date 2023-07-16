@@ -62,8 +62,9 @@ class SpfnDatasetWriter(BaseDatasetWriter):
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
             
-            features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
-                                                           labels=labels, features_point_indices=features_point_indices)
+            features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'],
+                                                                               min_number_points=min_number_points, labels=labels,
+                                                                               features_point_indices=features_point_indices)
             if len(features_data) == 0:
                 print(f'WARNING: {data_file_path} has no features left.')
 
@@ -106,14 +107,15 @@ class SpfnDatasetWriter(BaseDatasetWriter):
                 bar_position = bar_position if bar_position >= 0 else 0
 
                 for i, feature in enumerate(features_data):
-                    soup_name = f'{filename}_soup_{i}'
-                    grp = h5_file.create_group(soup_name)
-                    feat_points = gt_points[features_point_indices[i]]
-                    grp.create_dataset('gt_points', data=feat_points)
-                    feature['name'] = soup_name
-                    feature['normalized'] = True
-                    feature = translateFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_MAPPING)
-                    grp.attrs['meta'] = np.void(pickle.dumps(feature))
+                    if feature is not None:
+                        soup_name = f'{filename}_soup_{i}'
+                        grp = h5_file.create_group(soup_name)
+                        feat_points = gt_points[features_point_indices[i]]
+                        grp.create_dataset('gt_points', data=feat_points)
+                        feature['name'] = soup_name
+                        feature['normalized'] = True
+                        feature = translateFeature(feature, SpfnDatasetWriter.FEATURES_BY_TYPE, SpfnDatasetWriter.FEATURES_MAPPING)
+                        grp.attrs['meta'] = np.void(pickle.dumps(feature))
                              
         return True
 

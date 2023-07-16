@@ -55,6 +55,7 @@ def computeRGB(value):
     return (r, g, b)
 
 def getAllColorsArray():
+    np.random.seed(0)
     colors = np.random.permutation(256*256*256)
     return colors
 
@@ -136,7 +137,7 @@ def translateFeature(feature_data, features_by_type, features_mapping):
             feature_out[feature_key] = feature_data[feature_key]
     return feature_out
 
-def filterFeaturesData(features_data, types=None, min_number_points=None, labels=None, features_point_indices=None):
+def filterFeaturesData(features_data, types=None, min_number_points=None, labels=None, features_point_indices=None, add_none=True):
     by_type_condition = lambda x: True
     if types is not None:
         by_type_condition = lambda x: x['type'].lower() in types
@@ -144,24 +145,30 @@ def filterFeaturesData(features_data, types=None, min_number_points=None, labels
     if min_number_points is not None and features_point_indices is not None:
         by_npoints_condition = lambda x: len(x) >= min_number_points
 
-    labels_map = np.zeros(len(features_data))
+    labels_map = np.zeros(len(features_data), dtype=np.int32) - 1
     new_features_data = []
     new_features_point_indices = []
-    i = 0
     for j in range(len(features_data)):
         feature = features_data[j]
-        fpi = features_point_indices[j]
-        labels_map[j] = -1
-        if by_type_condition(feature) and by_npoints_condition(fpi):
-            labels_map[j] = i
-            new_features_data.append(features_data[j])
-            new_features_point_indices.append(features_point_indices[j])
-            i+= 1            
+        if feature is not None:
+            fpi = features_point_indices[j]
+            if by_type_condition(feature) and by_npoints_condition(fpi):
+                labels_map[j] = len(new_features_data)
+                new_features_data.append(features_data[j])
+                new_features_point_indices.append(features_point_indices[j])
+            elif add_none:
+                new_features_data.append(None)
+                new_features_point_indices.append([])
+        elif add_none:
+            new_features_data.append(None)
+            new_features_point_indices.append([])
 
     if labels is not None:
-        for i in range(len(labels)):
-            if labels[i] != -1:
-                labels[i] = labels_map[labels[i]]
+        not_minus_one_mask = labels != -1
+        labels[not_minus_one_mask] = labels_map[labels[not_minus_one_mask]]
+        #for i in range(len(labels)):
+        #    if labels[i] != -1:
+        #        labels[i] = labels_map[labels[i]]
 
     return new_features_data, labels, new_features_point_indices
 

@@ -62,9 +62,11 @@ class ParsenetDatasetWriter(BaseDatasetWriter):
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
 
-
+            labels_pre = labels.copy()
             features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.features_types, min_number_points=min_number_points,
                                                            labels=labels, features_point_indices=features_point_indices)
+            mask_not_minus_one = labels != -1
+            assert np.all(labels_pre[mask_not_minus_one] == labels[mask_not_minus_one])
 
             if len(features_data) == 0:
                 #print(f'ERROR: {filename} has no features left.')
@@ -84,7 +86,7 @@ class ParsenetDatasetWriter(BaseDatasetWriter):
         if normals is not None:
             self.normals.append(normals)
         self.labels.append(labels)
-        primitives = [ParsenetDatasetWriter.FEATURES_ID[features_data[labels[i]]['type'].lower()] for i in range(len(labels))]
+        primitives = [ParsenetDatasetWriter.FEATURES_ID[features_data[lab]['type'].lower()] if lab != -1 else -1 for lab in labels]
         self.primitives.append(primitives)
 
         return True

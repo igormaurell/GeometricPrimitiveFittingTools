@@ -35,7 +35,7 @@ class SpfnDatasetReader(BaseDatasetReader):
         with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
             self.filenames_by_set['val'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
 
-    def step(self):
+    def step(self, unormalize=True):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
@@ -65,16 +65,17 @@ class SpfnDatasetReader(BaseDatasetReader):
                     found_soup_ids.append(soup_id)
                     soup_id_to_key[soup_id] = key
 
-            features_data = []            
+            features_data = [None]*(max(found_soup_ids) + 1)      
             found_soup_ids.sort()
-            for i in range(len(found_soup_ids)):
+            for i in found_soup_ids:
                 g = h5_file[soup_id_to_key[i]]
                 meta = pickle.loads(g.attrs['meta'])
                 meta = translateFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_MAPPING)
-                features_data.append(meta)
+                features_data[i] = meta
 
-        gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-        noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
+        if unNormalize:
+            gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
+            noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,

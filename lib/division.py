@@ -125,14 +125,10 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
 
     features_indices = featuresIndicesByPointsIndices(features_point_indices, indices, filter_by_volume=filter_features_by_volume, points=points,
                                                       abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
-
-    features_data_part = [None for f in features_indices]
-    labels_part_new = np.zeros(len(labels_part), dtype=np.int64) - 1
-    for i, index in enumerate(features_indices):
-        features_data_part[i] = features_data[index]
-        labels_part_new[labels_part == index] = i
-    features_data = features_data_part
-    labels_part = labels_part_new
+    
+    features_data_part = [None] * len(features_data)
+    for fi in features_indices:
+        features_data_part[fi] = features_data[fi]
 
     result = {
         'points': points_part,

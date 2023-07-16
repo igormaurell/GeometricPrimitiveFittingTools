@@ -32,10 +32,10 @@ def generateErrorsBoxPlot(errors, individual=True, all_models=False):
             data_angles.append(np.concatenate(e['angles']) if len(e['angles']) > 0 else [])
     fig, (ax1, ax2) = plt.subplots(2, 1)
     fig.tight_layout(pad=2.0)
-    ax1.set_title('Distance Deviation')
+    ax1.set_title('Distance Deviation (m)')
     if len(data_distances) > 0:
         ax1.boxplot(data_distances, labels=data_labels, autorange=False, meanline=True)
-    ax2.set_title('Normal Deviation')
+    ax2.set_title('Normal Deviation (°)')
     if len(data_angles) > 0:
         ax2.boxplot(data_angles, labels=data_labels, autorange=False, meanline=True)
     return fig
@@ -154,32 +154,33 @@ def process(data):
     colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
     fpi = computeFeaturesPointIndices(labels, size=len(features))
     for i, feature in enumerate(features):
-        points_curr = points[fpi[i]]
-        normals_curr = normals[fpi[i]]
-        primitive = SurfaceFactory.fromDict(feature)
-        tp = primitive.getType()             
-        if tp not in dataset_errors[filename]:
-            dataset_errors[filename][tp] = {'distances': [], 'mean_distances': [], 'angles': [], 'mean_angles': [], 'void_primitives': []}
-        if len(fpi[i]) == 0:
-            dataset_errors[filename][tp]['void_primitives'].append(i)
-        else:
-            distances, angles = primitive.computeErrors(points_curr, normals=normals_curr)
-            dataset_errors[filename][tp]['distances'].append(distances)
-            dataset_errors[filename][tp]['angles'].append(angles)
-            dataset_errors[filename][tp]['mean_distances'].append(np.mean(distances))
-            dataset_errors[filename][tp]['mean_angles'].append(np.mean(angles))
-            if write_segmentation_gt:
-                colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
-                colors_types[fpi[i], :] = primitive.getColor()
-                if write_points_error:
-                    error_dist, error_ang = computeErrorsArrays(fpi[i], distances, angles, max_distance_deviation, max_angle_deviation)
-                    error_both = sortedIndicesIntersection(error_dist, error_ang)
-                    colors_instances[error_dist, :] = np.array([0, 255, 255])
-                    colors_types[error_dist, :] = np.array([0, 255, 255])
-                    colors_instances[error_ang, :] = np.array([0, 0, 0])
-                    colors_types[error_ang, :] = np.array([0, 0, 0])
-                    colors_instances[error_both, :] = np.array([255, 0, 255])
-                    colors_types[error_both, :] = np.array([255, 0, 255])
+        if feature is not None:
+            points_curr = points[fpi[i]]
+            normals_curr = normals[fpi[i]]
+            primitive = SurfaceFactory.fromDict(feature)
+            tp = primitive.getType()             
+            if tp not in dataset_errors[filename]:
+                dataset_errors[filename][tp] = {'distances': [], 'mean_distances': [], 'angles': [], 'mean_angles': [], 'void_primitives': []}
+            if len(fpi[i]) == 0:
+                dataset_errors[filename][tp]['void_primitives'].append(i)
+            else:
+                distances, angles = primitive.computeErrors(points_curr, normals=normals_curr)
+                dataset_errors[filename][tp]['distances'].append(distances)
+                dataset_errors[filename][tp]['angles'].append(angles)
+                dataset_errors[filename][tp]['mean_distances'].append(np.mean(distances))
+                dataset_errors[filename][tp]['mean_angles'].append(np.mean(angles))
+                if write_segmentation_gt:
+                    colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
+                    colors_types[fpi[i], :] = primitive.getColor()
+                    if write_points_error:
+                        error_dist, error_ang = computeErrorsArrays(fpi[i], distances, angles, max_distance_deviation, max_angle_deviation)
+                        error_both = sortedIndicesIntersection(error_dist, error_ang)
+                        colors_instances[error_dist, :] = np.array([0, 255, 255])
+                        colors_types[error_dist, :] = np.array([0, 255, 255])
+                        colors_instances[error_ang, :] = np.array([0, 0, 0])
+                        colors_types[error_ang, :] = np.array([0, 0, 0])
+                        colors_instances[error_both, :] = np.array([255, 0, 255])
+                        colors_types[error_both, :] = np.array([255, 0, 255])
     logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_angle_deviation)
     logs_dict['total']['number_of_points'] += np.count_nonzero(labels==-1)
     error_log = generateLog(logs_dict, max_distance_deviation, max_angle_deviation)
@@ -188,7 +189,7 @@ def process(data):
         f.write(log)
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
-        points, _, _ = unNormalize(points, transforms, invert=False)
+        #points, _, _ = unNormalize(points, transforms, invert=False)
         writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
         types_filename = f'{filename}_types.obj'
         writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
@@ -214,7 +215,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--points_error', action='store_true', help='write segmentation ground truth.')
     parser.add_argument('-b', '--show_box_plot', action='store_true', help='show box plot of the data.')
     parser.add_argument('-md', '--max_distance_deviation', type=float, default=0.05, help='max distance deviation.')
-    parser.add_argument('-mn', '--max_angle_deviation', type=float, default=10, help='max normal deviation.')
+    parser.add_argument('-mn', '--max_angle_deviation', type=float, default=10, help='max normal angle deviation in degrees.')
 
     args = vars(parser.parse_args())
 
@@ -230,7 +231,7 @@ if __name__ == '__main__':
     write_points_error = args['points_error']
     box_plot = args['show_box_plot']
     max_distance_deviation = args['max_distance_deviation']
-    max_angle_deviation = args['max_angle_deviation']*pi/180.
+    max_angle_deviation = args['max_angle_deviation']
 
     parameters = {format: {}}
     dataset_format_folder_name = join(folder_name, dataset_folder_name, format)
