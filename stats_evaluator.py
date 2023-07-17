@@ -12,6 +12,42 @@ from os.path import join
 
 import matplotlib.pyplot as plt
 
+def generateErrorsGraph(data_full, tp):
+    assert tp in ['surfaces', 'curves']
+
+    np.random.seed(19680801)
+
+    x = []
+    y = []
+    area = []
+    for data in data_full:
+        if tp == 'surfaces':
+            x.append(data['number_surfaces'])
+            y.append(data['number_faces'])
+            area.append(data['surfaces']['area'])
+        elif tp == 'curves':
+            x.append(data['number_curves'])
+            y.append(data['number_vertices'])
+            area.append(data['surfaces']['area'])
+
+    sizes = np.ones(len(x))*200
+
+    fig, ax = plt.subplots(figsize=(10.5, 6))
+    scatter = ax.scatter(x, y, s=sizes.tolist(), c=area, cmap='jet')
+
+    cbar = fig.colorbar(scatter, cax=axins1, orientation='vertical', ticks=[below, above])
+    cbar.ax.set_xticklabels(['25', '75'])
+
+    ax.set_xlabel('Número de Entidades Geométricas', fontsize=12)
+    ax.set_ylabel('Número de Triângulos da Malha', fontsize=12)
+
+    ax.grid(True)
+    fig.tight_layout()
+
+    plt.show()
+    return fig
+
+
 def addStats(dict1, dict2):
     for key, value in dict2.items():
         if type(value) is int or type(value) is float:
@@ -87,7 +123,7 @@ def createPieGraph(labels, data, title='', num_models=1):
                     horizontalalignment=horizontalalignment, **kw)
 
     ax.set(aspect="equal", )
-    ax.set_title(title, pad=32.0, fontsize=20)
+    #ax.set_title(title, pad=32.0, fontsize=20)
     
     ax.legend(wedges[0], labels,
             title="Types",
@@ -175,7 +211,8 @@ if __name__ == '__main__':
 
     stats_files_name = listdir(stats_folder_name)
 
-    stats_full = {}
+    data_full = []
+    i = 0
     for filename in tqdm(stats_files_name):
         filename = join(stats_folder_name, filename)
         name = filename[filename.rfind('/')+1:filename.rfind('.')]
@@ -186,6 +223,11 @@ if __name__ == '__main__':
         makedirs(model_folder_name)
         fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, fig_area = statsData2Graphs(data)
         saveFigs(fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, fig_area, model_folder_name)
+        data_full.append(data)
+        i+= 1
+    stats_full = {}
+    for data in data_full:
         stats_full = addStats(stats_full, data)
     fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, fig_area = statsData2Graphs(stats_full, num_models=len(stats_files_name))
+    #fig_box_plot = generateErrorsGraph(data_full, 'surfaces')
     saveFigs(fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, fig_area, graphs_folder_name)
