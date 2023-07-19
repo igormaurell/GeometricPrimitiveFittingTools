@@ -65,7 +65,8 @@ class SpfnDatasetReader(BaseDatasetReader):
                     found_soup_ids.append(soup_id)
                     soup_id_to_key[soup_id] = key
 
-            features_data = [None]*(max(found_soup_ids) + 1)      
+            max_size = max(found_soup_ids) + 1 if len(found_soup_ids) > 0 else 0
+            features_data = [None]*max_size  
             found_soup_ids.sort()
             for i in found_soup_ids:
                 g = h5_file[soup_id_to_key[i]]

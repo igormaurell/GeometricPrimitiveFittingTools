@@ -50,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('-nh', '--normals_healing', action='store_true', help='')
     parser.add_argument('-uon', '--use_original_noise', action='store_true', help='')
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
-    parser.add_argument('-t_p', '--train_percentage', type=int, default = 0.8, help='')
+    parser.add_argument('-t_p', '--train_percentage', type=float, default = 0.8, help='')
     parser.add_argument('-m_np', '--min_number_points', type=float, default = 0.0001, help='filter geometries by number of points.')
     parser.add_argument('-ls', '--leaf_size', type=float, default = 0.0, help='')
 
