@@ -1,3 +1,4 @@
 from .spfn_dataset_writer import SpfnDatasetWriter
 from .primitivenet_dataset_writer import PrimitivenetDatasetWriter
 from .parsenet_dataset_writer import ParsenetDatasetWriter
+from .ls3dc_dataset_writer import LS3DCDatasetWriter

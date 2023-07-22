@@ -75,8 +75,8 @@ def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
     logs_dict = {
         'total': getBaseKeyLogsDict(),
     }
-    for tp, e in errors.items():           
-        number_of_primitives = len(e['distances'])
+    for tp, e in errors.items():
+        number_of_primitives = len(e['distances'])     
         number_of_void_primitives = len(e['void_primitives'])
 
         ind_distances = e['distances']
@@ -84,15 +84,15 @@ def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
         number_of_points = 0
         number_error_distances = 0
         number_error_angles = 0
+        summd = 0.
+        summa = 0.
         for i in range(len(ind_distances)):
             number_of_points += len(ind_distances[i])
             number_error_distances += np.count_nonzero(ind_distances[i] > max_distance_deviation)
             number_error_angles += np.count_nonzero(ind_angles[i] > max_angle_deviation)
-
-        mean_distances = np.array(errors[tp]['mean_distances'])
-        summd = np.sum(mean_distances)
-        mean_angles = np.array(errors[tp]['mean_angles'])
-        summa = np.sum(mean_angles)
+            summd += np.sum(ind_distances[i])
+            summa += np.sum(ind_angles[i])
+        
         if tp not in logs_dict.keys():
             logs_dict[tp] = getBaseKeyLogsDict()
         logs_dict = sumToLogsDict(['total', tp], logs_dict, nop=number_of_primitives, novp=number_of_void_primitives, nopoints=number_of_points, ned=number_error_distances, nea=number_error_angles, sd=summd, sa=summa)
@@ -114,8 +114,8 @@ def generateLog(logs_dict, max_distance_deviation, max_angle_deviation):
         log += f'\t\t- Number of Points: {number_of_points}\n'
         log += f'\t\t- Distance Error Rate (>{max_distance_deviation}): {((100.0*number_error_distances)/number_of_points) if number_of_points > 0 else 0 }%\n'
         log += f'\t\t- Normal Error Rate (>{max_angle_deviation}): {((100.0*number_error_angles)/number_of_points) if number_of_points > 0 else 0}%\n'
-        log += f'\t\t- Mean Distance Error: {(sum_distances/number_of_primitives) if number_of_primitives > 0 else 0}\n'
-        log += f'\t\t- Mean Normal Error: {(sum_angles/number_of_primitives) if number_of_primitives > 0 else 0}\n\n'
+        log += f'\t\t- Mean Distance Error: {(sum_distances/number_of_points) if number_of_points > 0 else 0}\n'
+        log += f'\t\t- Mean Normal Error: {(sum_angles/number_of_points) if number_of_points > 0 else 0}\n\n'
     return log
 
 def computeErrorsArrays(indices, distances, angles, max_distance_deviation, max_angle_deviation):
@@ -167,8 +167,6 @@ def process(data):
                 distances, angles = primitive.computeErrors(points_curr, normals=normals_curr)
                 dataset_errors[filename][tp]['distances'].append(distances)
                 dataset_errors[filename][tp]['angles'].append(angles)
-                dataset_errors[filename][tp]['mean_distances'].append(np.mean(distances))
-                dataset_errors[filename][tp]['mean_angles'].append(np.mean(angles))
                 if write_segmentation_gt:
                     colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
                     colors_types[fpi[i], :] = primitive.getColor()

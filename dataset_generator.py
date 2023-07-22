@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('formats', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
 
     parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
-    parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
+    parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere,torus,bspline,revolution,extrusion', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
     parser.add_argument('-c', '--centralize', action='store_true', help='')
     parser.add_argument('-a', '--align', action='store_true', help='')
     parser.add_argument('-nl', '--noise_limit', type=float, default = 0., help='')
