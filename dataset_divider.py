@@ -207,7 +207,7 @@ if __name__ == '__main__':
         full_len = np.prod(regions_grid.shape[:3])
 
         results = process_map(partial(process_model_val, data, regions_grid, filename, val_number_points,
-                              abs_volume_threshold, relative_volume_threshold), range(full_len))
+                              abs_volume_threshold, relative_volume_threshold), range(full_len), chunksize=1)
 
         for j, result in tqdm(enumerate(results)):
             n_p = len(result['points'])
@@ -248,7 +248,7 @@ if __name__ == '__main__':
             full_len = np.prod(regions_grid.shape[:3])
 
             results += process_map(partial(process_model_val, data, regions_grid, filename, train_number_points,
-                                   abs_volume_threshold, relative_volume_threshold), range(full_len))
+                                   abs_volume_threshold, relative_volume_threshold), range(full_len), chunksize=1)
             
         if train_random_times > 0:
             size_points = np.max(data['points'], axis=0) -  np.min(data['points'], axis=0)
@@ -260,7 +260,7 @@ if __name__ == '__main__':
             if num_models > 1:
                 results += process_map(partial(process_model_train, data, filename, train_number_points,
                                        train_min_number_points, abs_volume_threshold, relative_volume_threshold),
-                                       range(num_models))
+                                       range(num_models), chunksize=1)
             else:
                 res = sampleDataOnRegion(np.asarray((np.min(data['points'], axis=0), np.max(data['points'], axis=0))), data['points'], data['normals'],
                                             data['labels'], data['features'], train_number_points, filter_features_by_volume=True,

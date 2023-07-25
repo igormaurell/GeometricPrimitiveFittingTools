@@ -559,7 +559,7 @@ def pairWiseRegistration(source, target, source_labels, target_labels, distance_
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
 def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180, 'vertical_resolution':0.09, 'horizontal_resolution':0.09},
-                                   dome_cell_size=20, distance_std=0., distance=3, verbose=True, view_pcd=False):
+                                   dome_cell_size=15, distance_std=0., distance=3, verbose=True, view_pcd=False):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
@@ -615,7 +615,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
         points = rays[hit][:,:3] + rays[hit][:,3:]*ans['t_hit'][hit].reshape((-1,1))
         normals = ans['primitive_normals'][hit].numpy()
 
-        normals = normals/np.linalg.norm(normals)
+        normals = normals/(np.linalg.norm(normals, axis=1)[:, np.newaxis])
 
         labels_mesh = ans['primitive_ids'][hit].numpy()
 

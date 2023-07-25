@@ -144,7 +144,6 @@ def process(data):
     normals = data['normals']
     labels = data['labels']
     features = data['features']
-    transforms = data['transforms']
     if points is None or normals is None or labels is None or features is None:
         print('Invalid Model.')
         return None
@@ -170,15 +169,15 @@ def process(data):
                 if write_segmentation_gt:
                     colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
                     colors_types[fpi[i], :] = primitive.getColor()
-                    if write_points_error:
-                        error_dist, error_ang = computeErrorsArrays(fpi[i], distances, angles, max_distance_deviation, max_angle_deviation)
-                        error_both = sortedIndicesIntersection(error_dist, error_ang)
-                        colors_instances[error_dist, :] = np.array([0, 255, 255])
-                        colors_types[error_dist, :] = np.array([0, 255, 255])
-                        colors_instances[error_ang, :] = np.array([0, 0, 0])
-                        colors_types[error_ang, :] = np.array([0, 0, 0])
-                        colors_instances[error_both, :] = np.array([255, 0, 255])
-                        colors_types[error_both, :] = np.array([255, 0, 255])
+                    # if write_points_error:
+                    #     error_dist, error_ang = computeErrorsArrays(fpi[i], distances, angles, max_distance_deviation, max_angle_deviation)
+                    #     error_both = sortedIndicesIntersection(error_dist, error_ang)
+                    #     colors_instances[error_dist, :] = np.array([0, 255, 255])
+                    #     colors_types[error_dist, :] = np.array([0, 255, 255])
+                    #     colors_instances[error_ang, :] = np.array([0, 0, 0])
+                    #     colors_types[error_ang, :] = np.array([0, 0, 0])
+                    #     colors_instances[error_both, :] = np.array([255, 0, 255])
+                    #     colors_types[error_both, :] = np.array([255, 0, 255])
     logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_angle_deviation)
     logs_dict['total']['number_of_points'] += np.count_nonzero(labels==-1)
     error_log = generateLog(logs_dict, max_distance_deviation, max_angle_deviation)

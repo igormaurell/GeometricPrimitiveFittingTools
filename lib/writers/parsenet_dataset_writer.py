@@ -46,7 +46,7 @@ class ParsenetDatasetWriter(BaseDatasetWriter):
 
         self.features_types = list(set(ParsenetDatasetWriter.FEATURES_ID.keys()) & set(self.filter_features_parameters['surface_types']))
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
         if filename is None:
             filename = str(uuid.uuid4())
         

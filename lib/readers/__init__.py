@@ -1,2 +1,4 @@
 from .spfn_dataset_reader import SpfnDatasetReader
 from .primitivenet_dataset_reader import PrimitivenetDatasetReader
+from .ls3dc_dataset_reader import LS3DCDatasetReader
+from .hpnet_dataset_reader import HPNetDatasetReader

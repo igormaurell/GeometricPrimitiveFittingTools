@@ -100,9 +100,12 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
                         grp.create_dataset('indices', data=features_point_indices[i])
                         feature['name'] = soup_name
                         feature['normalized'] = True
-                        del feature['vert_indices']
-                        del feature['vert_parameters']
-                        del feature['face_indices']
+                        if 'vert_indices' in feature.keys():
+                            del feature['vert_indices']
+                        if 'vert_parameters' in feature.keys():
+                            del feature['vert_parameters']
+                        if 'face_indices' in feature.keys():
+                            del feature['face_indices']
                         sub_grp = grp.create_group('parameters')
                         dict_to_hdf5_group(sub_grp, feature)
                              

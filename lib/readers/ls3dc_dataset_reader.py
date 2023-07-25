@@ -71,9 +71,9 @@ class LS3DCDatasetReader(BaseDatasetReader):
                 #if features_data[i]['type'] == 'BSpline':
                 #    print(features_data[i]['weights'].shape)
             
-            if unormalize:
-                gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-                noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
+            # if unormalize:
+            #     gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
+            #     noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,

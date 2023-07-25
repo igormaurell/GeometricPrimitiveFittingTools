@@ -1,12 +1,11 @@
-from lib.readers.spfn_dataset_reader import SpfnDatasetReader
-from lib.readers.primitivenet_dataset_reader import PrimitivenetDatasetReader
-from lib.readers.ls3dc_dataset_reader import LS3DCDatasetReader
+from lib.readers import *
 
 class DatasetReaderFactory:
     READERS_DICT = {
         'spfn': SpfnDatasetReader,
         'ls3dc': LS3DCDatasetReader,
         'primitivenet': PrimitivenetDatasetReader,
+        'hpnet': HPNetDatasetReader
     }
 
     def __init__(self, parameters):

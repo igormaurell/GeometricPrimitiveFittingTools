@@ -8,7 +8,8 @@ class DatasetWriterFactory:
         'spfn': SpfnDatasetWriter,
         'primitivenet': PrimitivenetDatasetWriter,
         'parsenet': ParsenetDatasetWriter,
-        'ls3dc': LS3DCDatasetWriter
+        'ls3dc': LS3DCDatasetWriter,
+        'hpnet': HPNetDatasetWriter
     }
 
     def __init__(self, parameters):
