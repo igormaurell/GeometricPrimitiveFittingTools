@@ -60,8 +60,6 @@ def rotateUtil(points, transform, normals=None, features=[]):
                 if key in FEATURE_TYPE.keys():
                     if FEATURE_TYPE[key] == 'point' or FEATURE_TYPE[key] == 'vector':
                         features[i][key] = list((transform @ np.array(features[i][key]).T).T)
-                else:
-                    print(key)
     return points, normals, features
 
 def alignCanonical(points, normals=None, features=[]):

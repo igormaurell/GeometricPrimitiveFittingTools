@@ -155,6 +155,7 @@ if __name__ == '__main__':
 
         mesh = None
         if exists(pc_filename):
+            print('Opening PC...')
             pc = pypcd.PointCloud.from_path(pc_filename).pc_data
       
             points = np.vstack((pc['x'], pc['y'], pc['z'])).T
@@ -162,9 +163,10 @@ if __name__ == '__main__':
             labels_mesh = pc['label']
             
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+            print('Done.\n')
 
         elif mesh_filename is not None:
-            print('Opening Mesh:')
+            print('Opening Mesh...')
             mesh = o3d.io.read_triangle_mesh(mesh_filename, print_progress=True)
             print('Done.\n')
 
@@ -214,14 +216,17 @@ if __name__ == '__main__':
             continue
             
         if mesh is None:
+            print('Opening Mesh...')
             mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
             mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
+            print('Done.\n')
 
         noisy_points = None
         if points_healing or normals_healing:
             points_new = points.copy()
             normals_new = normals.copy()
-            for i, feature in enumerate(features_data['surfaces']):
+            print('Healing Process...')
+            for i, feature in enumerate(tqdm(features_data['surfaces'])):
                 fpi = features_point_indices[i]
                 if len(fpi) > 0:
                     primitive = SurfaceFactory.fromDict(feature)
@@ -233,7 +238,11 @@ if __name__ == '__main__':
                 points = points_new
             if normals_healing:
                 normals = normals_new
+            print('Done.\n')
 
-        dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points, filename=filename, features_point_indices=features_point_indices, mesh=mesh)
-        
+        print('Writing...')
+        dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points,
+                                              filename=filename, features_point_indices=features_point_indices, mesh=mesh)
+        print('Done.\n')
+
     dataset_writer_factory.finishAllFormats()

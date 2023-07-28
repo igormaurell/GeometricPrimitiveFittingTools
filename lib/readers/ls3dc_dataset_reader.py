@@ -68,12 +68,10 @@ class LS3DCDatasetReader(BaseDatasetReader):
             for i in found_soup_ids:
                 g = h5_file[soup_id_to_key[i]]
                 features_data[i] = hdf5_group_to_dict(g['parameters'])
-                #if features_data[i]['type'] == 'BSpline':
-                #    print(features_data[i]['weights'].shape)
             
-            # if unormalize:
-            #     gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-            #     noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
+            if unormalize:
+                gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
+                noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,

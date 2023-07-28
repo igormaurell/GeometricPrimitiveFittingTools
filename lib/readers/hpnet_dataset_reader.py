@@ -92,9 +92,8 @@ class HPNetDatasetReader(BaseDatasetReader):
 
                 features_data[label] = feature
 
-            #if unormalize:
-            #    print('size:', np.max(points, axis=0) - np.min(points, axis=0))
-            #    points, normals, features_data = unNormalize(points, transforms, normals=normals, features=features_data)
+            if unormalize:
+                points, normals, features_data = unNormalize(points, transforms, normals=normals, features=features_data)
 
         result = {
             'points': points,

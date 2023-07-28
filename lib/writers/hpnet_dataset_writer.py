@@ -99,10 +99,10 @@ class HPNetDatasetWriter(BaseDatasetWriter):
                 local_labels = global_to_local_labels_map[labels]
                 labels[local_labels == -1] = -1
 
-                h5_file.create_dataset('prim', data=types)
+                h5_file.create_dataset('prim', data=types.astype(np.int32))
                 h5_file.create_dataset('T_param',  data=primitive_params)
-                h5_file.create_dataset('labels', data=local_labels)
-                h5_file.create_dataset('global_labels', data=labels)
+                h5_file.create_dataset('labels', data=local_labels.astype(np.int32))
+                h5_file.create_dataset('global_labels', data=labels.astype(np.int32))
                 
         return True
 
@@ -112,6 +112,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
         with open(os.path.join(self.data_folder_name, 'train_data.txt'), 'w') as f:
             f.write('\n'.join(train_models))
         with open(os.path.join(self.data_folder_name, 'val_data.txt'), 'w') as f:
+            f.write('\n'.join(val_models))
+        with open(os.path.join(self.data_folder_name, 'test_data.txt'), 'w') as f:
             f.write('\n'.join(val_models))
 
         super().finish()
