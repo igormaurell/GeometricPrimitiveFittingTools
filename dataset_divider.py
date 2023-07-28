@@ -17,7 +17,7 @@ from lib.dataset_reader_factory import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, computeSearchPoints
-
+import time
 def process_model_val(data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold, ind):
     size_x, size_y, _, _, _ = regions_grid.shape
     k = ind // (size_y * size_x)
@@ -28,9 +28,9 @@ def process_model_val(data, regions_grid, filename, val_number_points, abs_volum
     result = sampleDataOnRegion(regions_grid[i, j, k], data['points'], data['normals'], data['labels'], data['features'],
                                 val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                 relative_volume_threshold=relative_volume_threshold)
-   
+
     result['filename'] = filename_curr
-                    
+
     return result
 
 def process_model_train(data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold, ind):
@@ -206,8 +206,13 @@ if __name__ == '__main__':
         print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
         full_len = np.prod(regions_grid.shape[:3])
 
-        results = process_map(partial(process_model_val, data, regions_grid, filename, val_number_points,
+        start = time.time()
+        # results = [process_model_val(data, regions_grid, filename, val_number_points,
+        #                            abs_volume_threshold, relative_volume_threshold, ind) for ind in tqdm(range(full_len))]
+
+        results = thread_map(partial(process_model_val, data, regions_grid, filename, val_number_points,
                               abs_volume_threshold, relative_volume_threshold), range(full_len), chunksize=1)
+        print(time.time() - start)
 
         for j, result in tqdm(enumerate(results)):
             n_p = len(result['points'])
@@ -256,6 +261,10 @@ if __name__ == '__main__':
             num_models = int(np.ceil(train_random_times*np.ceil((points_dim/np.prod(train_region_size[train_region_size != np.inf])))))
             
             data['search_points'] = computeSearchPoints(data['points'], train_region_size)
+
+            if 'search_points' in data and len(data['search_points']) == 0:
+                print('WARNING: no point inside search region, not using it.')
+                del data['search_points']
 
             if num_models > 1:
                 results += process_map(partial(process_model_train, data, filename, train_number_points,

@@ -64,6 +64,7 @@ def computeRegionAroundPoint(point, region_size):
 
     return np.asarray([bb_min_limit, bb_max_limit])
 
+import time
 def randomSamplingPointsOnRegion(points, ll, ur, n_points):
     inidx = np.all(np.logical_and(points >= ll, points < ur), axis=1)
     indices = np.arange(0, inidx.shape[0], 1, dtype=int)
@@ -121,10 +122,19 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
     normals_part = normals[indices]
     labels_part = labels[indices]
 
-    features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
+    features_indices = np.unique(labels_part)
+    if features_indices[0] == -1:
+        features_indices = features_indices[1:]
 
-    features_indices = featuresIndicesByPointsIndices(features_point_indices, indices, filter_by_volume=filter_features_by_volume, points=points,
-                                                      abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
+    # features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
+
+    # features_indices2 = featuresIndicesByPointsIndices(features_point_indices, indices, filter_by_volume=filter_features_by_volume, points=points,
+    #                                                   abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
+
+    #print('1:', features_indices)
+    #print('2:', features_indices2)
+
+    #assert np.all(features_indices == features_indices2), f'{features_indices} != {features_indices2}'
     
     features_data_part = [None] * len(features_data)
     for fi in features_indices:
@@ -141,7 +151,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
 
 def divideOnceRandom(points, normals, labels, features_data, region_size, n_points, filter_features_by_volume=True,
                      abs_volume_threshold=0., relative_volume_threshold=0.2, search_points=None):
-   
+
     if search_points is None:
         middle_point = points[random.randint(0, points.shape[0] - 1)]
     else:

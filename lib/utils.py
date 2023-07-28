@@ -175,7 +175,7 @@ def filterFeaturesData(features_data, types=None, min_number_points=None, labels
 def computeFeaturesPointIndices(labels, size=None):
     if size is None:
         size = np.max(labels) + 1
-    features_point_indices = [[] for i in range(0, size + 1)]
+    features_point_indices = [[] for i in range(0, size)]
     for i in range(0, len(labels)):
         features_point_indices[labels[i]].append(i)
     features_point_indices.pop(-1)

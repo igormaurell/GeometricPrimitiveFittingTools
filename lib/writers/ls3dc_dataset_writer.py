@@ -41,9 +41,12 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
         if os.path.exists(data_file_path):
            return False
 
-        if labels is not None:   
+        if labels is not None:
+
             if features_point_indices is None:
-                features_point_indices = computeFeaturesPointIndices(labels)
+                features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
+
+            # print('a:', np.max(labels), len(features_data), len(features_point_indices))
 
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
@@ -87,11 +90,6 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
 
             if labels is not None:
                 h5_file.create_dataset('gt_labels', data=labels)
-
-                point_position = data_file_path.rfind('.')
-                point_position = point_position if point_position >= 0 else len(point_position)
-                bar_position = data_file_path.rfind('/')
-                bar_position = bar_position if bar_position >= 0 else 0
 
                 for i, feature in enumerate(features_data):
                     if feature is not None:
