@@ -86,8 +86,8 @@ class PrimitivenetDatasetWriter(BaseDatasetWriter):
         min_number_points = self.min_number_points if self.min_number_points > 1 else int(len(labels)*self.min_number_points)
         min_number_points = min_number_points if min_number_points >= 0 else 1
 
-        features_data['surfaces'], labels, features_vertice_indices = filterFeaturesData(features_data['surfaces'], types=self.filter_features_parameters['surface_types'], min_number_points=min_number_points,
-                                                                 labels=labels, features_point_indices=features_vertice_indices)
+        features_data['surfaces'], labels, features_vertice_indices = filterFeaturesData(features_data['surfaces'], labels, types=self.filter_features_parameters['surface_types'],
+                                                                                         min_number_points=min_number_points, features_point_indices=features_vertice_indices)
 
         if len(features_data['surfaces']) == 0:
             print(f'ERROR: {data_file_path} has no features left.')

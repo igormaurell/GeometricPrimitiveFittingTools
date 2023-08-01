@@ -1,8 +1,6 @@
 import pickle
 import h5py
 import csv
-import numpy as np
-import gc
 import uuid
 import os
 from collections.abc import Iterable
@@ -22,6 +20,7 @@ def dict_to_hdf5_group(group, data_dict):
         else:
             group[key] = value
 
+import time
 class LS3DCDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
@@ -42,20 +41,14 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
            return False
 
         if labels is not None:
-
             if features_point_indices is None:
                 features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
-
-            # print('a:', np.max(labels), len(features_data), len(features_point_indices))
 
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
             
-            features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.filter_features_parameters['surface_types'],
-                                                                               min_number_points=min_number_points, labels=labels,
-                                                                               features_point_indices=features_point_indices)
-            if len(features_data) == 0:
-                print(f'WARNING: {data_file_path} has no features left.')
+            features_data, labels, features_point_indices = filterFeaturesData(features_data, labels, types=self.filter_features_parameters['surface_types'],
+                                                                               min_number_points=min_number_points, features_point_indices=features_point_indices)
 
         self.filenames_by_set[self.current_set_name].append(filename)
 
@@ -81,12 +74,6 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
                 noisy_points, _, _, _ = normalize(points, self.normalization_parameters, normals=normals)
                 
             h5_file.create_dataset('noisy_points', data=noisy_points)
-            del noisy_points
-            del points
-            del normals
-            del gt_points
-            del gt_normals
-            gc.collect()
 
             if labels is not None:
                 h5_file.create_dataset('gt_labels', data=labels)

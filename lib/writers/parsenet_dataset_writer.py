@@ -63,8 +63,8 @@ class ParsenetDatasetWriter(BaseDatasetWriter):
             min_number_points = min_number_points if min_number_points >= 0 else 1
 
             labels_pre = labels.copy()
-            features_data, labels, features_point_indices = filterFeaturesData(features_data, types=self.features_types, min_number_points=min_number_points,
-                                                           labels=labels, features_point_indices=features_point_indices)
+            features_data, labels, features_point_indices = filterFeaturesData(features_data, labels, types=self.features_types,
+                                                                               min_number_points=min_number_points, features_point_indices=features_point_indices)
             mask_not_minus_one = labels != -1
             assert np.all(labels_pre[mask_not_minus_one] == labels[mask_not_minus_one])
 

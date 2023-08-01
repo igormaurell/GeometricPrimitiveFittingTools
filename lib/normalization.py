@@ -123,7 +123,7 @@ def unNormalize(points, transforms, normals=None, features=[], invert=True):
     else:
         t = transforms
 
-    for key in t['sequence'][::-1]:
+    for key in t['sequence']:
         points, normals, features = transform_functions[key](points, t[key], normals=normals, features=features)
 
     return points, normals, features

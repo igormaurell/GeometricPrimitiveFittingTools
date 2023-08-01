@@ -137,50 +137,56 @@ def translateFeature(feature_data, features_by_type, features_mapping):
             feature_out[feature_key] = feature_data[feature_key]
     return feature_out
 
-def filterFeaturesData(features_data, types=None, min_number_points=None, labels=None, features_point_indices=None, add_none=True):
+def filterFeaturesData(features_data, labels, types=None, min_number_points=None, features_point_indices=None):
+    if features_point_indices is None:
+        features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
+    
     by_type_condition = lambda x: True
     if types is not None:
         by_type_condition = lambda x: x['type'].lower() in types
+
     by_npoints_condition = lambda x: True
-    if min_number_points is not None and features_point_indices is not None:
+    if min_number_points is not None:
         by_npoints_condition = lambda x: len(x) >= min_number_points
 
-    labels_map = np.zeros(len(features_data), dtype=np.int32) - 1
-    new_features_data = []
-    new_features_point_indices = []
+    labels_map = np.arange(len(features_data), dtype=np.int32)
+    new_features_data = [None]*len(features_data)
+    new_features_point_indices = [None]*len(features_data)
     for j in range(len(features_data)):
         feature = features_data[j]
-        if feature is not None:
-            fpi = features_point_indices[j]
+        fpi = features_point_indices[j]
+        if feature is not None and fpi is not None:
             if by_type_condition(feature) and by_npoints_condition(fpi):
-                labels_map[j] = len(new_features_data)
-                new_features_data.append(features_data[j])
-                new_features_point_indices.append(features_point_indices[j])
-            elif add_none:
-                new_features_data.append(None)
-                new_features_point_indices.append([])
-        elif add_none:
-            new_features_data.append(None)
-            new_features_point_indices.append([])
+                new_features_data[j] = features_data[j]
+                new_features_point_indices[j] = features_point_indices[j]
+            else:
+                labels_map[j] = -1
+        else:
+            labels_map[j] = -1
 
     if labels is not None:
         not_minus_one_mask = labels != -1
         labels[not_minus_one_mask] = labels_map[labels[not_minus_one_mask]]
-        #for i in range(len(labels)):
-        #    if labels[i] != -1:
-        #        labels[i] = labels_map[labels[i]]
 
     return new_features_data, labels, new_features_point_indices
 
 def computeFeaturesPointIndices(labels, size=None):
     if size is None:
         size = np.max(labels) + 1
-    features_point_indices = [[] for i in range(0, size)]
-    for i in range(0, len(labels)):
-        features_point_indices[labels[i]].append(i)
-    features_point_indices.pop(-1)
 
-    for i in range(0, len(features_point_indices)):
+    features_point_indices = [None]*size
+    
+    labels_mask = labels != -1
+    not_none_features = []
+    for i in range(0, len(labels)):
+        if labels_mask[i]:
+            if features_point_indices[labels[i]] is None:
+                not_none_features.append(labels[i])
+                features_point_indices[labels[i]] = [i]
+            else:
+                features_point_indices[labels[i]].append(i)
+
+    for i in not_none_features:
         features_point_indices[i] = np.array(features_point_indices[i], dtype=np.int64)
 
     return features_point_indices

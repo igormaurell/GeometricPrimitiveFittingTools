@@ -206,18 +206,17 @@ if __name__ == '__main__':
         print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
         full_len = np.prod(regions_grid.shape[:3])
 
-        start = time.time()
         # results = [process_model_val(data, regions_grid, filename, val_number_points,
         #                            abs_volume_threshold, relative_volume_threshold, ind) for ind in tqdm(range(full_len))]
 
         results = thread_map(partial(process_model_val, data, regions_grid, filename, val_number_points,
                               abs_volume_threshold, relative_volume_threshold), range(full_len), chunksize=1)
-        print(time.time() - start)
-
-        for j, result in tqdm(enumerate(results)):
+        
+        for j, result in enumerate(tqdm(results)):
             n_p = len(result['points'])
             if n_p <= val_min_number_points:
-                print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {val_min_number_points}")
+                pass
+                #print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {val_min_number_points}")
             else:
                 if write_obj:
                     points = np.zeros((result['points'].shape[0], 6))
@@ -252,7 +251,7 @@ if __name__ == '__main__':
             regions_grid = computeGridOfRegions(data['points'], train_region_size)
             full_len = np.prod(regions_grid.shape[:3])
 
-            results += process_map(partial(process_model_val, data, regions_grid, filename, train_number_points,
+            results += thread_map(partial(process_model_val, data, regions_grid, filename, train_number_points,
                                    abs_volume_threshold, relative_volume_threshold), range(full_len), chunksize=1)
             
         if train_random_times > 0:
@@ -267,7 +266,7 @@ if __name__ == '__main__':
                 del data['search_points']
 
             if num_models > 1:
-                results += process_map(partial(process_model_train, data, filename, train_number_points,
+                results += thread_map(partial(process_model_train, data, filename, train_number_points,
                                        train_min_number_points, abs_volume_threshold, relative_volume_threshold),
                                        range(num_models), chunksize=1)
             else:
@@ -277,7 +276,7 @@ if __name__ == '__main__':
                 res['filename'] = f'{filename}_0'
                 results += [res]
        
-        for j, result in tqdm(enumerate(results)):   
+        for j, result in enumerate(tqdm(results)):   
             n_p = len(result['points'])
             if n_p <= train_min_number_points:
                 print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {train_min_number_points}")
@@ -291,7 +290,7 @@ if __name__ == '__main__':
                     else:
                         point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
                 dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
-                                                  features_data=result['features'], filename=result['filename'])
+                                                      features_data=result['features'], filename=result['filename'])
 
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_train.obj', point_cloud_full)
