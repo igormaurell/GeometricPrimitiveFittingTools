@@ -23,19 +23,21 @@ def findLast(c, s, from_idx=0, to_idx=None):
 
 def getMergedFilesDict(files):
     result = {}
-    i = 0
-    while i < len(files):
-        file = files[i]
-        p_idx = file.rfind('.')
+    while len(files) > 0:
+        file = files[0]
 
         u3_idx = file.rfind('_')
         u2_idx = file.rfind('_', 0, u3_idx)
         u1_idx = file.rfind('_', 0, u2_idx)
 
-        prefix = file[0:u1_idx]
-        sufix =  file[p_idx:] if p_idx > -1 else ''
+        p_idx = file.rfind('.', u3_idx, len(file))
 
-        pattern = rf"{re.escape(prefix)}_\d+_\d+_\d+{re.escape(sufix)}"
+        prefix = file[0:u1_idx]
+
+        if p_idx > -1:
+            pattern = rf"{re.escape(prefix)}_(\d+)_(\d+)_(\d+){re.escape(file[p_idx:])}"
+        else:
+            pattern = rf"{re.escape(prefix)}_(\d+)_(\d+)_(\d+)"
 
         matches = []
         new_files = []
@@ -49,8 +51,7 @@ def getMergedFilesDict(files):
         result[prefix] = matches
 
         files = new_files
-        i += 1
-    
+
     return result
 
 def addDictionaries(dict1, dict2):
@@ -126,9 +127,9 @@ if __name__ == '__main__':
     output_parameters[format]['data_folder_name'] = output_data_format_folder_name
     output_transform_format_folder_name = join(output_dataset_format_folder_name, transform_folder_name)
     output_parameters[format]['transform_folder_name'] = output_transform_format_folder_name
-    if exists(output_dataset_format_folder_name):
-        rmtree(output_dataset_format_folder_name)
     makedirs(output_dataset_format_folder_name, exist_ok=True)
+    if exists(output_data_format_folder_name):
+        rmtree(output_data_format_folder_name)
     makedirs(output_data_format_folder_name, exist_ok=True)
     makedirs(output_transform_format_folder_name, exist_ok=True)
     
@@ -142,7 +143,8 @@ if __name__ == '__main__':
 
     files_dict = getMergedFilesDict(reader.filenames_by_set['val'])
 
-    for merged_filename, divided_filenames in files_dict.items():
+    print('Generating merged models...')
+    for merged_filename, divided_filenames in tqdm(files_dict.items()):
         input_data = {}
         for div_filename in divided_filenames:
             reader.filenames_by_set['val'] = divided_filenames
@@ -153,8 +155,11 @@ if __name__ == '__main__':
         del input_data['features']
         input_data['filename'] = merged_filename
 
+        print(merged_filename)
+
         writer.step(**input_data)
     writer.finish()
+    print('Done.')
 
     #print('Generating test dataset:')
     #for i in tqdm(range(len(reader))):

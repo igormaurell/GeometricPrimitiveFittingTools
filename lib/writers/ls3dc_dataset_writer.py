@@ -27,8 +27,6 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
 
     def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None,
              filename=None, features_point_indices=None, **kwargs):
-        import time
-
         if filename is None:
             filename = str(uuid.uuid4())
         

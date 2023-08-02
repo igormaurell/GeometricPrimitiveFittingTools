@@ -77,7 +77,7 @@ class HPNetDatasetWriter(BaseDatasetWriter):
 
                         if tp == 'Plane':
                             z_axis = np.asarray(feature['z_axis'])
-                            if not feature['foward']:
+                            if 'foward' in feature and not feature['foward']:
                                 z_axis = -z_axis
                             location = np.asarray(feature['location'])
                             primitive_params[indices, 4:7] = z_axis

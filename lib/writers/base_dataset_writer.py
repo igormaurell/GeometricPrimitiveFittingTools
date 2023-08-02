@@ -25,7 +25,7 @@ class BaseDatasetWriter:
                              self.filter_features_parameters.keys() else None
 
     def divisionTrainVal(self, permutation=None):
-        if len(self.filenames_by_set['train']) > 0 and len(self.filenames_by_set['val']) > 0:
+        if len(self.filenames_by_set['val']) > 0:
             return self.filenames_by_set['train'], self.filenames_by_set['val']
         elif len(self.filenames_by_set['train']) > 0:
             if self.train_percentage is None:

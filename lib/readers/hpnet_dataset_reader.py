@@ -19,9 +19,17 @@ class HPNetDatasetReader(BaseDatasetReader):
         super().__init__(parameters)
 
         with open(join(self.data_folder_name, 'train_data.txt'), 'r') as f:
-            self.filenames_by_set['train'] = f.read().split('\n')
+            read = f.read()
+            if read == '':
+                self.filenames_by_set['train'] = []
+            else:
+                self.filenames_by_set['train'] = read.split('\n')
         with open(join(self.data_folder_name, 'val_data.txt'), 'r') as f:
-            self.filenames_by_set['val'] = f.read().split('\n')
+            read = f.read()
+            if read == '':
+                self.filenames_by_set['val'] = []
+            else:
+                self.filenames_by_set['val'] = read.split('\n')
 
     def step(self, unormalize=True):
         assert self.current_set_name in self.filenames_by_set.keys()
@@ -54,7 +62,10 @@ class HPNetDatasetReader(BaseDatasetReader):
             types = prim[unique_indices]
             primitive_params = params[unique_indices]
 
-            max_size = max(unique_labels) + 1
+            if len(unique_labels) > 0:
+                max_size = max(unique_labels) + 1
+            else:
+                max_size = 0
             features_data = [None]*max_size  
             for i, label in enumerate(unique_labels):
                 feature = {}
