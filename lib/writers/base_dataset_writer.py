@@ -21,6 +21,8 @@ class BaseDatasetWriter:
         self.train_percentage = parameters['train_percentage'] if 'train_percentage' in parameters.keys() else 1.
         self.min_number_points = parameters['min_number_points'] if 'min_number_points' in parameters.keys() else 0
         self.filter_features_parameters = parameters['filter_features'] if 'filter_features' in parameters.keys() else {}
+        self.surface_types = self.filter_features_parameters['surface_types'] if 'surface_types' in \
+                             self.filter_features_parameters.keys() else None
 
     def divisionTrainVal(self, permutation=None):
         if len(self.filenames_by_set['train']) > 0 and len(self.filenames_by_set['val']) > 0:

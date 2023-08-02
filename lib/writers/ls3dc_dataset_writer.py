@@ -25,7 +25,8 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None,
+             filename=None, features_point_indices=None, **kwargs):
         import time
 
         if filename is None:
@@ -47,8 +48,9 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
             min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
             min_number_points = min_number_points if min_number_points >= 0 else 1
             
-            features_data, labels, features_point_indices = filterFeaturesData(features_data, labels, types=self.filter_features_parameters['surface_types'],
-                                                                               min_number_points=min_number_points, features_point_indices=features_point_indices)
+            features_data, labels, features_point_indices = filterFeaturesData(features_data, labels, types=self.surface_types,
+                                                                               min_number_points=min_number_points, 
+                                                                               features_point_indices=features_point_indices)
 
         self.filenames_by_set[self.current_set_name].append(filename)
 
@@ -59,7 +61,8 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
                 noise_limit = self.normalization_parameters['add_noise']
                 self.normalization_parameters['add_noise'] = 0.
                 
-            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
+            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters,
+                                                                         normals=normals.copy(), features=features_data)
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
 
