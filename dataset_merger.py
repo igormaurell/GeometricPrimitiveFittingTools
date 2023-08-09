@@ -55,34 +55,75 @@ def getMergedFilesDict(files):
     return result
 
 def addDictionaries(dict1, dict2):
-    concatenate_keys = ['noisy_points', 'points', 'normals', 'labels']
-    merge_key = 'features'
+    concatenate_keys = ['noisy_points', 'points', 'normals', 'labels', 'non_gt_features']
+    merge_keys = ['features']
     result_dict = dict1.copy()
 
     for key in dict2.keys():
-        if (key in concatenate_keys or key == merge_key) and key not in result_dict:
+        if (key in concatenate_keys or key in merge_keys) and key not in result_dict:
             result_dict[key] = dict2[key]
         elif key in concatenate_keys:
-            result_dict[key] = np.concatenate((result_dict[key], dict2[key]))
-        elif key == merge_key:
+            if isinstance(result_dict[key], np.ndarray):
+                result_dict[key] = np.concatenate((result_dict[key], dict2[key]))
+            else:
+                result_dict[key] += dict2[key]
+        elif key in merge_keys:
             if isinstance(dict2[key], dict):
                 # merge surfaces and curves
                 pass
             else:
                 i = 0
-                while i < len(result_dict[merge_key]) and i < len(dict2[merge_key]):
-                    if result_dict[merge_key][i] is not None and dict2[merge_key][i] is not None:
+                while i < len(result_dict[key]) and i < len(dict2[key]):
+                    if result_dict[key][i] is not None and dict2[key][i] is not None:
                         pass
                         # verify if is equal or merge parameters 
-                    elif dict2[merge_key][i] is not None:
-                        result_dict[merge_key][i] = dict2[merge_key][i]
+                    elif dict2[key][i] is not None:
+                        result_dict[key][i] = dict2[key][i]
                     
                     i+= 1
 
-                if i < len(dict2[merge_key]):
-                    result_dict[merge_key] += dict2[merge_key][i:]
+                if i < len(dict2[key]):
+                    result_dict[key] += dict2[key][i:]
 
     return result_dict
+
+def mergeQueryAndGTData(query, gt, global_min=-1):
+    assert 'matching' in query, 'hungarian matching not implemented yet'
+
+    gt_labels = gt['labels']
+    gt_labels_unique = np.unique(gt_labels)
+    gt_labels_unique = gt_labels_unique[gt_labels_unique != -1]
+
+    matching = np.array(query['matching'])
+    valid_matching_mask = matching != -1
+    matching[valid_matching_mask] = gt_labels_unique[matching[valid_matching_mask]]
+
+    local_min = global_min
+    for i in range(0, len(matching)):
+        if matching[i] == -1:
+            matching[i] = local_min - 1
+            local_min -= 1
+    
+    new_labels = query['labels']
+    valid_labels_mask = new_labels != -1
+
+    new_labels[valid_labels_mask] = matching[new_labels[valid_labels_mask]]
+    #print(np.unique(new_labels))
+
+    old_features = query['features']
+    new_features = [None]*(len(gt['features']))
+    non_gt_features = [None]*np.count_nonzero(matching < global_min)
+    for query_idx, gt_idx in enumerate(matching):
+        if gt_idx < global_min:
+            non_gt_features[gt_idx - global_min + 1] = old_features[query_idx]
+        else:
+            new_features[gt_idx] = old_features[query_idx]
+    
+    query['labels'] = new_labels
+    query['features'] = new_features
+    query['non_gt_features'] = non_gt_features
+
+    return query
         
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -94,7 +135,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_gt_dataset_folder_name', type=str, help='input dataset folder name.')
     parser.add_argument('--output_dataset_folder_name', type=str, default = 'dataset_merged', help='output dataset folder name.')
     parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')
-    parser.add_argument('--input_gt_folder_name', type=str, help='input gt data folder name.')
+    parser.add_argument('--input_gt_data_folder_name', type=str, help='input gt data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
 
     args = vars(parser.parse_args())
@@ -106,8 +147,14 @@ if __name__ == '__main__':
     input_gt_dataset_folder_name = args['input_gt_dataset_folder_name']
     output_dataset_folder_name = args['output_dataset_folder_name']
     data_folder_name = args['data_folder_name']
-    input_gt_folder_name = args['input_gt_folder_name']
+    input_gt_data_folder_name = args['input_gt_data_folder_name']
     transform_folder_name = args['transform_folder_name']
+
+    if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is None:
+        input_gt_data_folder_name = data_folder_name
+    
+    if input_gt_data_folder_name is not None and input_gt_dataset_folder_name is None:
+        input_gt_dataset_folder_name = input_dataset_folder_name
 
     input_parameters = {}
     input_gt_parameters = {}
@@ -124,12 +171,12 @@ if __name__ == '__main__':
     input_transform_format_folder_name = join(input_dataset_format_folder_name, transform_folder_name)
     input_parameters[format]['transform_folder_name'] = input_transform_format_folder_name
 
-    if input_gt_dataset_folder_name is not None and input_gt_folder_name is not None:
+    if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is not None:
         input_gt_parameters[format] = {}
 
         input_gt_dataset_format_folder_name = join(folder_name, input_gt_dataset_folder_name, format)
         input_gt_parameters[format]['dataset_folder_name'] = input_gt_dataset_format_folder_name
-        input_gt_data_format_folder_name = join(input_gt_dataset_format_folder_name, data_folder_name)
+        input_gt_data_format_folder_name = join(input_gt_dataset_format_folder_name, input_gt_data_folder_name)
         input_gt_parameters[format]['data_folder_name'] = input_gt_data_format_folder_name
         input_gt_transform_format_folder_name = join(input_gt_dataset_format_folder_name, transform_folder_name)
         input_gt_parameters[format]['transform_folder_name'] = input_gt_transform_format_folder_name
@@ -156,23 +203,42 @@ if __name__ == '__main__':
         gt_reader_factory = DatasetReaderFactory(input_gt_parameters)
         gt_reader = gt_reader_factory.getReaderByFormat(format)
         gt_reader.setCurrentSetName('val')
+        query_files = reader.filenames_by_set['val']
+        gt_files = gt_reader.filenames_by_set['val']
+        assert sorted(query_files) == sorted(gt_files), 'gt has different files from query'
     else:
         gt_reader = None
 
     dataset_writer_factory = DatasetWriterFactory(output_parameters)
     writer = dataset_writer_factory.getWriterByFormat(format)
-    writer.setCurrentSetName('val')
+    writer.setCurrentSetName('val')        
 
     files_dict = getMergedFilesDict(reader.filenames_by_set['val'])
 
     print('Generating merged models...')
     for merged_filename, divided_filenames in tqdm(files_dict.items()):
         input_data = {}
+        reader.filenames_by_set['val'] = divided_filenames
+        if gt_reader is not None:
+            gt_reader.filenames_by_set['val'] = divided_filenames
+        global_min = -1
         for div_filename in divided_filenames:
-            reader.filenames_by_set['val'] = divided_filenames
             data = reader.step()
+            if gt_reader is not None:
+                gt_data = gt_reader.step()
+                data = mergeQueryAndGTData(data, gt_data, global_min=global_min)
+                global_min = min(global_min, np.min(data['labels']))
+
             input_data = addDictionaries(input_data, data)
-        
+
+        num_features = len(input_data['features'])
+        input_data['features'] += input_data['non_gt_features']
+        non_gt_labels_mask = input_data['labels'] < -1
+        input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_features - 2
+
+        assert np.max(input_data['labels']) + 1 == len(input_data['features']), f"{np.max(input_data['labels']) + 1} != {len(input_data['features'])}"
+        assert np.count_nonzero(input_data['labels'] < -1) == 0, f"{np.count_nonzero(input_data['labels'] < -1)} > 0"
+
         input_data['features_data'] = input_data['features']
         del input_data['features']
         input_data['filename'] = merged_filename
