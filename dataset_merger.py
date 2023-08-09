@@ -91,8 +91,10 @@ if __name__ == '__main__':
     parser.add_argument('format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
 
     parser.add_argument('--input_dataset_folder_name', type=str, default = 'dataset_divided', help='input dataset folder name.')
+    parser.add_argument('--input_gt_dataset_folder_name', type=str, help='input dataset folder name.')
     parser.add_argument('--output_dataset_folder_name', type=str, default = 'dataset_merged', help='output dataset folder name.')
     parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')
+    parser.add_argument('--input_gt_folder_name', type=str, help='input gt data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
 
     args = vars(parser.parse_args())
@@ -101,11 +103,14 @@ if __name__ == '__main__':
     format = args['format']
 
     input_dataset_folder_name = args['input_dataset_folder_name']
+    input_gt_dataset_folder_name = args['input_gt_dataset_folder_name']
     output_dataset_folder_name = args['output_dataset_folder_name']
     data_folder_name = args['data_folder_name']
+    input_gt_folder_name = args['input_gt_folder_name']
     transform_folder_name = args['transform_folder_name']
 
     input_parameters = {}
+    input_gt_parameters = {}
     output_parameters = {}
 
     assert format in DatasetReaderFactory.READERS_DICT.keys()
@@ -118,6 +123,16 @@ if __name__ == '__main__':
     input_parameters[format]['data_folder_name'] = input_data_format_folder_name
     input_transform_format_folder_name = join(input_dataset_format_folder_name, transform_folder_name)
     input_parameters[format]['transform_folder_name'] = input_transform_format_folder_name
+
+    if input_gt_dataset_folder_name is not None and input_gt_folder_name is not None:
+        input_gt_parameters[format] = {}
+
+        input_gt_dataset_format_folder_name = join(folder_name, input_gt_dataset_folder_name, format)
+        input_gt_parameters[format]['dataset_folder_name'] = input_gt_dataset_format_folder_name
+        input_gt_data_format_folder_name = join(input_gt_dataset_format_folder_name, data_folder_name)
+        input_gt_parameters[format]['data_folder_name'] = input_gt_data_format_folder_name
+        input_gt_transform_format_folder_name = join(input_gt_dataset_format_folder_name, transform_folder_name)
+        input_gt_parameters[format]['transform_folder_name'] = input_gt_transform_format_folder_name
 
     output_parameters[format] = {}
 
@@ -137,6 +152,13 @@ if __name__ == '__main__':
     reader = dataset_reader_factory.getReaderByFormat(format)
     reader.setCurrentSetName('val')
 
+    if len(input_gt_parameters) > 0:
+        gt_reader_factory = DatasetReaderFactory(input_gt_parameters)
+        gt_reader = gt_reader_factory.getReaderByFormat(format)
+        gt_reader.setCurrentSetName('val')
+    else:
+        gt_reader = None
+
     dataset_writer_factory = DatasetWriterFactory(output_parameters)
     writer = dataset_writer_factory.getWriterByFormat(format)
     writer.setCurrentSetName('val')
@@ -154,8 +176,6 @@ if __name__ == '__main__':
         input_data['features_data'] = input_data['features']
         del input_data['features']
         input_data['filename'] = merged_filename
-
-        print(merged_filename)
 
         writer.step(**input_data)
     writer.finish()

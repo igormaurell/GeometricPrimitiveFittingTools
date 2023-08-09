@@ -152,11 +152,19 @@ def process(data):
     colors_instances = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
     colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
     fpi = computeFeaturesPointIndices(labels, size=len(features))
+    impossible_primitives = {}
     for i, feature in enumerate(features):
         if feature is not None:
             points_curr = points[fpi[i]]
             normals_curr = normals[fpi[i]]
-            primitive = SurfaceFactory.fromDict(feature)
+            try:
+                primitive = SurfaceFactory.fromDict(feature)
+            except:
+                if feature['type'] not in impossible_primitives:
+                    impossible_primitives[feature['type']] = 1
+                else:
+                    impossible_primitives[feature['type']] += 1
+                continue
             tp = primitive.getType()             
             if tp not in dataset_errors[filename]:
                 dataset_errors[filename][tp] = {'distances': [], 'mean_distances': [], 'angles': [], 'mean_angles': [], 'void_primitives': []}
@@ -178,6 +186,8 @@ def process(data):
                     #     colors_types[error_ang, :] = np.array([0, 0, 0])
                     #     colors_instances[error_both, :] = np.array([255, 0, 255])
                     #     colors_types[error_both, :] = np.array([255, 0, 255])
+    if len(impossible_primitives) > 0:
+        print(f'{filename} impossible primitives: {impossible_primitives}')
     logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_angle_deviation)
     logs_dict['total']['number_of_points'] += np.count_nonzero(labels==-1)
     error_log = generateLog(logs_dict, max_distance_deviation, max_angle_deviation)

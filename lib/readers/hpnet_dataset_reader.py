@@ -20,16 +20,14 @@ class HPNetDatasetReader(BaseDatasetReader):
 
         with open(join(self.data_folder_name, 'train_data.txt'), 'r') as f:
             read = f.read()
-            if read == '':
-                self.filenames_by_set['train'] = []
-            else:
-                self.filenames_by_set['train'] = read.split('\n')
+            self.filenames_by_set['train'] = read.split('\n')
+            if self.filenames_by_set['train'][-1] == '':
+                self.filenames_by_set['train'].pop()
         with open(join(self.data_folder_name, 'val_data.txt'), 'r') as f:
             read = f.read()
-            if read == '':
-                self.filenames_by_set['val'] = []
-            else:
-                self.filenames_by_set['val'] = read.split('\n')
+            self.filenames_by_set['val'] = read.split('\n')
+            if self.filenames_by_set['val'][-1] == '':
+                self.filenames_by_set['val'].pop()
 
     def step(self, unormalize=True):
         assert self.current_set_name in self.filenames_by_set.keys()
@@ -50,6 +48,8 @@ class HPNetDatasetReader(BaseDatasetReader):
             prim = h5_file['prim'][()] if 'prim' in h5_file.keys() else None
             params = h5_file['T_param'][()] if 'T_param' in h5_file.keys() else None
             global_labels = h5_file['global_labels'][()] if 'global_labels' in h5_file.keys() else None
+            gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
+            matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
 
             if global_labels is not None:
                 unique_labels, unique_indices = np.unique(global_labels, return_index=True)
@@ -100,7 +100,7 @@ class HPNetDatasetReader(BaseDatasetReader):
                 elif tp == 'Sphere':
                     feature['location'] = primitive_params[i, :3].tolist()
                     feature['radius'] = primitive_params[i, 3]
-
+                
                 features_data[label] = feature
 
             if unormalize:
@@ -112,8 +112,12 @@ class HPNetDatasetReader(BaseDatasetReader):
             'labels': global_labels if global_labels is not None else labels,
             'features': features_data,
             'filename': filename,
-            'transforms': transforms
+            'transforms': transforms,
         }
+        if gt_indices is not None:
+            result['gt_indices'] = gt_indices
+        if matching is not None:
+            result['matching'] = matching
 
         self.steps_by_set[self.current_set_name] += 1
         

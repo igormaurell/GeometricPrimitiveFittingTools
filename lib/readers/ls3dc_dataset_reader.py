@@ -28,9 +28,11 @@ class LS3DCDatasetReader(BaseDatasetReader):
         super().__init__(parameters)
 
         with open(join(self.data_folder_name, 'train_models.csv'), 'r', newline='') as f:
-            self.filenames_by_set['train'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
+            data = list(csv.reader(f, delimiter=',', quotechar='|'))
+            self.filenames_by_set['train'] = data[0] if len(data) > 0 else data
         with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
-            self.filenames_by_set['val'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
+            data = list(csv.reader(f, delimiter=',', quotechar='|'))
+            self.filenames_by_set['val'] = data[0] if len(data) > 0 else data
 
     def step(self, unormalize=True):
         assert self.current_set_name in self.filenames_by_set.keys()
@@ -47,8 +49,10 @@ class LS3DCDatasetReader(BaseDatasetReader):
             transforms = pickle.load(pkl_file)
 
         with h5py.File(data_file_path, 'r') as h5_file:
-            noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
             gt_points = h5_file['gt_points'][()] if 'gt_points' in h5_file.keys() else None
+            noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
+            if noisy_points is None and gt_points is not None:
+                noisy_points = gt_points.copy()
             gt_normals = h5_file['gt_normals'][()] if 'gt_normals' in h5_file.keys() else None
             labels = h5_file['gt_labels'][()] if 'gt_labels' in h5_file.keys() else None
 
