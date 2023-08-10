@@ -55,7 +55,7 @@ def getMergedFilesDict(files):
     return result
 
 def addDictionaries(dict1, dict2):
-    concatenate_keys = ['noisy_points', 'points', 'normals', 'labels', 'non_gt_features']
+    concatenate_keys = ['noisy_points', 'points', 'normals', 'labels', 'gt_indices', 'non_gt_features']
     merge_keys = ['features']
     result_dict = dict1.copy()
 
@@ -87,7 +87,12 @@ def addDictionaries(dict1, dict2):
 
     return result_dict
 
-def mergeQueryAndGTData(query, gt, global_min=-1):
+def mergeQueryAndGTData(query, gt, global_min=-1, num_points=0):
+    if 'gt_indices' in query:
+        gt_indices = np.array(query['gt_indices']) + num_points
+    else:
+        gt_indices = np.arange(len(query['points'])) + num_points
+    
     assert 'matching' in query, 'hungarian matching not implemented yet'
 
     gt_labels = gt['labels']
@@ -122,6 +127,7 @@ def mergeQueryAndGTData(query, gt, global_min=-1):
     query['labels'] = new_labels
     query['features'] = new_features
     query['non_gt_features'] = non_gt_features
+    query['gt_indices'] = gt_indices
 
     return query
         
@@ -222,21 +228,24 @@ if __name__ == '__main__':
         if gt_reader is not None:
             gt_reader.filenames_by_set['val'] = divided_filenames
         global_min = -1
+        num_points = 0
         for div_filename in divided_filenames:
             data = reader.step()
             if gt_reader is not None:
                 gt_data = gt_reader.step()
-                data = mergeQueryAndGTData(data, gt_data, global_min=global_min)
+                data = mergeQueryAndGTData(data, gt_data, global_min=global_min, num_points=num_points)
                 global_min = min(global_min, np.min(data['labels']))
+                num_points += len(gt_data['points'])
 
             input_data = addDictionaries(input_data, data)
 
+        #adding non gt (primitives that are not in the ground truth but there are in prediction) ate the end of features list (and adjusting labels)
         num_features = len(input_data['features'])
         input_data['features'] += input_data['non_gt_features']
         non_gt_labels_mask = input_data['labels'] < -1
         input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_features - 2
 
-        assert np.max(input_data['labels']) + 1 == len(input_data['features']), f"{np.max(input_data['labels']) + 1} != {len(input_data['features'])}"
+        assert np.max(input_data['labels']) + 1 == len(input_data['features']), f"{np.max(input_data['labels']) + 1 } != {len(input_data['features'])}"
         assert np.count_nonzero(input_data['labels'] < -1) == 0, f"{np.count_nonzero(input_data['labels'] < -1)} > 0"
 
         input_data['features_data'] = input_data['features']
@@ -244,6 +253,7 @@ if __name__ == '__main__':
         input_data['filename'] = merged_filename
 
         writer.step(**input_data)
+
     writer.finish()
     print('Done.')
 
