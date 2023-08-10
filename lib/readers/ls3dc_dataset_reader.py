@@ -55,6 +55,8 @@ class LS3DCDatasetReader(BaseDatasetReader):
                 noisy_points = gt_points.copy()
             gt_normals = h5_file['gt_normals'][()] if 'gt_normals' in h5_file.keys() else None
             labels = h5_file['gt_labels'][()] if 'gt_labels' in h5_file.keys() else None
+            gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
+            matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
 
             found_soup_ids = []
             soup_id_to_key = {}
@@ -86,6 +88,11 @@ class LS3DCDatasetReader(BaseDatasetReader):
             'filename': filename,
             'transforms': transforms
         }
+
+        if gt_indices is not None:
+            result['gt_indices'] = gt_indices
+        if matching is not None:
+            result['matching'] = matching
 
         self.steps_by_set[self.current_set_name] += 1
         

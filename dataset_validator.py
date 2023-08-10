@@ -6,7 +6,7 @@ from math import pi
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from lib.dataset_reader_factory import DatasetReaderFactory
+from lib.readers import DatasetReaderFactory
 from lib.utils import sortedIndicesIntersection, computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.normalization import unNormalize
 

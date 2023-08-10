@@ -12,7 +12,7 @@ from os import listdir, makedirs
 from os.path import join, isfile, exists
 
 from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif
-from lib.dataset_writer_factory import DatasetWriterFactory
+from lib.writers import DatasetWriterFactory
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 

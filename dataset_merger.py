@@ -9,8 +9,8 @@ from os import makedirs
 from os.path import join, exists
 from shutil import rmtree
 
-from lib.dataset_writer_factory import DatasetWriterFactory
-from lib.dataset_reader_factory import DatasetReaderFactory
+from lib.writers import DatasetWriterFactory
+from lib.readers import DatasetReaderFactory
 
 def findLast(c, s, from_idx=0, to_idx=None):
     to_idx = len(s) if to_idx is None else to_idx
@@ -244,12 +244,14 @@ if __name__ == '__main__':
         input_data['features'] += input_data['non_gt_features']
         non_gt_labels_mask = input_data['labels'] < -1
         input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_features - 2
+        input_data['matching'] = np.concatenate((np.arange(num_features), np.zeros(len(input_data['non_gt_features']) - 1)))
 
         assert np.max(input_data['labels']) + 1 == len(input_data['features']), f"{np.max(input_data['labels']) + 1 } != {len(input_data['features'])}"
         assert np.count_nonzero(input_data['labels'] < -1) == 0, f"{np.count_nonzero(input_data['labels'] < -1)} > 0"
 
         input_data['features_data'] = input_data['features']
         del input_data['features']
+        del input_data['non_gt_features']
         input_data['filename'] = merged_filename
 
         writer.step(**input_data)

@@ -12,8 +12,8 @@ import numpy as np
 
 import time
 
-from lib.dataset_writer_factory import DatasetWriterFactory
-from lib.dataset_reader_factory import DatasetReaderFactory
+from lib.writers import DatasetWriterFactory
+from lib.readers import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, computeSearchPoints
