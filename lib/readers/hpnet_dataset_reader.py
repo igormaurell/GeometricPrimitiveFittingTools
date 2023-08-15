@@ -42,7 +42,6 @@ class HPNetDatasetReader(BaseDatasetReader):
             transforms = pickle.load(pkl_file)
 
         with h5py.File(data_file_path, 'r') as h5_file:
-            print(h5_file.keys())
             points = h5_file['points'][()] if 'points' in h5_file.keys() else None
             normals = h5_file['normals'][()] if 'normals' in h5_file.keys() else None
             labels = h5_file['labels'][()] if 'labels' in h5_file.keys() else None

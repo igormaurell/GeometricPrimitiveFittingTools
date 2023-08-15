@@ -12,6 +12,8 @@ from shutil import rmtree
 from lib.writers import DatasetWriterFactory
 from lib.readers import DatasetReaderFactory
 
+from lib.matching import mergeQueryAndGTData
+
 def findLast(c, s, from_idx=0, to_idx=None):
     to_idx = len(s) if to_idx is None else to_idx
 
@@ -86,50 +88,6 @@ def addDictionaries(dict1, dict2):
                     result_dict[key] += dict2[key][i:]
 
     return result_dict
-
-def mergeQueryAndGTData(query, gt, global_min=-1, num_points=0):
-    if 'gt_indices' in query:
-        gt_indices = np.array(query['gt_indices']) + num_points
-    else:
-        gt_indices = np.arange(len(query['points'])) + num_points
-    
-    assert 'matching' in query, 'hungarian matching not implemented yet'
-
-    gt_labels = gt['labels']
-    gt_labels_unique = np.unique(gt_labels)
-    gt_labels_unique = gt_labels_unique[gt_labels_unique != -1]
-
-    matching = np.array(query['matching'])
-    valid_matching_mask = matching != -1
-    matching[valid_matching_mask] = gt_labels_unique[matching[valid_matching_mask]]
-
-    local_min = global_min
-    for i in range(0, len(matching)):
-        if matching[i] == -1:
-            matching[i] = local_min - 1
-            local_min -= 1
-    
-    new_labels = query['labels']
-    valid_labels_mask = new_labels != -1
-
-    new_labels[valid_labels_mask] = matching[new_labels[valid_labels_mask]]
-    #print(np.unique(new_labels))
-
-    old_features = query['features']
-    new_features = [None]*(len(gt['features']))
-    non_gt_features = [None]*np.count_nonzero(matching < global_min)
-    for query_idx, gt_idx in enumerate(matching):
-        if gt_idx < global_min:
-            non_gt_features[gt_idx - global_min + 1] = old_features[query_idx]
-        else:
-            new_features[gt_idx] = old_features[query_idx]
-    
-    query['labels'] = new_labels
-    query['features'] = new_features
-    query['non_gt_features'] = non_gt_features
-    query['gt_indices'] = gt_indices
-
-    return query
         
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
@@ -144,6 +102,8 @@ if __name__ == '__main__':
     parser.add_argument('--input_gt_data_folder_name', type=str, help='input gt data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
 
+    parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
+
     args = vars(parser.parse_args())
 
     folder_name = args['folder']
@@ -155,6 +115,8 @@ if __name__ == '__main__':
     data_folder_name = args['data_folder_name']
     input_gt_data_folder_name = args['input_gt_data_folder_name']
     transform_folder_name = args['transform_folder_name']
+
+    use_gt_transform = args['use_gt_transform']
 
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is None:
         input_gt_data_folder_name = data_folder_name
@@ -177,6 +139,7 @@ if __name__ == '__main__':
     input_transform_format_folder_name = join(input_dataset_format_folder_name, transform_folder_name)
     input_parameters[format]['transform_folder_name'] = input_transform_format_folder_name
 
+    input_gt_transform_format_folder_name = None
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is not None:
         input_gt_parameters[format] = {}
 
@@ -186,6 +149,9 @@ if __name__ == '__main__':
         input_gt_parameters[format]['data_folder_name'] = input_gt_data_format_folder_name
         input_gt_transform_format_folder_name = join(input_gt_dataset_format_folder_name, transform_folder_name)
         input_gt_parameters[format]['transform_folder_name'] = input_gt_transform_format_folder_name
+
+    if use_gt_transform and input_gt_transform_format_folder_name is not None:
+        input_parameters[format]['transform_folder_name'] = input_gt_transform_format_folder_name
 
     output_parameters[format] = {}
 
