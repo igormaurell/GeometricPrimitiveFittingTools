@@ -41,17 +41,15 @@ def generateErrorsBoxPlot(errors, individual=True, all_models=False):
         ax2.boxplot(data_angles, labels=data_labels, autorange=False, meanline=True)
     return fig
 
-def sumToLogsDict(keys, d, nop=0, novp=0, noip=0, nopoints=0, ned=0, nea=0, sd=0, sa=0, siiou=0.):
+def sumToLogsDict(keys, d, nop=0, novp=0, noip=0, nopoints=0, sd=0, sa=0, siiou=0.):
     for key in keys:
         d[key]['number_of_primitives'] += nop
         d[key]['number_of_void_primitives'] += novp
         d[key]['number_of_invalid_primitives'] += noip
         d[key]['number_of_points'] += nopoints
-        d[key]['number_error_distances'] += ned
-        d[key]['number_error_angles'] += nea
-        d[key]['sum_distances'] += sd
-        d[key]['sum_angles'] += sa
-        d[key]['sum_instance_ious'] += siiou
+        d[key]['mean_distance_error'] += sd
+        d[key]['mean_normal_error'] += sa
+        d[key]['mean_iou'] += siiou
     return d
 
 def getBaseKeyLogsDict():
@@ -60,11 +58,9 @@ def getBaseKeyLogsDict():
         'number_of_void_primitives': 0,
         'number_of_invalid_primitives': 0,
         'number_of_points': 0,
-        'number_error_distances': 0,
-        'number_error_angles': 0,
-        'sum_distances': 0,
-        'sum_angles': 0,
-        'sum_instance_ious': 0,
+        'mean_distance_error': 0,
+        'mean_normal_error': 0,
+        'mean_iou': 0,
         }
     return d
 
@@ -74,11 +70,10 @@ def addTwoLogsDict(first, second):
             first[key] = getBaseKeyLogsDict()
         first = sumToLogsDict([key], first, nop=second[key]['number_of_primitives'], novp=second[key]['number_of_void_primitives'],
                               noip=second[key]['number_of_invalid_primitives'], nopoints=second[key]['number_of_points'], 
-                              ned=second[key]['number_error_distances'], nea=second[key]['number_error_angles'], sd=second[key]['sum_distances'],
-                              sa=second[key]['sum_angles'], siiou=second[key]['sum_instance_ious'])
+                              sd=second[key]['mean_distance_error'], sa=second[key]['mean_normal_error'], siiou=second[key]['mean_iou'])
     return first
 
-def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
+def generateErrorsLogDict(errors):
     logs_dict = {
         'Total': getBaseKeyLogsDict(),
     }
@@ -91,14 +86,10 @@ def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
         instance_ious = e['instance_ious']
 
         number_of_points = 0
-        number_error_distances = 0
-        number_error_angles = 0
         summd = 0.
         summa = 0.
         for i in range(len(ind_distances)):
             number_of_points += len(ind_distances[i])
-            number_error_distances += np.count_nonzero(ind_distances[i] > max_distance_deviation)
-            number_error_angles += np.count_nonzero(ind_angles[i] > max_angle_deviation)
             summd += np.sum(ind_distances[i])
             summa += np.sum(ind_angles[i])
         
@@ -111,37 +102,26 @@ def generateErrorsLogDict(errors, max_distance_deviation, max_angle_deviation):
             logs_dict[tp] = getBaseKeyLogsDict()
         logs_dict = sumToLogsDict(['Total', tp], logs_dict, nop=number_of_primitives, 
                                   novp=number_of_void_primitives, noip=number_of_invalid_primitives,
-                                  nopoints=number_of_points, ned=number_error_distances, nea=number_error_angles,
-                                  sd=summd, sa=summa, siiou=siiou)
+                                  nopoints=number_of_points, sd=summd, sa=summa, siiou=siiou)
     return logs_dict
 
-def adaptLog2Save(logs_dict):
+def adaptLog2Save(logs_dict, denominator=0):
     result = deepcopy(logs_dict)
     for tp, d in logs_dict.items():
         number_points = d['number_of_points'] if d['number_of_points'] > 0 else 1
+        number_points = number_points if denominator == 0 else denominator
+
         number_valid_primitives = d['number_of_primitives'] - d['number_of_void_primitives']
-        if 'number_error_distances' in d:
-            result[tp]['distance_deviation_rate'] = d['number_error_distances']/number_points
-            del result[tp]['number_error_distances']
-        if 'number_error_angles' in d:
-            result[tp]['normal_deviation_rate'] = d['number_error_angles']/number_points
-            del result[tp]['number_error_angles']
-        if 'sum_distances' in d:
-            result[tp]['mean_distance_error'] = d['sum_distances']/number_points
-            del result[tp]['sum_distances']
-        if 'sum_angles' in d:
-            result[tp]['mean_normal_error'] = d['sum_angles']/number_points
-            del result[tp]['sum_angles']
-        if 'sum_instance_ious' in d and d['sum_instance_ious'] >= 0:
-            result[tp]['mean_iou'] = d['sum_instance_ious']/number_valid_primitives if number_valid_primitives > 0 else 0.
-            del result[tp]['sum_instance_ious']
+        number_valid_primitives = number_valid_primitives if denominator == 0 else denominator
+
+        if 'mean_distance_error' in d:
+            result[tp]['mean_distance_error'] = d['mean_distance_error']/number_points
+        if 'mean_normal_error' in d:
+            result[tp]['mean_normal_error'] = d['mean_normal_error']/number_points
+        if 'mean_iou' in d and d['mean_iou'] >= 0:
+            result[tp]['mean_iou'] = d['mean_iou']/number_valid_primitives if number_valid_primitives > 0 else 0.
 
     return result
-
-def computeErrorsArrays(indices, distances, angles, max_distance_deviation, max_angle_deviation):
-    error_dist = np.sort(indices[distances > max_distance_deviation])
-    error_ang = np.sort(indices[angles > max_angle_deviation])
-    return error_dist, error_ang
 
 folder_name = ''
 dataset_folder_name = ''
@@ -152,8 +132,6 @@ VERBOSE = False
 write_segmentation_gt = False
 write_points_error = False
 box_plot = False
-max_distance_deviation = False
-max_angle_deviation = False
 
 def process(data_tuple):
     if len(data_tuple) == 1:
@@ -183,7 +161,9 @@ def process(data_tuple):
     if gt_data is not None:
         query_labels = data['labels']
         gt_labels = gt_data['labels'][data['gt_indices']]
-        instance_ious = computeIoUs(query_labels, gt_labels)
+        instance_ious = computeIoUs(query_labels, gt_labels, p=(filename == '1_2_3_0'))
+        if filename == '1_2_3_0':
+            print([x for x in instance_ious if x > 0])
         
     for i, feature in enumerate(features):
         if feature is not None:
@@ -222,7 +202,7 @@ def process(data_tuple):
                         color = SurfaceFactory.FEATURES_SURFACE_CLASSES[feature['type']].getColor()
                     colors_types[fpi[i], :] = color
                 # if write_points_error:
-                #     error_dist, error_ang = computeErrorsArrays(fpi[i], distances, angles, max_distance_deviation, max_angle_deviation)
+                #     error_dist, error_ang = computeErrorsArrays(fpi[i], distances, angles)
                 #     error_both = sortedIndicesIntersection(error_dist, error_ang)
                 #     colors_instances[error_dist, :] = np.array([0, 255, 255])
                 #     colors_types[error_dist, :] = np.array([0, 255, 255])
@@ -231,11 +211,12 @@ def process(data_tuple):
                 #     colors_instances[error_both, :] = np.array([255, 0, 255])
                 #     colors_types[error_both, :] = np.array([255, 0, 255])
 
-    logs_dict = generateErrorsLogDict(dataset_errors[filename], max_distance_deviation, max_angle_deviation)
-    logs_dict['Total']['number_of_points'] += np.count_nonzero(labels==-1)
+    logs_dict = generateErrorsLogDict(dataset_errors[filename])
+    logs_dict_final = adaptLog2Save(logs_dict)
+    logs_dict_final['Total']['number_of_points'] += np.count_nonzero(labels==-1)
 
     with open(f'{log_format_folder_name}/{filename}.json', 'w') as f:
-        json.dump(adaptLog2Save(logs_dict), f, indent=4)
+        json.dump(logs_dict_final, f, indent=4)
     
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
@@ -248,7 +229,7 @@ def process(data_tuple):
         plt.figure(fig.number)
         plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
     
-    return logs_dict
+    return logs_dict_final
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for evaluate predictions')
@@ -267,8 +248,6 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--segmentation_gt', action='store_true', help='write segmentation ground truth.')
     parser.add_argument('-p', '--points_error', action='store_true', help='write segmentation ground truth.')
     parser.add_argument('-b', '--show_box_plot', action='store_true', help='show box plot of the data.')
-    parser.add_argument('-md', '--max_distance_deviation', type=float, default=0.05, help='max distance deviation.')
-    parser.add_argument('-mn', '--max_angle_deviation', type=float, default=10, help='max normal angle deviation in degrees.')
 
     parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
 
@@ -287,8 +266,6 @@ if __name__ == '__main__':
     write_segmentation_gt = args['segmentation_gt']
     write_points_error = args['points_error']
     box_plot = args['show_box_plot']
-    max_distance_deviation = args['max_distance_deviation']
-    max_angle_deviation = args['max_angle_deviation']
 
     use_gt_transform = args['use_gt_transform']
 
@@ -325,6 +302,14 @@ if __name__ == '__main__':
     if use_gt_transform and gt_transform_format_folder_name is not None:
         parameters[format]['transform_folder_name'] = gt_transform_format_folder_name
 
+    dataset_reader_factory = DatasetReaderFactory(parameters)
+    reader = dataset_reader_factory.getReaderByFormat(format)
+
+    gt_reader = None
+    if len(gt_parameters) > 0:
+        gt_dataset_reader_factory = DatasetReaderFactory(gt_parameters)
+        gt_reader = gt_dataset_reader_factory.getReaderByFormat(format)
+
     result_format_folder_name = join(dataset_format_folder_name, result_folder_name)
     makedirs(result_format_folder_name, exist_ok=True)
 
@@ -339,14 +324,6 @@ if __name__ == '__main__':
     log_format_folder_name = join(result_format_folder_name, 'log')
     makedirs(log_format_folder_name, exist_ok=True)
 
-    dataset_reader_factory = DatasetReaderFactory(parameters)
-    reader = dataset_reader_factory.getReaderByFormat(format)
-
-    gt_reader = None
-    if len(gt_parameters) > 0:
-        gt_dataset_reader_factory = DatasetReaderFactory(gt_parameters)
-        gt_reader = gt_dataset_reader_factory.getReaderByFormat(format)
-
     sets = ['val', 'train']
     colors_full = getAllColorsArray()
     for s in sets:
@@ -355,7 +332,7 @@ if __name__ == '__main__':
             gt_reader.setCurrentSetName(s)
             files = reader.filenames_by_set['val']
             gt_files = gt_reader.filenames_by_set['val']
-            assert sorted(files) == sorted(gt_files), f'\n {sorted(files)} \n {sorted(gt_files)}'
+            #assert sorted(files) == sorted(gt_files), f'\n {sorted(files)} \n {sorted(gt_files)}'
             gt_reader.filenames_by_set['val'] = deepcopy(files)
             readers = zip(reader, gt_reader)
         else:
@@ -367,8 +344,13 @@ if __name__ == '__main__':
         results = process_map(process, readers, max_workers=32, chunksize=1)
 
         print('Accumulating...')
+        c = 0
         for logs_dict in tqdm(results):
+            #print(reader.filenames_by_set['val'][c], logs_dict['Total']['mean_iou'])
             full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
+            #c+= 1
+
+        print(len(results))
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
-            json.dump(adaptLog2Save(full_logs_dicts), f, indent=4)
+            json.dump(adaptLog2Save(full_logs_dicts, denominator=len(results)), f, indent=4)

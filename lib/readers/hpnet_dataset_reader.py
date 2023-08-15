@@ -106,10 +106,15 @@ class HPNetDatasetReader(BaseDatasetReader):
             if unormalize:
                 points, normals, features_data = unNormalize(points, transforms, normals=normals, features=features_data)
 
+        if filename == '1_2_3_0':
+            if global_labels is not None:
+                print(np.unique(labels), len(np.unique(labels)))
+                print(np.unique(global_labels), len(np.unique(global_labels)))
+
         result = {
             'points': points,
             'normals': normals,
-            'labels': global_labels if global_labels is not None else labels,
+            'labels': labels, #global_labels if global_labels is not None else labels,
             'features': features_data,
             'filename': filename,
             'transforms': transforms,

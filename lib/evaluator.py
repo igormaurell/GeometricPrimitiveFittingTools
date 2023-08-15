@@ -102,14 +102,21 @@ import numpy as np
 #     type_iou /= cnt
 #     return type_iou
 
-def computeIoUs(query_labels, gt_labels):
+def computeIoUs(query_labels, gt_labels, p=False):
     ious = [None] * (np.max(query_labels) + 1)
+
+    intersections = []
 
     for i in range(len(ious)):
         query_mask = (query_labels == i)
         gt_mask = (gt_labels == i)
         intersection = np.count_nonzero(np.logical_and(query_mask, gt_mask))
         union = np.count_nonzero(np.logical_or(query_mask, gt_mask))
-        ious[i] = intersection/(union + np.finfo(np.float32).eps)
+        if intersection > 0:
+            intersections.append((i, intersection, union))
+        ious[i] = intersection/(union + np.finfo(np.float64).eps)
+
+    if p:
+        print(intersections)
 
     return ious
