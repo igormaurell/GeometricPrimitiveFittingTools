@@ -68,13 +68,15 @@ class HPNetDatasetWriter(BaseDatasetWriter):
             if labels is not None:
                 primitive_params = np.zeros((len(labels), 22))
                 types = np.zeros(len(labels)) - 1
-                global_to_local_labels_map = np.zeros(len(features_data)) - 1
+                local_labels = np.zeros(len(labels)) - 1
+                local_2_global_map = []
                 j = 0
                 for i, feature in enumerate(features_data):
                     if feature is not None and feature['type'] in HPNetDatasetWriter.PRIMITIVES_MAP:
                         tp = feature['type']
-                        global_to_local_labels_map[i] = j
                         indices = features_point_indices[i]
+                        local_labels[indices] = len(local_2_global_map)
+                        local_2_global_map.append(i)
 
                         types[indices] = HPNetDatasetWriter.PRIMITIVES_MAP[tp]
 
@@ -99,13 +101,10 @@ class HPNetDatasetWriter(BaseDatasetWriter):
 
                         j+= 1
 
-                local_labels = global_to_local_labels_map[labels]
-                labels[local_labels == -1] = -1
-
                 h5_file.create_dataset('prim', data=types.astype(np.int32))
                 h5_file.create_dataset('T_param',  data=primitive_params)
                 h5_file.create_dataset('labels', data=local_labels.astype(np.int32))
-                h5_file.create_dataset('global_labels', data=labels.astype(np.int32))
+                h5_file.create_dataset('local_2_global_map', data=np.asarray(local_2_global_map, dtype=np.int32))
                 
         return True
 

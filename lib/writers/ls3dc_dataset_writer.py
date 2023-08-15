@@ -20,7 +20,6 @@ def dict_to_hdf5_group(group, data_dict):
         else:
             group[key] = value
 
-import time
 class LS3DCDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)

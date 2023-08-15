@@ -47,14 +47,15 @@ class HPNetDatasetReader(BaseDatasetReader):
             labels = h5_file['labels'][()] if 'labels' in h5_file.keys() else None
             prim = h5_file['prim'][()] if 'prim' in h5_file.keys() else None
             params = h5_file['T_param'][()] if 'T_param' in h5_file.keys() else None
-            global_labels = h5_file['global_labels'][()] if 'global_labels' in h5_file.keys() else None
+            local_2_global_map = h5_file['local_2_global_map'][()] if 'local_2_global_map' in h5_file.keys() else None
             gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
             matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
 
-            if global_labels is not None:
-                unique_labels, unique_indices = np.unique(global_labels, return_index=True)
-            else:
-                unique_labels, unique_indices = np.unique(labels, return_index=True)
+            if local_2_global_map is not None:
+                valid_labels_mask = labels != -1
+                labels[valid_labels_mask] = local_2_global_map[labels[valid_labels_mask]]
+
+            unique_labels, unique_indices = np.unique(labels, return_index=True)
 
             unique_indices = unique_indices[unique_labels != -1]
             unique_labels = unique_labels[unique_labels != -1]
@@ -106,15 +107,10 @@ class HPNetDatasetReader(BaseDatasetReader):
             if unormalize:
                 points, normals, features_data = unNormalize(points, transforms, normals=normals, features=features_data)
 
-        if filename == '1_2_3_0':
-            if global_labels is not None:
-                print(np.unique(labels), len(np.unique(labels)))
-                print(np.unique(global_labels), len(np.unique(global_labels)))
-
         result = {
             'points': points,
             'normals': normals,
-            'labels': labels, #global_labels if global_labels is not None else labels,
+            'labels': labels,
             'features': features_data,
             'filename': filename,
             'transforms': transforms,

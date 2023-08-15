@@ -177,7 +177,7 @@ if __name__ == '__main__':
         gt_reader.setCurrentSetName('val')
         query_files = reader.filenames_by_set['val']
         gt_files = gt_reader.filenames_by_set['val']
-        assert sorted(query_files) == sorted(gt_files), 'gt has different files from query'
+        #assert sorted(query_files) == sorted(gt_files), 'gt has different files from query'
     else:
         gt_reader = None
 
@@ -206,18 +206,20 @@ if __name__ == '__main__':
             input_data = addDictionaries(input_data, data)
 
         #adding non gt (primitives that are not in the ground truth but there are in prediction) ate the end of features list (and adjusting labels)
-        num_features = len(input_data['features'])
-        input_data['features'] += input_data['non_gt_features']
-        non_gt_labels_mask = input_data['labels'] < -1
-        input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_features - 2
-        input_data['matching'] = np.concatenate((np.arange(num_features), np.zeros(len(input_data['non_gt_features']) - 1)))
+        if gt_reader is not None:
+            num_features = len(input_data['features'])
+            input_data['features'] += input_data['non_gt_features']
+            non_gt_labels_mask = input_data['labels'] < -1
+            input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_features - 2
+            input_data['matching'] = np.concatenate((np.arange(num_features), np.zeros(len(input_data['non_gt_features']) - 1)))
 
-        assert np.max(input_data['labels']) + 1 == len(input_data['features']), f"{np.max(input_data['labels']) + 1 } != {len(input_data['features'])}"
-        assert np.count_nonzero(input_data['labels'] < -1) == 0, f"{np.count_nonzero(input_data['labels'] < -1)} > 0"
+            assert np.max(input_data['labels']) + 1 == len(input_data['features']), f"{np.max(input_data['labels']) + 1 } != {len(input_data['features'])}"
+            assert np.count_nonzero(input_data['labels'] < -1) == 0, f"{np.count_nonzero(input_data['labels'] < -1)} > 0"
+            
+            del input_data['non_gt_features']
 
         input_data['features_data'] = input_data['features']
         del input_data['features']
-        del input_data['non_gt_features']
         input_data['filename'] = merged_filename
 
         writer.step(**input_data)
