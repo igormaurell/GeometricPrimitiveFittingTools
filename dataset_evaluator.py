@@ -105,22 +105,31 @@ def generateErrorsLogDict(errors):
                                   nopoints=number_of_points, sd=summd, sa=summa, siiou=siiou)
     return logs_dict
 
-def adaptLog2Save(logs_dict, denominator=0):
+def computeLogMeans(logs_dict, denominator=0):
     result = deepcopy(logs_dict)
-    for tp, d in logs_dict.items():
-        number_points = d['number_of_points'] if d['number_of_points'] > 0 else 1
+    for tp in logs_dict.keys():
+        number_points = result[tp]['number_of_points'] if result[tp]['number_of_points'] > 0 else 1
         number_points = number_points if denominator == 0 else denominator
 
-        number_valid_primitives = d['number_of_primitives'] - d['number_of_void_primitives']
+        number_valid_primitives = result[tp]['number_of_primitives'] - result[tp]['number_of_void_primitives']
         number_valid_primitives = number_valid_primitives if denominator == 0 else denominator
 
-        if 'mean_distance_error' in d:
-            result[tp]['mean_distance_error'] = d['mean_distance_error']/number_points
-        if 'mean_normal_error' in d:
-            result[tp]['mean_normal_error'] = d['mean_normal_error']/number_points
-        if 'mean_iou' in d and d['mean_iou'] >= 0:
-            result[tp]['mean_iou'] = d['mean_iou']/number_valid_primitives if number_valid_primitives > 0 else 0.
+        if 'mean_distance_error' in result[tp]:
+            result[tp]['mean_distance_error'] = result[tp]['mean_distance_error']/number_points
+        if 'mean_normal_error' in result[tp]:
+            result[tp]['mean_normal_error'] = result[tp]['mean_normal_error']/number_points
+        if 'mean_iou' in result[tp]:
+            result[tp]['mean_iou'] = result[tp]['mean_iou']/number_valid_primitives if number_valid_primitives > 0 else 0.
 
+    return result
+
+def filterLog(logs_dict):
+    result = deepcopy(logs_dict)
+    for tp in logs_dict.keys():
+        if 'mean_iou' in result[tp]:
+            if result[tp]['mean_iou'] < 0:
+                del result[tp]['mean_iou']
+    
     return result
 
 folder_name = ''
@@ -192,7 +201,8 @@ def process(data_tuple):
                 dataset_errors[filename][tp]['angles'].append(angles)
                 
             if len(fpi[i]) > 0:
-                dataset_errors[filename][tp]['instance_ious'].append(instance_ious[i])
+                if gt_data is not None:
+                    dataset_errors[filename][tp]['instance_ious'].append(instance_ious[i])
 
                 if write_segmentation_gt:
                     colors_instances[fpi[i], :] = computeRGB(colors_full[i%len(colors_full)])
@@ -212,11 +222,11 @@ def process(data_tuple):
                 #     colors_types[error_both, :] = np.array([255, 0, 255])
 
     logs_dict = generateErrorsLogDict(dataset_errors[filename])
-    logs_dict_final = adaptLog2Save(logs_dict)
+    logs_dict_final = computeLogMeans(logs_dict)
     logs_dict_final['Total']['number_of_points'] += np.count_nonzero(labels==-1)
 
     with open(f'{log_format_folder_name}/{filename}.json', 'w') as f:
-        json.dump(logs_dict_final, f, indent=4)
+        json.dump(filterLog(logs_dict_final), f, indent=4)
     
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
@@ -332,7 +342,7 @@ if __name__ == '__main__':
             gt_reader.setCurrentSetName(s)
             files = reader.filenames_by_set['val']
             gt_files = gt_reader.filenames_by_set['val']
-            #assert sorted(files) == sorted(gt_files), f'\n {sorted(files)} \n {sorted(gt_files)}'
+            assert sorted(files) == sorted(gt_files), f'\n {sorted(files)} \n {sorted(gt_files)}'
             gt_reader.filenames_by_set['val'] = deepcopy(files)
             readers = zip(reader, gt_reader)
         else:
@@ -353,4 +363,4 @@ if __name__ == '__main__':
         print(len(results))
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
-            json.dump(adaptLog2Save(full_logs_dicts, denominator=len(results)), f, indent=4)
+            json.dump(filterLog(computeLogMeans(full_logs_dicts, denominator=len(results))), f, indent=4)

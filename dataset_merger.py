@@ -177,7 +177,7 @@ if __name__ == '__main__':
         gt_reader.setCurrentSetName('val')
         query_files = reader.filenames_by_set['val']
         gt_files = gt_reader.filenames_by_set['val']
-        #assert sorted(query_files) == sorted(gt_files), 'gt has different files from query'
+        assert sorted(query_files) == sorted(gt_files), 'gt has different files from query'
     else:
         gt_reader = None
 
