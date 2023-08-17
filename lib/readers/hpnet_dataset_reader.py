@@ -111,7 +111,7 @@ class HPNetDatasetReader(BaseDatasetReader):
             'points': points,
             'normals': normals,
             'labels': labels,
-            'features': features_data,
+            'features_data': features_data,
             'filename': filename,
             'transforms': transforms,
         }

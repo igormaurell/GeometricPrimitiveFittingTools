@@ -1,8 +1,9 @@
 import argparse
 import json
-from os.path import join
+from os.path import join, exists
 from os import makedirs
 import numpy as np
+from shutil import rmtree
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from lib.readers import DatasetReaderFactory
@@ -153,8 +154,11 @@ def process(data_tuple):
     filename = data['filename'] if 'filename' in data.keys() else str(i)
     points = data['points']
     normals = data['normals']
+
     labels = data['labels']
-    features = data['features']
+    labels[labels < -1] = -1 # removing non_gt_features
+
+    features = data['features_data']
     if points is None or normals is None or labels is None or features is None:
         print('Invalid Model.')
         return None
@@ -170,9 +174,7 @@ def process(data_tuple):
     if gt_data is not None:
         query_labels = data['labels']
         gt_labels = gt_data['labels'][data['gt_indices']]
-        instance_ious = computeIoUs(query_labels, gt_labels, p=(filename == '1_2_3_0'))
-        if filename == '1_2_3_0':
-            print([x for x in instance_ious if x > 0])
+        instance_ious = computeIoUs(query_labels, gt_labels)
         
     for i, feature in enumerate(features):
         if feature is not None:
@@ -321,6 +323,9 @@ if __name__ == '__main__':
         gt_reader = gt_dataset_reader_factory.getReaderByFormat(format)
 
     result_format_folder_name = join(dataset_format_folder_name, result_folder_name)
+    if exists(result_format_folder_name):
+        rmtree(result_format_folder_name)
+
     makedirs(result_format_folder_name, exist_ok=True)
 
     seg_format_folder_name = join(result_format_folder_name, 'seg')
@@ -351,7 +356,7 @@ if __name__ == '__main__':
         dataset_errors = {}
         full_logs_dicts = {}
 
-        results = process_map(process, readers, max_workers=32, chunksize=1)
+        results = process_map(process, readers, max_workers=1, chunksize=1)
 
         print('Accumulating...')
         c = 0
@@ -359,8 +364,6 @@ if __name__ == '__main__':
             #print(reader.filenames_by_set['val'][c], logs_dict['Total']['mean_iou'])
             full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
             #c+= 1
-
-        print(len(results))
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
             json.dump(filterLog(computeLogMeans(full_logs_dicts, denominator=len(results))), f, indent=4)

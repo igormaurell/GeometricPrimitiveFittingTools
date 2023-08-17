@@ -23,7 +23,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None,
+             features_point_indices=None, **kwargs):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -53,7 +54,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
 
         with h5py.File(data_file_path, 'w') as h5_file:
                 
-            points, normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
+            points, normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, 
+                                                                   normals=normals.copy(), features=features_data)
 
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
@@ -61,9 +63,9 @@ class HPNetDatasetWriter(BaseDatasetWriter):
             h5_file.create_dataset('points', data=points)
             h5_file.create_dataset('normals', data=normals)
             if 'gt_indices' in kwargs:
-                h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'])
+                h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'].astype(np.int32))
             if 'matching' in kwargs:
-                h5_file.create_dataset('matching', data=kwargs['matching'])
+                h5_file.create_dataset('matching', data=kwargs['matching'].astype(np.int32))
 
             if labels is not None:
                 primitive_params = np.zeros((len(labels), 22))

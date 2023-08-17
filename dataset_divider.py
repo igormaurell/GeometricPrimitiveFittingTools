@@ -25,7 +25,7 @@ def process_model_val(data, regions_grid, filename, val_number_points, abs_volum
     i = ind % size_x
 
     filename_curr = f'{filename}_{i}_{j}_{k}'
-    result = sampleDataOnRegion(regions_grid[i, j, k], data['points'], data['normals'], data['labels'], data['features'],
+    result = sampleDataOnRegion(regions_grid[i, j, k], data['points'], data['normals'], data['labels'], data['features_data'],
                                 val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                 relative_volume_threshold=relative_volume_threshold)
 
@@ -40,7 +40,7 @@ def process_model_train(data, filename, train_number_points, train_min_number_po
     search_points = data['search_points'] if 'search_points' in data.keys() else None
 
     while result['points'].shape[0] < train_min_number_points:
-        result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features'], train_region_size, train_number_points,
+        result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features_data'], train_region_size, train_number_points,
                                   filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
                                   relative_volume_threshold=relative_volume_threshold, search_points=search_points)
     
@@ -227,7 +227,7 @@ if __name__ == '__main__':
                     else:
                         point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
                 dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
-                                                    features_data=result['features'], filename=result['filename'])
+                                                    features_data=result['features_data'], filename=result['filename'])
             
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
@@ -271,7 +271,7 @@ if __name__ == '__main__':
                                        range(num_models), chunksize=1)
             else:
                 res = sampleDataOnRegion(np.asarray((np.min(data['points'], axis=0), np.max(data['points'], axis=0))), data['points'], data['normals'],
-                                            data['labels'], data['features'], train_number_points, filter_features_by_volume=True,
+                                            data['labels'], data['features_data'], train_number_points, filter_features_by_volume=True,
                                             abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
                 res['filename'] = f'{filename}_0'
                 results += [res]
@@ -290,10 +290,11 @@ if __name__ == '__main__':
                     else:
                         point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
                 dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
-                                                      features_data=result['features'], filename=result['filename'])
+                                                      features_data=result['features_data'], filename=result['filename'])
 
         if write_obj:
             writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_train.obj', point_cloud_full)
+    
     reader.finish()
     dataset_writer_factory.finishAllFormats()
 

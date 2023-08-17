@@ -80,7 +80,7 @@ class PrimitivenetDatasetReader(BaseDatasetReader):
             'points': gt_points,
             'normals': gt_normals,
             'labels': labels,
-            'features': features_data,
+            'features_data': features_data,
             'filename': filename,
         }
 

@@ -115,7 +115,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
             'points': np.array([]),
             'normals': np.array([]),
             'labels': np.array([]),
-            'features': [],
+            'features_data': [],
         }
 
     points_part = points[indices]
@@ -144,7 +144,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
         'points': points_part,
         'normals': normals_part,
         'labels': labels_part,
-        'features': features_data_part,
+        'features_data': features_data_part,
     }
 
     return result

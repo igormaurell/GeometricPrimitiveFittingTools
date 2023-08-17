@@ -58,7 +58,7 @@ def getMergedFilesDict(files):
 
 def addDictionaries(dict1, dict2):
     concatenate_keys = ['noisy_points', 'points', 'normals', 'labels', 'gt_indices', 'non_gt_features']
-    merge_keys = ['features']
+    merge_keys = ['features_data']
     result_dict = dict1.copy()
 
     for key in dict2.keys():
@@ -93,7 +93,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
     formats_txt = ','.join(DatasetReaderFactory.READERS_DICT.keys())
-    parser.add_argument('format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
+    parser.add_argument('input_format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
+    formats_txt = ','.join(DatasetWriterFactory.WRITERS_DICT.keys())
+    parser.add_argument('output_formats', type=str, help='')
 
     parser.add_argument('--input_dataset_folder_name', type=str, default = 'dataset_divided', help='input dataset folder name.')
     parser.add_argument('--input_gt_dataset_folder_name', type=str, help='input dataset folder name.')
@@ -107,7 +109,8 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     folder_name = args['folder']
-    format = args['format']
+    input_format = args['input_format']
+    output_formats = [s.lower() for s in args['output_formats'].split(',')]
 
     input_dataset_folder_name = args['input_dataset_folder_name']
     input_gt_dataset_folder_name = args['input_gt_dataset_folder_name']
@@ -128,52 +131,57 @@ if __name__ == '__main__':
     input_gt_parameters = {}
     output_parameters = {}
 
-    assert format in DatasetReaderFactory.READERS_DICT.keys()
+    assert input_format in DatasetReaderFactory.READERS_DICT.keys()
 
-    input_parameters[format] = {}
+    input_parameters[input_format] = {}
 
-    input_dataset_format_folder_name = join(folder_name, input_dataset_folder_name, format)
-    input_parameters[format]['dataset_folder_name'] = input_dataset_format_folder_name
+    input_dataset_format_folder_name = join(folder_name, input_dataset_folder_name, input_format)
+    input_parameters[input_format]['dataset_folder_name'] = input_dataset_format_folder_name
     input_data_format_folder_name = join(input_dataset_format_folder_name, data_folder_name)
-    input_parameters[format]['data_folder_name'] = input_data_format_folder_name
+    input_parameters[input_format]['data_folder_name'] = input_data_format_folder_name
     input_transform_format_folder_name = join(input_dataset_format_folder_name, transform_folder_name)
-    input_parameters[format]['transform_folder_name'] = input_transform_format_folder_name
+    input_parameters[input_format]['transform_folder_name'] = input_transform_format_folder_name
 
     input_gt_transform_format_folder_name = None
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is not None:
-        input_gt_parameters[format] = {}
+        input_gt_parameters[input_format] = {}
 
-        input_gt_dataset_format_folder_name = join(folder_name, input_gt_dataset_folder_name, format)
-        input_gt_parameters[format]['dataset_folder_name'] = input_gt_dataset_format_folder_name
+        input_gt_dataset_format_folder_name = join(folder_name, input_gt_dataset_folder_name, input_format)
+        input_gt_parameters[input_format]['dataset_folder_name'] = input_gt_dataset_format_folder_name
         input_gt_data_format_folder_name = join(input_gt_dataset_format_folder_name, input_gt_data_folder_name)
-        input_gt_parameters[format]['data_folder_name'] = input_gt_data_format_folder_name
+        input_gt_parameters[input_format]['data_folder_name'] = input_gt_data_format_folder_name
         input_gt_transform_format_folder_name = join(input_gt_dataset_format_folder_name, transform_folder_name)
-        input_gt_parameters[format]['transform_folder_name'] = input_gt_transform_format_folder_name
+        input_gt_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
 
     if use_gt_transform and input_gt_transform_format_folder_name is not None:
-        input_parameters[format]['transform_folder_name'] = input_gt_transform_format_folder_name
+        input_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
 
-    output_parameters[format] = {}
+    output_parameters = {}
+    for format in output_formats:
 
-    output_dataset_format_folder_name = join(folder_name, output_dataset_folder_name, format)
-    output_parameters[format]['dataset_folder_name'] = output_dataset_format_folder_name
-    output_data_format_folder_name = join(output_dataset_format_folder_name, data_folder_name)
-    output_parameters[format]['data_folder_name'] = output_data_format_folder_name
-    output_transform_format_folder_name = join(output_dataset_format_folder_name, transform_folder_name)
-    output_parameters[format]['transform_folder_name'] = output_transform_format_folder_name
-    makedirs(output_dataset_format_folder_name, exist_ok=True)
-    if exists(output_data_format_folder_name):
-        rmtree(output_data_format_folder_name)
-    makedirs(output_data_format_folder_name, exist_ok=True)
-    makedirs(output_transform_format_folder_name, exist_ok=True)
-    
+        assert format in DatasetWriterFactory.WRITERS_DICT.keys()
+
+        output_parameters[format] = {'filter_features': {}, 'normalization': {}}
+
+        output_dataset_format_folder_name = join(folder_name, output_dataset_folder_name, format)
+        output_parameters[format]['dataset_folder_name'] = output_dataset_format_folder_name
+        output_data_format_folder_name = join(output_dataset_format_folder_name, data_folder_name)
+        output_parameters[format]['data_folder_name'] = output_data_format_folder_name
+        output_transform_format_folder_name = join(output_dataset_format_folder_name, transform_folder_name)
+        output_parameters[format]['transform_folder_name'] = output_transform_format_folder_name
+        makedirs(output_dataset_format_folder_name, exist_ok=True)
+        if exists(output_data_format_folder_name):
+            rmtree(output_data_format_folder_name)
+        makedirs(output_data_format_folder_name, exist_ok=True)
+        makedirs(output_transform_format_folder_name, exist_ok=True)
+        
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
-    reader = dataset_reader_factory.getReaderByFormat(format)
+    reader = dataset_reader_factory.getReaderByFormat(input_format)
     reader.setCurrentSetName('val')
 
     if len(input_gt_parameters) > 0:
         gt_reader_factory = DatasetReaderFactory(input_gt_parameters)
-        gt_reader = gt_reader_factory.getReaderByFormat(format)
+        gt_reader = gt_reader_factory.getReaderByFormat(input_format)
         gt_reader.setCurrentSetName('val')
         query_files = reader.filenames_by_set['val']
         gt_files = gt_reader.filenames_by_set['val']
@@ -182,17 +190,16 @@ if __name__ == '__main__':
         gt_reader = None
 
     dataset_writer_factory = DatasetWriterFactory(output_parameters)
-    writer = dataset_writer_factory.getWriterByFormat(format)
-    writer.setCurrentSetName('val')        
+    dataset_writer_factory.setCurrentSetNameAllFormats('val')     
 
     files_dict = getMergedFilesDict(reader.filenames_by_set['val'])
 
     print('Generating merged models...')
     for merged_filename, divided_filenames in tqdm(files_dict.items()):
         input_data = {}
-        reader.filenames_by_set['val'] = divided_filenames
+        reader.filenames_by_set['val'] = sorted(divided_filenames)
         if gt_reader is not None:
-            gt_reader.filenames_by_set['val'] = divided_filenames
+            gt_reader.filenames_by_set['val'] = sorted(divided_filenames)
         global_min = -1
         num_points = 0
         for div_filename in divided_filenames:
@@ -207,24 +214,28 @@ if __name__ == '__main__':
 
         #adding non gt (primitives that are not in the ground truth but there are in prediction) ate the end of features list (and adjusting labels)
         if gt_reader is not None:
-            num_features = len(input_data['features'])
-            input_data['features'] += input_data['non_gt_features']
+            input_data['features_data'] = [x for x in input_data['features_data'] if x is not None]
+            num_gt_features = len(input_data['features_data'])
+            input_data['features_data'] += input_data['non_gt_features']
+           
+            gt_labels_mask = input_data['labels'] > -1
+            _, local_labels = np.unique(input_data['labels'][gt_labels_mask], return_inverse=True)
+            input_data['labels'][gt_labels_mask] = local_labels
             non_gt_labels_mask = input_data['labels'] < -1
-            input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_features - 2
-            input_data['matching'] = np.concatenate((np.arange(num_features), np.zeros(len(input_data['non_gt_features']) - 1)))
+            input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_gt_features - 2
 
-            assert np.max(input_data['labels']) + 1 == len(input_data['features']), f"{np.max(input_data['labels']) + 1 } != {len(input_data['features'])}"
-            assert np.count_nonzero(input_data['labels'] < -1) == 0, f"{np.count_nonzero(input_data['labels'] < -1)} > 0"
+            input_data['matching'] = np.arange(len(input_data['features_data']))
+            input_data['matching'][num_gt_features:] = -1
+
+            assert (np.max(input_data['labels']) + 1) == len(input_data['matching']) == len(input_data['features_data'])
             
             del input_data['non_gt_features']
 
-        input_data['features_data'] = input_data['features']
-        del input_data['features']
         input_data['filename'] = merged_filename
 
-        writer.step(**input_data)
+        dataset_writer_factory.stepAllFormats(**input_data)
 
-    writer.finish()
+    dataset_writer_factory.finishAllFormats()
     print('Done.')
 
     #print('Generating test dataset:')

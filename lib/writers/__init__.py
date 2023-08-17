@@ -38,13 +38,14 @@ class DatasetWriterFactory:
         for writer in self.writers.values():
             writer.setCurrentSetName(set_name)
 
-    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, mesh=None):
+    def stepAllFormats(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None,
+                       features_point_indices=None, mesh=None, **kwargs):
         fn_1 = lambda x: None if x is None else x.copy()
         json_dc = lambda x: None if x is None else ujson.loads(ujson.dumps(x))
         for writer in self.writers.values():
             writer.step(points.copy(), normals=fn_1(normals), labels=fn_1(labels), features_data=json_dc(features_data), 
                         noisy_points=fn_1(noisy_points), filename=copy(filename), features_point_indices=deepcopy(features_point_indices),
-                        mesh=deepcopy(mesh))
+                        mesh=deepcopy(mesh), **kwargs)
         self.step_num += 1
 
     def finishAllFormats(self):

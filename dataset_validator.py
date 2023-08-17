@@ -143,7 +143,7 @@ def process(data):
     points = data['points']
     normals = data['normals']
     labels = data['labels']
-    features = data['features']
+    features = data['features_data']
     if points is None or normals is None or labels is None or features is None:
         print('Invalid Model.')
         return None
