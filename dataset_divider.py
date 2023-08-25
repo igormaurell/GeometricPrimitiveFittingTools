@@ -17,7 +17,7 @@ from lib.readers import DatasetReaderFactory
 
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, computeSearchPoints
-import time
+
 def process_model_val(data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold, ind):
     size_x, size_y, _, _, _ = regions_grid.shape
     k = ind // (size_y * size_x)
@@ -89,12 +89,11 @@ if __name__ == '__main__':
     parser.add_argument('--output_dataset_folder_name', type=str, default = 'dataset_divided', help='output dataset folder name.')
     parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
-    parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
+    parser.add_argument('--division_info_folder_name', type=str, default = 'division_info', help='point cloud folder name.')
 
-    parser.add_argument('-wo', '--write_obj', action='store_true', help='')
-    parser.add_argument('-ra', '--region_axis', type=str, default='z', help='')
-    parser.add_argument('-trs','--train_region_size', nargs='+', default=[4], help='')
-    parser.add_argument('-vrs','--val_region_size', nargs='+', default=[4], help='')
+    parser.add_argument('-ra',  '--region_axis', type=str, default='z', help='')
+    parser.add_argument('-trs', '--train_region_size', nargs='+', default=[4], help='')
+    parser.add_argument('-vrs', '--val_region_size', nargs='+', default=[4], help='')
     parser.add_argument('-tnp', '--train_number_points', type=int, default=0, help='')
     parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
     parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=5000, help='')
@@ -121,9 +120,8 @@ if __name__ == '__main__':
     output_dataset_folder_name = args['output_dataset_folder_name']
     data_folder_name = args['data_folder_name']
     transform_folder_name = args['transform_folder_name']
-    pc_folder_name = join(folder_name, args['pc_folder_name'])
+    division_info_folder_name = args['division_info_folder_name']
 
-    write_obj = args['write_obj']
     region_axis = args['region_axis']
     train_region_size = parse_size_arg(args['train_region_size'], region_axis=region_axis)  
     val_region_size = parse_size_arg(args['val_region_size'], region_axis=region_axis)
@@ -184,6 +182,9 @@ if __name__ == '__main__':
         makedirs(output_dataset_format_folder_name, exist_ok=True)
         makedirs(output_data_format_folder_name, exist_ok=True)
         makedirs(output_transform_format_folder_name, exist_ok=True)
+    
+    output_division_info_folder_name = join(folder_name, output_dataset_folder_name, division_info_folder_name)
+    makedirs(output_division_info_folder_name, exist_ok=True)
 
     colors = getAllColorsArray()
 
@@ -214,23 +215,20 @@ if __name__ == '__main__':
         
         for j, result in enumerate(tqdm(results)):
             n_p = len(result['points'])
-            if n_p <= val_min_number_points:
+            if n_p < val_min_number_points:
                 pass
-                #print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {val_min_number_points}")
+                # print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {val_min_number_points}")
             else:
-                if write_obj:
-                    points = np.zeros((result['points'].shape[0], 6))
-                    points[:, 0:3] = result['points']
-                    points[:, 3:6] = np.array(computeRGB(colors[j]))
-                    if point_cloud_full is None:
-                        point_cloud_full = points.copy()
-                    else:
-                        point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
-                dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
-                                                    features_data=result['features_data'], filename=result['filename'])
+                points = np.zeros((result['points'].shape[0], 6))
+                points[:, 0:3] = result['points']
+                points[:, 3:6] = np.array(computeRGB(colors[j]))
+                if point_cloud_full is None:
+                    point_cloud_full = points.copy()
+                else:
+                    point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
+                dataset_writer_factory.stepAllFormats(**result)
             
-        if write_obj:
-            writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_val.obj', point_cloud_full)
+        writeColorPointCloudOBJ(f'{output_division_info_folder_name}/{filename}_val.obj', point_cloud_full)
 
     val_end = time.time()
 
@@ -278,22 +276,19 @@ if __name__ == '__main__':
        
         for j, result in enumerate(tqdm(results)):   
             n_p = len(result['points'])
-            if n_p <= train_min_number_points:
+            if n_p < train_min_number_points:
                 print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {train_min_number_points}")
             else:
-                if write_obj:
-                    points = np.zeros((result['points'].shape[0], 6))
-                    points[:, 0:3] = result['points']
-                    points[:, 3:6] = np.array(computeRGB(colors[j]))
-                    if point_cloud_full is None:
-                        point_cloud_full = points.copy()
-                    else:
-                        point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
-                dataset_writer_factory.stepAllFormats(result['points'], normals=result['normals'], labels=result['labels'],
-                                                      features_data=result['features_data'], filename=result['filename'])
+                points = np.zeros((result['points'].shape[0], 6))
+                points[:, 0:3] = result['points']
+                points[:, 3:6] = np.array(computeRGB(colors[j]))
+                if point_cloud_full is None:
+                    point_cloud_full = points.copy()
+                else:
+                    point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
+                dataset_writer_factory.stepAllFormats(**result)
 
-        if write_obj:
-            writeColorPointCloudOBJ(f'{output_data_format_folder_name}/{filename}_train.obj', point_cloud_full)
+        writeColorPointCloudOBJ(f'{output_division_info_folder_name}/{filename}_train.obj', point_cloud_full)
     
     reader.finish()
     dataset_writer_factory.finishAllFormats()

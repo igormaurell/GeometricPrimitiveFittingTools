@@ -66,6 +66,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
                 h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'].astype(np.int32))
             if 'matching' in kwargs:
                 h5_file.create_dataset('matching', data=kwargs['matching'].astype(np.int32))
+            if 'global_indices' in kwargs:
+                h5_file.create_dataset('global_indices', data=kwargs['global_indices'].astype(np.int32))
 
             if labels is not None:
                 primitive_params = np.zeros((len(labels), 22))

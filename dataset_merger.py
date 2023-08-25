@@ -57,7 +57,7 @@ def getMergedFilesDict(files):
     return result
 
 def addDictionaries(dict1, dict2):
-    concatenate_keys = ['noisy_points', 'points', 'normals', 'labels', 'gt_indices', 'non_gt_features']
+    concatenate_keys = ['noisy_points', 'points', 'normals', 'labels', 'gt_indices', 'global_indices', 'non_gt_features']
     merge_keys = ['features_data']
     result_dict = dict1.copy()
 
@@ -202,10 +202,15 @@ if __name__ == '__main__':
             gt_reader.filenames_by_set['val'] = sorted(divided_filenames)
         global_min = -1
         num_points = 0
+        gt_labels = None
         for div_filename in divided_filenames:
             data = reader.step()
             if gt_reader is not None:
                 gt_data = gt_reader.step()
+                if gt_labels is None:
+                    gt_labels = gt_data['labels']
+                else:
+                    gt_labels = np.concatenate((gt_labels, gt_data['labels']))
                 data = mergeQueryAndGTData(data, gt_data, global_min=global_min, num_points=num_points)
                 global_min = min(global_min, np.min(data['labels']))
                 num_points += len(gt_data['points'])
@@ -219,15 +224,22 @@ if __name__ == '__main__':
             input_data['features_data'] += input_data['non_gt_features']
            
             gt_labels_mask = input_data['labels'] > -1
-            _, local_labels = np.unique(input_data['labels'][gt_labels_mask], return_inverse=True)
+            matching, local_labels = np.unique(input_data['labels'][gt_labels_mask], return_inverse=True)
             input_data['labels'][gt_labels_mask] = local_labels
             non_gt_labels_mask = input_data['labels'] < -1
             input_data['labels'][non_gt_labels_mask] = np.abs(input_data['labels'][non_gt_labels_mask]) + num_gt_features - 2
 
-            input_data['matching'] = np.arange(len(input_data['features_data']))
-            input_data['matching'][num_gt_features:] = -1
+            gt_labels = gt_labels[input_data['gt_indices']]
+            valid_gt_labels = gt_labels > -1
+            gt_unique_labels = np.unique(gt_labels[valid_gt_labels])
 
-            assert (np.max(input_data['labels']) + 1) == len(input_data['matching']) == len(input_data['features_data'])
+            assert np.all(np.isin(matching, gt_unique_labels))
+
+            matching = np.asarray([np.where(gt_unique_labels == m)[0][0] for m in matching])
+
+            matching = np.concatenate((matching, np.zeros(len(input_data['non_gt_features']), dtype=np.int32) - 1))
+
+            input_data['matching'] = matching
             
             del input_data['non_gt_features']
 

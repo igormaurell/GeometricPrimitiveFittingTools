@@ -2,7 +2,7 @@ from copy import deepcopy
 import numpy as np
 import random
 
-from lib.utils import computeFeaturesPointIndices, sortedIndicesIntersection
+from lib.utils import sortedIndicesIntersection
 
 EPS = np.finfo(np.float32).eps
 
@@ -115,6 +115,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
             'points': np.array([]),
             'normals': np.array([]),
             'labels': np.array([]),
+            'global_indices': np.array([]),
             'features_data': [],
         }
 
@@ -144,6 +145,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
         'points': points_part,
         'normals': normals_part,
         'labels': labels_part,
+        'global_indices': indices,
         'features_data': features_data_part,
     }
 

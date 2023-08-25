@@ -177,7 +177,7 @@ def process(data_tuple):
         instance_ious = computeIoUs(query_labels, gt_labels)
         
     for i, feature in enumerate(features):
-        if feature is not None:
+        if feature is not None and fpi[i] is not None:
             points_curr = points[fpi[i]]
             normals_curr = normals[fpi[i]]
             primitive = None
@@ -240,6 +240,7 @@ def process(data_tuple):
         fig = generateErrorsBoxPlot(dataset_errors[filename])
         plt.figure(fig.number)
         plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
+        plt.close()
     
     return logs_dict_final
 
@@ -248,6 +249,8 @@ if __name__ == '__main__':
     parser.add_argument('folder', type=str, help='dataset folder.')
     formats_txt = ','.join(DatasetReaderFactory.READERS_DICT.keys())
     parser.add_argument('format', type=str, help=f'types of h5 format to generate. Possible formats: {formats_txt}. Multiple formats can me generated.')
+
+    parser.add_argument('--gt_format', type=str, help='format of gt data.')
 
     parser.add_argument('--dataset_folder_name', type=str, default = 'dataset', help='input dataset folder name.')
     parser.add_argument('--gt_dataset_folder_name', type=str, help='gt dataset folder name.')
@@ -267,6 +270,8 @@ if __name__ == '__main__':
 
     folder_name = args['folder']
     format = args['format']
+    gt_format = args['gt_format']
+    gt_format = format if gt_format is None else gt_format
     dataset_folder_name = args['dataset_folder_name']
     gt_dataset_folder_name = args['gt_dataset_folder_name']
     data_folder_name = args['data_folder_name']
@@ -302,17 +307,17 @@ if __name__ == '__main__':
 
     gt_transform_format_folder_name = None
     if gt_dataset_folder_name is not None and gt_data_folder_name is not None:
-        gt_parameters[format] = {}
+        gt_parameters[gt_format] = {}
 
-        gt_dataset_format_folder_name = join(folder_name, gt_dataset_folder_name, format)
-        gt_parameters[format]['dataset_folder_name'] = gt_dataset_format_folder_name
+        gt_dataset_format_folder_name = join(folder_name, gt_dataset_folder_name, gt_format)
+        gt_parameters[gt_format]['dataset_folder_name'] = gt_dataset_format_folder_name
         gt_data_format_folder_name = join(gt_dataset_format_folder_name, gt_data_folder_name)
-        gt_parameters[format]['data_folder_name'] = gt_data_format_folder_name
+        gt_parameters[gt_format]['data_folder_name'] = gt_data_format_folder_name
         gt_transform_format_folder_name = join(gt_dataset_format_folder_name, transform_folder_name)
-        gt_parameters[format]['transform_folder_name'] = gt_transform_format_folder_name
+        gt_parameters[gt_format]['transform_folder_name'] = gt_transform_format_folder_name
 
     if use_gt_transform and gt_transform_format_folder_name is not None:
-        parameters[format]['transform_folder_name'] = gt_transform_format_folder_name
+        parameters[gt_format]['transform_folder_name'] = gt_transform_format_folder_name
 
     dataset_reader_factory = DatasetReaderFactory(parameters)
     reader = dataset_reader_factory.getReaderByFormat(format)
@@ -320,7 +325,7 @@ if __name__ == '__main__':
     gt_reader = None
     if len(gt_parameters) > 0:
         gt_dataset_reader_factory = DatasetReaderFactory(gt_parameters)
-        gt_reader = gt_dataset_reader_factory.getReaderByFormat(format)
+        gt_reader = gt_dataset_reader_factory.getReaderByFormat(gt_format)
 
     result_format_folder_name = join(dataset_format_folder_name, result_folder_name)
     if exists(result_format_folder_name):
@@ -356,7 +361,7 @@ if __name__ == '__main__':
         dataset_errors = {}
         full_logs_dicts = {}
 
-        results = process_map(process, readers, max_workers=1, chunksize=1)
+        results = process_map(process, readers, max_workers=32, chunksize=1)
 
         print('Accumulating...')
         c = 0

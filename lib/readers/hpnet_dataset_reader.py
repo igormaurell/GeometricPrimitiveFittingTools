@@ -50,6 +50,7 @@ class HPNetDatasetReader(BaseDatasetReader):
             local_2_global_map = h5_file['local_2_global_map'][()] if 'local_2_global_map' in h5_file.keys() else None
             gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
             matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
+            global_indices = h5_file['global_indices'][()] if 'global_indices' in h5_file.keys() else None
 
             if local_2_global_map is not None:
                 valid_labels_mask = labels != -1
@@ -119,6 +120,8 @@ class HPNetDatasetReader(BaseDatasetReader):
             result['gt_indices'] = gt_indices
         if matching is not None:
             result['matching'] = matching
+        if global_indices is not None:
+            result['global_indices'] = global_indices
 
         self.steps_by_set[self.current_set_name] += 1
         
