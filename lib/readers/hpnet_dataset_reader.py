@@ -6,6 +6,7 @@ import numpy as np
 from .base_dataset_reader import BaseDatasetReader
 
 from lib.normalization import unNormalize
+from lib.utils import computeFeaturesPointIndices
 
 class HPNetDatasetReader(BaseDatasetReader):
     PRIMITIVES_MAP = {
@@ -56,33 +57,41 @@ class HPNetDatasetReader(BaseDatasetReader):
                 valid_labels_mask = labels != -1
                 labels[valid_labels_mask] = local_2_global_map[labels[valid_labels_mask]]
 
-            unique_labels, unique_indices = np.unique(labels, return_index=True)
-
-            unique_indices = unique_indices[unique_labels != -1]
+            unique_labels = np.unique(labels)
             unique_labels = unique_labels[unique_labels != -1]
-            
-            types = prim[unique_indices]
-            primitive_params = params[unique_indices]
 
             if len(unique_labels) > 0:
                 max_size = max(unique_labels) + 1
             else:
                 max_size = 0
+
+            fpi = computeFeaturesPointIndices(labels, size=max_size)
+
             features_data = [None]*max_size  
-            for i, label in enumerate(unique_labels):
+            for label in unique_labels:
+                indices = fpi[label]
+                types = prim[indices]
+                types_unique, types_counts = np.unique(types, return_counts=True)
+                argmax = np.argmax(types_counts)
+                tp_id = types_unique[argmax]
+
+                valid_indices = indices[np.where(types==tp_id)[0].astype(np.int32)]
+
+                primitive_params = params[valid_indices, :]
+
                 feature = {}
-                tp = HPNetDatasetReader.PRIMITIVES_MAP[int(types[i])]
+                tp = HPNetDatasetReader.PRIMITIVES_MAP[tp_id]
                 feature['type'] = tp
 
                 if tp == 'Plane':
-                    z_axis = primitive_params[i, 4:7]
+                    z_axis = primitive_params[0, 4:7]
                     feature['z_axis'] = z_axis.tolist()
-                    feature['location'] = (primitive_params[i, 7]*z_axis).tolist()
+                    feature['location'] = (primitive_params[0, 7]*z_axis).tolist()
 
                 elif tp == 'Cone':
-                    apex = primitive_params[i, 15:18]
-                    location = primitive_params[i, 18:21]
-                    angle = primitive_params[i, 21]
+                    apex = primitive_params[0, 15:18]
+                    location = primitive_params[0, 18:21]
+                    angle = primitive_params[0, 21]
                     axis = location - apex
                     dist = np.linalg.norm(axis)
                     z_axis = axis/dist
@@ -95,13 +104,13 @@ class HPNetDatasetReader(BaseDatasetReader):
                     feature['radius'] = radius
 
                 elif tp == 'Cylinder':
-                    feature['z_axis'] = primitive_params[i, 8:11].tolist()
-                    feature['location'] = primitive_params[i, 11:14].tolist()
-                    feature['radius'] = primitive_params[i, 14]
+                    feature['z_axis'] = primitive_params[0, 8:11].tolist()
+                    feature['location'] = primitive_params[0, 11:14].tolist()
+                    feature['radius'] = primitive_params[0, 14]
 
                 elif tp == 'Sphere':
-                    feature['location'] = primitive_params[i, :3].tolist()
-                    feature['radius'] = primitive_params[i, 3]
+                    feature['location'] = primitive_params[0, :3].tolist()
+                    feature['radius'] = primitive_params[0, 3]
                 
                 features_data[label] = feature
 
