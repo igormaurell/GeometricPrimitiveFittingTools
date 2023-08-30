@@ -42,17 +42,21 @@ def generateErrorsBoxPlot(errors, individual=True, all_models=False):
         ax2.boxplot(data_angles, labels=data_labels, autorange=False, meanline=True)
     return fig
 
-def sumToLogsDict(keys, d, nop=0, novp=0, noip=0, nopoints=0, novpoints=0, sd=0, sa=0, siiou=0., stiou=0.):
+def sumToLogsDict(keys, d, nop=0, novp=0, noip=0, nopoints=0, novpoints=0, nogtpoints=0,
+                  sd=0, sa=0, sdgt=0, sagt=0, siiou=0., stiou=0.):
     for key in keys:
         d[key]['number_of_primitives'] += nop
         d[key]['number_of_void_primitives'] += novp
         d[key]['number_of_invalid_primitives'] += noip
         d[key]['number_of_points'] += nopoints
         d[key]['number_of_valid_points'] += novpoints
+        d[key]['number_of_valid_gt_points'] += nogtpoints
         d[key]['mean_distance_error'] += sd
-        d[key]['mean_normal_error'] += sa
+        d[key]['mean_normal_error'] += sa        
         d[key]['mean_iou'] += siiou
         d[key]['mean_type_iou'] += stiou
+        d[key]['mean_distance_gt_error'] += sdgt
+        d[key]['mean_normal_gt_error'] += sagt  
     return d
 
 def getBaseKeyLogsDict():
@@ -62,10 +66,13 @@ def getBaseKeyLogsDict():
         'number_of_invalid_primitives': 0,
         'number_of_points': 0,
         'number_of_valid_points': 0,
+        'number_of_valid_gt_points': 0,
         'mean_distance_error': 0,
         'mean_normal_error': 0,
         'mean_iou': 0,
-        'mean_type_iou': 0
+        'mean_type_iou': 0,
+        'mean_distance_gt_error': 0,
+        'mean_normal_gt_error': 0
         }
     return d
 
@@ -75,8 +82,10 @@ def addTwoLogsDict(first, second):
             first[key] = getBaseKeyLogsDict()
         first = sumToLogsDict([key], first, nop=second[key]['number_of_primitives'], novp=second[key]['number_of_void_primitives'],
                               noip=second[key]['number_of_invalid_primitives'], nopoints=second[key]['number_of_points'], 
-                              novpoints=second[key]['number_of_valid_points'], sd=second[key]['mean_distance_error'], 
-                              sa=second[key]['mean_normal_error'], siiou=second[key]['mean_iou'], stiou=second[key]['mean_type_iou'])
+                              novpoints=second[key]['number_of_valid_points'], nogtpoints=second[key]['number_of_valid_gt_points'],
+                              sd=second[key]['mean_distance_error'], sdgt=second[key]['mean_distance_gt_error'],
+                              sagt=second[key]['mean_normal_gt_error'], sa=second[key]['mean_normal_error'], siiou=second[key]['mean_iou'],
+                              stiou=second[key]['mean_type_iou'])
     return first
 
 def generateErrorsLogDict(errors):
@@ -100,6 +109,22 @@ def generateErrorsLogDict(errors):
             number_of_valid_points += len(ind_distances[i])
             summd += np.sum(ind_distances[i])
             summa += np.sum(ind_angles[i])
+
+        number_of_valid_gt_points = 0
+        ind_gt_distances = e['distances_to_gt']
+        ind_gt_angles = e['normals_to_gt']
+        summdgt = 0.
+        summagt = 0.
+        if len(ind_gt_distances) > 0:
+            summdgt = 0.
+            summagt = 0.
+            for i in range(len(ind_gt_distances)):
+                number_of_valid_gt_points += len(ind_gt_angles[i])
+                summdgt += np.sum(ind_gt_distances[i])
+                summagt += np.sum(ind_gt_angles[i])
+        else:
+            summdgt = -1.
+            summagt = -1.
         
         if len(instance_ious) > 0:
             siiou = sum(instance_ious)
@@ -115,18 +140,19 @@ def generateErrorsLogDict(errors):
             logs_dict[tp] = getBaseKeyLogsDict()
         logs_dict = sumToLogsDict(['Total', tp], logs_dict, nop=number_of_primitives, 
                                   novp=number_of_void_primitives, noip=number_of_invalid_primitives,
-                                  nopoints=number_of_points, novpoints=number_of_valid_points, sd=summd,
-                                  sa=summa, siiou=siiou, stiou=stiou)
+                                  nopoints=number_of_points, novpoints=number_of_valid_points,
+                                  nogtpoints=number_of_valid_gt_points, sd=summd, sa=summa, sdgt=summdgt, sagt=summagt,
+                                  siiou=siiou, stiou=stiou)
     return logs_dict
 
 def computeLogMeans(logs_dict, denominator=0):
     result = deepcopy(logs_dict)
     for tp in logs_dict.keys():
-        number_points = result[tp]['number_of_points'] if result[tp]['number_of_points'] > 0 else 1
-        number_points = number_points if denominator == 0 else denominator
-
         number_valid_points = result[tp]['number_of_valid_points'] if result[tp]['number_of_valid_points'] > 0 else 1
         number_valid_points = number_valid_points if denominator == 0 else denominator
+
+        number_of_valid_gt_points = result[tp]['number_of_valid_gt_points'] if result[tp]['number_of_valid_gt_points'] > 0 else 1
+        number_of_valid_gt_points = number_of_valid_gt_points if denominator == 0 else denominator
 
         number_of_primitives = result[tp]['number_of_primitives'] - result[tp]['number_of_void_primitives']
         number_of_primitives = number_of_primitives if denominator == 0 else denominator
@@ -135,6 +161,10 @@ def computeLogMeans(logs_dict, denominator=0):
             result[tp]['mean_distance_error'] = result[tp]['mean_distance_error']/number_valid_points
         if 'mean_normal_error' in result[tp]:
             result[tp]['mean_normal_error'] = result[tp]['mean_normal_error']/number_valid_points
+        if 'mean_distance_gt_error' in result[tp]:
+            result[tp]['mean_distance_gt_error'] = result[tp]['mean_distance_gt_error']/number_of_valid_gt_points
+        if 'mean_normal_gt_error' in result[tp]:
+            result[tp]['mean_normal_gt_error'] = result[tp]['mean_normal_gt_error']/number_of_valid_gt_points
         if 'mean_iou' in result[tp]:
             result[tp]['mean_iou'] = result[tp]['mean_iou']/number_of_primitives if number_of_primitives > 0 else 0.
         if 'mean_type_iou' in result[tp]:
@@ -145,6 +175,12 @@ def computeLogMeans(logs_dict, denominator=0):
 def filterLog(logs_dict):
     result = deepcopy(logs_dict)
     for tp in logs_dict.keys():
+        if 'mean_distance_gt_error' in result[tp]:
+            if result[tp]['mean_distance_gt_error'] < 0:
+                del result[tp]['mean_distance_gt_error']
+        if 'mean_normal_gt_error' in result[tp]:
+            if result[tp]['mean_normal_gt_error'] < 0:
+                del result[tp]['mean_normal_gt_error']
         if 'mean_iou' in result[tp]:
             if result[tp]['mean_iou'] < 0:
                 del result[tp]['mean_iou']
@@ -191,36 +227,20 @@ def process(data_tuple):
     fpi = computeFeaturesPointIndices(labels, size=len(features))
 
     instance_ious = []
+    fpi_gt = None
+    gt_points = None
+    gt_normals = None
     #type_ious = []
     if gt_data is not None:
         query_labels = data['labels']
         gt_labels = gt_data['labels'][data['gt_indices']]
         instance_ious = computeIoUs(query_labels, gt_labels)
 
-        # query_types = np.zeros(len(query_labels), dtype=np.int32) - 1
-        # valid_query_labels = query_labels > -1
-        # query_unique_labels, query_local = np.unique(query_labels[valid_query_labels], return_inverse=True)
-        # query_labels_types = [data['features_data'][ql]['type'] for ql in query_unique_labels]
-        
-        # gt_types = np.zeros(len(gt_labels), dtype=np.int32) - 1
-        # valid_gt_labels = gt_labels > -1
-        # gt_unique_labels, gt_local = np.unique(gt_labels[valid_gt_labels], return_inverse=True)
-        # gt_labels_types = [gt_data['features_data'][gl]['type'] for gl in gt_unique_labels]
+        fpi_gt = computeFeaturesPointIndices(gt_data['labels'], size=len(gt_data['features_data']))
 
-        # unique_types = set(query_labels_types).union(set(gt_labels_types))
+        gt_points = gt_data['points']
+        gt_normals = gt_data['normals']
 
-        # type_to_id_map = {}
-        # for id, tp in enumerate(unique_types):
-        #     type_to_id_map[tp] = id
-
-        # query_labels_to_type_id_map = np.asarray([type_to_id_map[qt] for qt in query_labels_types], dtype=np.int32)
-        # gt_labels_to_type_id_map = np.asarray([type_to_id_map[gt] for gt in gt_labels_types], dtype=np.int32)
-
-        # query_types[valid_query_labels] = query_labels_to_type_id_map[query_local]
-        # gt_types[valid_gt_labels] = gt_labels_to_type_id_map[gt_local]
-
-        # type_ious = query_types==gt_types
-        
     for i, feature in enumerate(features):
         indices = fpi[i]
         if feature is not None and indices is not None:
@@ -234,9 +254,9 @@ def process(data_tuple):
                 tp = feature['type']
                 
             if tp not in dataset_errors[filename]:
-                dataset_errors[filename][tp] = {'number_of_points': 0, 'distances': [], 'mean_distances': [], 'angles': [], 
-                                                'mean_angles': [], 'void_primitives': [], 'invalid_primitives': [],
-                                                'instance_ious': [], 'type_ious': []}
+                dataset_errors[filename][tp] = {'number_of_points': 0, 'distances': [], 'angles': [],
+                                                'distances_to_gt': [], 'normals_to_gt': [], 'void_primitives': [],
+                                                'invalid_primitives': [], 'instance_ious': [], 'type_ious': []}
 
             dataset_errors[filename][tp]['number_of_points'] += len(indices)
 
@@ -250,6 +270,15 @@ def process(data_tuple):
                 distances, angles = primitive.computeErrors(points_curr, normals=normals_curr)
                 dataset_errors[filename][tp]['distances'].append(distances)
                 dataset_errors[filename][tp]['angles'].append(angles)
+
+                if fpi_gt is not None:
+                    indices_gt = fpi_gt[i]
+                    points_gt_curr = gt_points[indices_gt]
+                    normals_gt_curr = gt_normals[indices_gt]
+                    distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr)
+                    dataset_errors[filename][tp]['distances_to_gt'].append(distances_to_gt)
+                    dataset_errors[filename][tp]['normals_to_gt'].append(angles_to_gt)
+
                 
             if len(indices) > 0:
                 if gt_data is not None:

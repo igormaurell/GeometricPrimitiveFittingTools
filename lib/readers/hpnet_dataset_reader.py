@@ -7,6 +7,7 @@ from .base_dataset_reader import BaseDatasetReader
 
 from lib.normalization import unNormalize
 from lib.utils import computeFeaturesPointIndices
+from lib.fitting_func import FittingFunctions
 
 class HPNetDatasetReader(BaseDatasetReader):
     PRIMITIVES_MAP = {
@@ -75,23 +76,18 @@ class HPNetDatasetReader(BaseDatasetReader):
                 argmax = np.argmax(types_counts)
                 tp_id = types_unique[argmax]
 
-                valid_indices = indices[np.where(types==tp_id)[0].astype(np.int32)]
-
-                primitive_params = params[valid_indices, :]
-
                 feature = {}
                 tp = HPNetDatasetReader.PRIMITIVES_MAP[tp_id]
                 feature['type'] = tp
 
+                primitive_params = FittingFunctions.fit(tp, points[indices], normals[indices])
                 if tp == 'Plane':
-                    z_axis = primitive_params[0, 4:7]
+                    z_axis, d = primitive_params
                     feature['z_axis'] = z_axis.tolist()
-                    feature['location'] = (primitive_params[0, 7]*z_axis).tolist()
+                    feature['location'] = (d*z_axis).tolist()
 
                 elif tp == 'Cone':
-                    apex = primitive_params[0, 15:18]
-                    location = primitive_params[0, 18:21]
-                    angle = primitive_params[0, 21]
+                    location, apex, angle = primitive_params
                     axis = location - apex
                     dist = np.linalg.norm(axis)
                     z_axis = axis/dist
@@ -104,13 +100,17 @@ class HPNetDatasetReader(BaseDatasetReader):
                     feature['radius'] = radius
 
                 elif tp == 'Cylinder':
-                    feature['z_axis'] = primitive_params[0, 8:11].tolist()
-                    feature['location'] = primitive_params[0, 11:14].tolist()
-                    feature['radius'] = primitive_params[0, 14]
+                    z_axis, location, radius = primitive_params
+                    if radius > 10 or location[0] > 10 or location[1] > 10 or location[2] > 10:
+                        radius = -1
+                    feature['z_axis'] = z_axis.tolist()
+                    feature['location'] = location.tolist()
+                    feature['radius'] = radius
 
                 elif tp == 'Sphere':
-                    feature['location'] = primitive_params[0, :3].tolist()
-                    feature['radius'] = primitive_params[0, 3]
+                    location, radius = primitive_params
+                    feature['location'] = location.tolist()
+                    feature['radius'] = radius
                 
                 features_data[label] = feature
 
