@@ -566,7 +566,7 @@ LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizonta
 
 def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180,
                                                      'vertical_resolution':0.09, 'horizontal_resolution':0.09},
-                                   dome_cell_size=1, distance_std=0., distance=0.5, verbose=True, view_pcd=False):
+                                   dome_cell_size=14, distance_std=0., distance=2, verbose=True, view_pcd=False):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'

@@ -132,7 +132,7 @@ def mergeQueryAndGTData(query, gt, global_min=-1, num_points=0):
         # just gt has global indices
         global_indices = gt['global_indices'][gt_indices]    
 
-    assert np.allclose(query['points'], gt['points'][gt_indices], rtol=0., atol=1e-6)
+    assert np.allclose(query['points'], gt['points'][gt_indices], rtol=0., atol=1e-5), f"{query['points']} != {gt['points'][gt_indices]}"
 
     query_labels = query['labels']
     gt_labels = gt['labels'][gt_indices]

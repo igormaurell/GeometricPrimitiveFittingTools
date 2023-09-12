@@ -256,8 +256,7 @@ class FittingFunctions:
             if show_warning:
                 print("condition number is large, cone")
                 print(torch.sum(normals).item(), torch.sum(points).item(), torch.sum(weights).item())
-            return torch.zeros((1, 3)).cuda(points.get_device()), torch.Tensor([[1.0, 0.0, 0.0]]).cuda(
-                points.get_device()), torch.zeros(1).cuda(points.get_device())
+            return torch.zeros((1, 3)), torch.Tensor([[1.0, 0.0, 0.0]]), torch.zeros(1)
 
         c = FittingFunctions.LS.lstsq(A, Y, lamb=1e-3)
 
