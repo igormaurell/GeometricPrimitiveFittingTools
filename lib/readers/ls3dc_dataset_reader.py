@@ -29,20 +29,22 @@ class LS3DCDatasetReader(BaseDatasetReader):
 
         with open(join(self.data_folder_name, 'train_models.csv'), 'r', newline='') as f:
             data = list(csv.reader(f, delimiter=',', quotechar='|'))
-            self.filenames_by_set['train'] = data[0] if len(data) > 0 else data
+            data = data[0] if len(data) > 0 else data
+            data = [d[:d.rfind('.')] for d in data]
+            self.filenames_by_set['train'] = data
         with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
             data = list(csv.reader(f, delimiter=',', quotechar='|'))
-            self.filenames_by_set['val'] = data[0] if len(data) > 0 else data
+            data = data[0] if len(data) > 0 else data
+            data = [d[:d.rfind('.')] for d in data]
+            self.filenames_by_set['val'] = data
 
-    def step(self, unormalize=True):
+    def step(self, unormalize=True, **kwargs):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
         filename = self.filenames_by_set[self.current_set_name][index]
-        point_position = filename.rfind('.')
 
-        data_file_path = join(self.data_folder_name, filename)
-        filename = filename[:point_position]
+        data_file_path = join(self.data_folder_name, f'{filename}.h5')
         transforms_file_path = join(self.transform_folder_name, f'{filename}.pkl')
 
         with open(transforms_file_path, 'rb') as pkl_file:
@@ -57,6 +59,7 @@ class LS3DCDatasetReader(BaseDatasetReader):
             labels = h5_file['gt_labels'][()] if 'gt_labels' in h5_file.keys() else None
             gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
             matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
+            global_indices = h5_file['global_indices'][()] if 'global_indices' in h5_file.keys() else None
 
             found_soup_ids = []
             soup_id_to_key = {}
@@ -84,7 +87,7 @@ class LS3DCDatasetReader(BaseDatasetReader):
             'points': gt_points,
             'normals': gt_normals,
             'labels': labels,
-            'features': features_data,
+            'features_data': features_data,
             'filename': filename,
             'transforms': transforms
         }
@@ -93,6 +96,8 @@ class LS3DCDatasetReader(BaseDatasetReader):
             result['gt_indices'] = gt_indices
         if matching is not None:
             result['matching'] = matching
+        if global_indices is not None:
+            result['global_indices'] = global_indices
 
         self.steps_by_set[self.current_set_name] += 1
         

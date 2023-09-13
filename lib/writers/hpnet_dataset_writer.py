@@ -23,7 +23,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None,
+             features_point_indices=None, **kwargs):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -53,7 +54,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
 
         with h5py.File(data_file_path, 'w') as h5_file:
                 
-            points, normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, normals=normals.copy(), features=features_data)
+            points, normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, 
+                                                                   normals=normals.copy(), features=features_data)
 
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
@@ -61,20 +63,24 @@ class HPNetDatasetWriter(BaseDatasetWriter):
             h5_file.create_dataset('points', data=points)
             h5_file.create_dataset('normals', data=normals)
             if 'gt_indices' in kwargs:
-                h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'])
+                h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'].astype(np.int32))
             if 'matching' in kwargs:
-                h5_file.create_dataset('matching', data=kwargs['matching'])
+                h5_file.create_dataset('matching', data=kwargs['matching'].astype(np.int32))
+            if 'global_indices' in kwargs:
+                h5_file.create_dataset('global_indices', data=kwargs['global_indices'].astype(np.int32))
 
             if labels is not None:
                 primitive_params = np.zeros((len(labels), 22))
                 types = np.zeros(len(labels)) - 1
-                global_to_local_labels_map = np.zeros(len(features_data)) - 1
+                local_labels = np.zeros(len(labels)) - 1
+                local_2_global_map = []
                 j = 0
                 for i, feature in enumerate(features_data):
                     if feature is not None and feature['type'] in HPNetDatasetWriter.PRIMITIVES_MAP:
                         tp = feature['type']
-                        global_to_local_labels_map[i] = j
                         indices = features_point_indices[i]
+                        local_labels[indices] = len(local_2_global_map)
+                        local_2_global_map.append(i)
 
                         types[indices] = HPNetDatasetWriter.PRIMITIVES_MAP[tp]
 
@@ -99,13 +105,10 @@ class HPNetDatasetWriter(BaseDatasetWriter):
 
                         j+= 1
 
-                local_labels = global_to_local_labels_map[labels]
-                labels[local_labels == -1] = -1
-
                 h5_file.create_dataset('prim', data=types.astype(np.int32))
                 h5_file.create_dataset('T_param',  data=primitive_params)
                 h5_file.create_dataset('labels', data=local_labels.astype(np.int32))
-                h5_file.create_dataset('global_labels', data=labels.astype(np.int32))
+                h5_file.create_dataset('local_2_global_map', data=np.asarray(local_2_global_map, dtype=np.int32))
                 
         return True
 

@@ -4,6 +4,7 @@ import csv
 import uuid
 import os
 from collections.abc import Iterable
+import numpy as np
 
 from lib.normalization import normalize
 from lib.utils import filterFeaturesData, computeFeaturesPointIndices
@@ -20,7 +21,6 @@ def dict_to_hdf5_group(group, data_dict):
         else:
             group[key] = value
 
-import time
 class LS3DCDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
@@ -58,6 +58,13 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
             if 'add_noise' in self.normalization_parameters.keys():
                 noise_limit = self.normalization_parameters['add_noise']
                 self.normalization_parameters['add_noise'] = 0.
+            
+            if 'gt_indices' in kwargs:
+                h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'].astype(np.int32))
+            if 'matching' in kwargs:
+                h5_file.create_dataset('matching', data=kwargs['matching'].astype(np.int32))
+            if 'global_indices' in kwargs:
+                h5_file.create_dataset('global_indices', data=kwargs['global_indices'].astype(np.int32))
                 
             gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters,
                                                                          normals=normals.copy(), features=features_data)
@@ -93,8 +100,7 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
                         if 'face_indices' in feature.keys():
                             del feature['face_indices']
                         sub_grp = grp.create_group('parameters')
-                        dict_to_hdf5_group(sub_grp, feature)
-                             
+                        dict_to_hdf5_group(sub_grp, feature)                             
         return True
 
     def finish(self, permutation=None):
