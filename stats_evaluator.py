@@ -12,6 +12,9 @@ from os.path import join
 
 import matplotlib.pyplot as plt
 
+from asGeometryOCCWrapper.curves import CurveFactory
+from asGeometryOCCWrapper.surfaces import SurfaceFactory
+
 def addStats(dict1, dict2):
     for key, value in dict2.items():
         if type(value) is int or type(value) is float:
@@ -56,14 +59,23 @@ def createNestedPieGraph(labels, in_data, out_data, title='', number_in_per_out=
 
     return fig
 
-def createPieGraph(labels, data, title='', num_models=1):
+def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface'):
     fig, ax = plt.subplots(figsize=(10.5, 6))
 
     size = 0.8
 
-    cmap = plt.get_cmap("tab20")
-    colors_array = np.arange(len(data))*2
-    colors = cmap(colors_array)
+    #cmap = plt.get_cmap("tab20")
+    #colors_array = np.arange(len(data))*2
+    #colors = cmap(colors_array)
+
+    if geometry_type == 'curve':
+        colors = np.asarray([list(CurveFactory.FEATURES_CURVE_CLASSES[l].getColor()) + [255] for l in labels])
+    elif geometry_type == 'surface':
+        colors = np.asarray([list(SurfaceFactory.FEATURES_SURFACE_CLASSES[l].getColor()) + [255] for l in labels])
+    else:
+        assert False
+
+    colors = colors/255.
 
     wedges = ax.pie(data, radius=1.1, colors=colors, wedgeprops=dict(width=size, edgecolor='w'))
 
@@ -134,8 +146,10 @@ def statsData2Graphs(data, num_models=1):
             # data_small.append(d['number_curves']-d['number_small_curves'])
             # data_small.append(d['number_small_curves'])
     #fig_number_curves = createNestedPieGraph(columns_curves, data_number, data_small, title='Nuber of Curves per Type')
-    fig_number_curves = createPieGraph(columns_curves, data_number, title='Number of Curves per Type', num_models=num_models)
-    fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve', num_models=num_models)
+    fig_number_curves = createPieGraph(columns_curves, data_number, title='Number of Curves per Type', 
+                                       num_models=num_models, geometry_type='curve')
+    fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve', 
+                                         num_models=num_models, geometry_type='curve')
 
     ##surfaces
     columns_surfaces = []

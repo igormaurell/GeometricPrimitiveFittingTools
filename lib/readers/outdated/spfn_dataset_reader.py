@@ -7,14 +7,24 @@ import re
 from .base_dataset_reader import BaseDatasetReader
 
 from lib.normalization import unNormalize
-from lib.utils import translateFeature
+from lib.utils import translateFeature, strUpperFirstLetter
 
-class ParsenetDatasetReader(BaseDatasetReader):
-    FEATURES_ID = {
-        'plane': 1,
-        'cone': 3,
-        'cylinder': 4,
-        'sphere': 5
+class SpfnDatasetReader(BaseDatasetReader):
+    FEATURES_BY_TYPE = {
+        'plane': ['type', 'foward', 'location', 'z_axis'],
+        'cylinder': ['type', 'foward', 'location', 'z_axis', 'radius'],
+        'cone': ['type', 'foward', 'location', 'z_axis', 'radius', 'angle', 'apex'],
+        'sphere': ['type', 'foward', 'location', 'radius']
+    }
+
+    FEATURES_MAPPING = {
+        'type': {'type': str, 'map': 'type', 'transform': strUpperFirstLetter},
+        'location': {'type': list, 'map': ['location_x', 'location_y', 'location_z']},
+        'z_axis': {'type': list, 'map': ['axis_x', 'axis_y', 'axis_z']},
+        'apex': {'type': list, 'map': ['apex_x', 'apex_y', 'apex_z']},
+        'angle': {'type': float, 'map': 'semi_angle'},
+        'radius': {'type': float, 'map': 'radius'},
+        'foward': {'type': str, 'map': 'foward'}
     }
 
     def __init__(self, parameters):
@@ -22,10 +32,10 @@ class ParsenetDatasetReader(BaseDatasetReader):
 
         with open(join(self.data_folder_name, 'train_models.csv'), 'r', newline='') as f:
             self.filenames_by_set['train'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
-        with open(join(self.data_folder_name, 'val_models.csv'), 'r', newline='') as f:
+        with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
             self.filenames_by_set['val'] = list(csv.reader(f, delimiter=',', quotechar='|'))[0]
 
-    def step(self):
+    def step(self, unormalize=True):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
@@ -35,6 +45,9 @@ class ParsenetDatasetReader(BaseDatasetReader):
         data_file_path = join(self.data_folder_name, filename)
         filename = filename[:point_position]
         transforms_file_path = join(self.transform_folder_name, f'{filename}.pkl')
+
+        with open(transforms_file_path, 'rb') as pkl_file:
+            transforms = pickle.load(pkl_file)
 
         with h5py.File(data_file_path, 'r') as h5_file:
             noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
@@ -52,16 +65,18 @@ class ParsenetDatasetReader(BaseDatasetReader):
                     found_soup_ids.append(soup_id)
                     soup_id_to_key[soup_id] = key
 
-            features_data = []            
+            max_size = max(found_soup_ids) + 1 if len(found_soup_ids) > 0 else 0
+            features_data = [None]*max_size  
             found_soup_ids.sort()
-            for i in range(len(found_soup_ids)):
+            for i in found_soup_ids:
                 g = h5_file[soup_id_to_key[i]]
                 meta = pickle.loads(g.attrs['meta'])
                 meta = translateFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_MAPPING)
-                features_data.append(meta)
+                features_data[i] = meta
 
-        gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-        noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
+        if unNormalize:
+            gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
+            noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,
@@ -70,6 +85,7 @@ class ParsenetDatasetReader(BaseDatasetReader):
             'labels': labels,
             'features': features_data,
             'filename': filename,
+            'transforms': transforms
         }
 
         self.steps_by_set[self.current_set_name] += 1
@@ -78,3 +94,6 @@ class ParsenetDatasetReader(BaseDatasetReader):
     
     def finish(self):
         super().finish()
+    
+    def __iter__(self):
+        return super().__iter__()

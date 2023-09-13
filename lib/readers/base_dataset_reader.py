@@ -40,5 +40,5 @@ class BaseDatasetReader:
         return DatasetReaderIterator(self)
 
     @abstractmethod
-    def step(self):
+    def step(self, unnormalize=True):
         pass   

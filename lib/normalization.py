@@ -1,5 +1,8 @@
 import numpy as np
 
+#TODO: do the normalization again using asGeometryOCCWrapper (smaller code)
+
+
 FEATURE_TYPE = {
     'location'  : 'point',
     'direction' : 'vector',
@@ -52,10 +55,11 @@ def rotateUtil(points, transform, normals=None, features=[]):
     if normals is not None:
         normals = (transform @ normals.T).T
     for i in range(0, len(features)):
-        for key in features[i].keys():
-            if key in FEATURE_TYPE.keys():
-                if FEATURE_TYPE[key] == 'point' or FEATURE_TYPE[key] == 'vector':
-                    features[i][key] = list((transform @ np.array(features[i][key]).T).T)
+        if features[i] is not None:
+            for key in features[i].keys():
+                if key in FEATURE_TYPE.keys():
+                    if FEATURE_TYPE[key] == 'point' or FEATURE_TYPE[key] == 'vector':
+                        features[i][key] = list((transform @ np.array(features[i][key]).T).T)
     return points, normals, features
 
 def alignCanonical(points, normals=None, features=[]):
@@ -68,10 +72,11 @@ def alignCanonical(points, normals=None, features=[]):
 def translateUtil(points, transform, normals=None, features=[]):
     points = points + transform
     for i in range(0, len(features)):
-        for key in features[i].keys():
-            if key in FEATURE_TYPE.keys():
-                if FEATURE_TYPE[key] == 'point':
-                    features[i][key] = list(np.array(features[i][key]) + transform)
+        if features[i] is not None:
+            for key in features[i].keys():
+                if key in FEATURE_TYPE.keys():
+                    if FEATURE_TYPE[key] == 'point':
+                        features[i][key] = list(np.array(features[i][key]) + transform)
     return points, normals, features
 
 def centralize(points, features=[]):
@@ -82,12 +87,13 @@ def centralize(points, features=[]):
 def reescaleUtil(points, factor, normals=None, features=[]):
     points = points*factor
     for i in range(0, len(features)):
-        for key in features[i].keys():
-            if key in FEATURE_TYPE.keys():
-                if FEATURE_TYPE[key] == 'point':
-                    features[i][key] = list(np.array(features[i][key])*factor)
-                if FEATURE_TYPE[key] == 'value':
-                    features[i][key]*= factor
+        if features[i] is not None:
+            for key in features[i].keys():
+                if key in FEATURE_TYPE.keys():
+                    if FEATURE_TYPE[key] == 'point':
+                        features[i][key] = list(np.array(features[i][key])*factor)
+                    if FEATURE_TYPE[key] == 'value':
+                        features[i][key]*= factor
     return points, normals, features
 
 def rescale(points, features=[], factor=1000):
@@ -117,7 +123,7 @@ def unNormalize(points, transforms, normals=None, features=[], invert=True):
     else:
         t = transforms
 
-    for key in t['sequence'][::-1]:
+    for key in t['sequence']:
         points, normals, features = transform_functions[key](points, t[key], normals=normals, features=features)
 
     return points, normals, features

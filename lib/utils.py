@@ -55,6 +55,7 @@ def computeRGB(value):
     return (r, g, b)
 
 def getAllColorsArray():
+    np.random.seed(0)
     colors = np.random.permutation(256*256*256)
     return colors
 
@@ -136,44 +137,56 @@ def translateFeature(feature_data, features_by_type, features_mapping):
             feature_out[feature_key] = feature_data[feature_key]
     return feature_out
 
-def filterFeaturesData(features_data, types=None, min_number_points=None, labels=None, features_point_indices=None):
+def filterFeaturesData(features_data, labels, types=None, min_number_points=None, features_point_indices=None):
+    if features_point_indices is None:
+        features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
+    
     by_type_condition = lambda x: True
     if types is not None:
         by_type_condition = lambda x: x['type'].lower() in types
+
     by_npoints_condition = lambda x: True
-    if min_number_points is not None and features_point_indices is not None:
+    if min_number_points is not None:
         by_npoints_condition = lambda x: len(x) >= min_number_points
 
-    labels_map = np.zeros(len(features_data))
-    new_features_data = []
-    new_features_point_indices = []
-    i = 0
+    labels_map = np.arange(len(features_data), dtype=np.int32)
+    new_features_data = [None]*len(features_data)
+    new_features_point_indices = [None]*len(features_data)
     for j in range(len(features_data)):
         feature = features_data[j]
         fpi = features_point_indices[j]
-        labels_map[j] = -1
-        if by_type_condition(feature) and by_npoints_condition(fpi):
-            labels_map[j] = i
-            new_features_data.append(features_data[j])
-            new_features_point_indices.append(features_point_indices[j])
-            i+= 1            
+        if feature is not None and fpi is not None:
+            if by_type_condition(feature) and by_npoints_condition(fpi):
+                new_features_data[j] = features_data[j]
+                new_features_point_indices[j] = features_point_indices[j]
+            else:
+                labels_map[j] = -1
+        else:
+            labels_map[j] = -1
 
     if labels is not None:
-        for i in range(len(labels)):
-            if labels[i] != -1:
-                labels[i] = labels_map[labels[i]]
+        not_minus_one_mask = labels != -1
+        labels[not_minus_one_mask] = labels_map[labels[not_minus_one_mask]]
 
     return new_features_data, labels, new_features_point_indices
 
 def computeFeaturesPointIndices(labels, size=None):
     if size is None:
         size = np.max(labels) + 1
-    features_point_indices = [[] for i in range(0, size + 1)]
-    for i in range(0, len(labels)):
-        features_point_indices[labels[i]].append(i)
-    features_point_indices.pop(-1)
 
-    for i in range(0, len(features_point_indices)):
+    features_point_indices = [None]*size
+    
+    labels_mask = labels != -1
+    not_none_features = []
+    for i in range(0, len(labels)):
+        if labels_mask[i]:
+            if features_point_indices[labels[i]] is None:
+                not_none_features.append(labels[i])
+                features_point_indices[labels[i]] = [i]
+            else:
+                features_point_indices[labels[i]].append(i)
+
+    for i in not_none_features:
         features_point_indices[i] = np.array(features_point_indices[i], dtype=np.int64)
 
     return features_point_indices
@@ -552,7 +565,7 @@ def pairWiseRegistration(source, target, source_labels, target_labels, distance_
 LIDAR_KEYS =['vertical_fov', 'horizontal_fov', 'vertical_resolution', 'horizontal_resolution']
 
 def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizontal_fov':180, 'vertical_resolution':0.09, 'horizontal_resolution':0.09},
-                                   dome_cell_size=14, distance_std=0., distance=3, verbose=True, view_pcd=False):
+                                   dome_cell_size=15, distance_std=0., distance=3, verbose=True, view_pcd=False):
     
 
     assert np.array([key in lidar_data.keys() for key in LIDAR_KEYS]).all(), 'Missing keys in lidar_data dictionary.'
@@ -608,7 +621,7 @@ def rayCastingPointCloudGeneration(mesh, lidar_data={'vertical_fov':180, 'horizo
         points = rays[hit][:,:3] + rays[hit][:,3:]*ans['t_hit'][hit].reshape((-1,1))
         normals = ans['primitive_normals'][hit].numpy()
 
-        normals = normals/np.linalg.norm(normals)
+        normals = normals/(np.linalg.norm(normals, axis=1)[:, np.newaxis])
 
         labels_mesh = ans['primitive_ids'][hit].numpy()
 
