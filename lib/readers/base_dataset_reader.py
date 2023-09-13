@@ -20,6 +20,7 @@ class BaseDatasetReader:
         self.dataset_folder_name = parameters['dataset_folder_name'] if 'dataset_folder_name' in parameters.keys() else None
         self.data_folder_name = parameters['data_folder_name'] if 'data_folder_name' in parameters.keys() else None
         self.transform_folder_name = parameters['transform_folder_name'] if 'transform_folder_name' in parameters.keys() else None
+        self.use_data_primitives = parameters['use_data_primitives'] if 'use_data_primitives' in parameters.keys() else True
 
     def reset(self):
         self.current_set_name = 'train'
@@ -40,5 +41,5 @@ class BaseDatasetReader:
         return DatasetReaderIterator(self)
 
     @abstractmethod
-    def step(self, unnormalize=True):
+    def step(self, unormalize=True, **kwargs):
         pass   

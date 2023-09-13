@@ -106,6 +106,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
 
+    parser.add_argument('--no_use_data_primitives', action='store_true')
+
     args = vars(parser.parse_args())
 
     folder_name = args['folder']
@@ -120,6 +122,8 @@ if __name__ == '__main__':
     transform_folder_name = args['transform_folder_name']
 
     use_gt_transform = args['use_gt_transform']
+
+    use_data_primitives = not args['no_use_data_primitives']
 
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is None:
         input_gt_data_folder_name = data_folder_name
@@ -141,6 +145,7 @@ if __name__ == '__main__':
     input_parameters[input_format]['data_folder_name'] = input_data_format_folder_name
     input_transform_format_folder_name = join(input_dataset_format_folder_name, transform_folder_name)
     input_parameters[input_format]['transform_folder_name'] = input_transform_format_folder_name
+    input_parameters[input_format]['use_data_primitives'] = use_data_primitives
 
     input_gt_transform_format_folder_name = None
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is not None:
@@ -204,7 +209,7 @@ if __name__ == '__main__':
         num_points = 0
         gt_labels = None
         for div_filename in divided_filenames:
-            data = reader.step()
+            data = reader.step(use_data_primitives=use_data_primitives)
             if gt_reader is not None:
                 gt_data = gt_reader.step()
                 if gt_labels is None:

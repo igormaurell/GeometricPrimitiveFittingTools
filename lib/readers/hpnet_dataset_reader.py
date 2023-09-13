@@ -31,7 +31,7 @@ class HPNetDatasetReader(BaseDatasetReader):
             if self.filenames_by_set['val'][-1] == '':
                 self.filenames_by_set['val'].pop()
 
-    def step(self, unormalize=True):
+    def step(self, unormalize=True, **kwargs):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
@@ -68,6 +68,8 @@ class HPNetDatasetReader(BaseDatasetReader):
 
             fpi = computeFeaturesPointIndices(labels, size=max_size)
 
+            use_data_primitives = self.use_data_primitives or params is None
+
             features_data = [None]*max_size  
             for label in unique_labels:
                 indices = fpi[label]
@@ -76,18 +78,31 @@ class HPNetDatasetReader(BaseDatasetReader):
                 argmax = np.argmax(types_counts)
                 tp_id = types_unique[argmax]
 
+                valid_indices = indices[np.where(types==tp_id)[0].astype(np.int32)]
+
                 feature = {}
                 tp = HPNetDatasetReader.PRIMITIVES_MAP[tp_id]
                 feature['type'] = tp
 
-                primitive_params = FittingFunctions.fit(tp, points[indices], normals[indices])
+                if use_data_primitives:
+                    primitive_params = params[valid_indices, :]
+                else:
+                    primitive_params = FittingFunctions.fit(tp, points[indices], normals[indices])
+
                 if tp == 'Plane':
-                    z_axis, d = primitive_params
+                    if use_data_primitives:
+                        z_axis, d = primitive_params[0, 4:7], primitive_params[0, 7]
+                    else:
+                        z_axis, d = primitive_params
                     feature['z_axis'] = z_axis.tolist()
                     feature['location'] = (d*z_axis).tolist()
 
                 elif tp == 'Cone':
-                    location, apex, angle = primitive_params
+                    if use_data_primitives:
+                        location, apex, angle = primitive_params[0, 18:21], primitive_params[0, 15:18], primitive_params[0, 21]
+                    else:
+                        location, apex, angle = primitive_params
+
                     axis = location - apex
                     dist = np.linalg.norm(axis)
                     z_axis = axis/dist
@@ -100,15 +115,23 @@ class HPNetDatasetReader(BaseDatasetReader):
                     feature['radius'] = radius
 
                 elif tp == 'Cylinder':
-                    z_axis, location, radius = primitive_params
-                    if radius > 10 or location[0] > 10 or location[1] > 10 or location[2] > 10:
-                        radius = -1
+                    if use_data_primitives:
+                        z_axis, location, radius = primitive_params[0, 8:11], primitive_params[0, 11:14], primitive_params[0, 14]
+                    else:
+                        z_axis, location, radius = primitive_params
+                        if radius > 10 or location[0] > 10 or location[1] > 10 or location[2] > 10:
+                            radius = -1
+
                     feature['z_axis'] = z_axis.tolist()
                     feature['location'] = location.tolist()
                     feature['radius'] = radius
 
                 elif tp == 'Sphere':
-                    location, radius = primitive_params
+                    if use_data_primitives:
+                        location, radius = primitive_params[0, :3], primitive_params[0, 3]
+                    else:
+                        location, radius = primitive_params
+                        
                     feature['location'] = location.tolist()
                     feature['radius'] = radius
                 

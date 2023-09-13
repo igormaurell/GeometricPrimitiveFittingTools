@@ -38,7 +38,7 @@ class LS3DCDatasetReader(BaseDatasetReader):
             data = [d[:d.rfind('.')] for d in data]
             self.filenames_by_set['val'] = data
 
-    def step(self, unormalize=True):
+    def step(self, unormalize=True, **kwargs):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])

@@ -346,6 +346,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
 
+    parser.add_argument('--no_use_data_primitives', action='store_true')
+
     args = vars(parser.parse_args())
 
     folder_name = args['folder']
@@ -366,6 +368,8 @@ if __name__ == '__main__':
 
     use_gt_transform = args['use_gt_transform']
 
+    use_data_primitives = not args['no_use_data_primitives']
+
     if gt_dataset_folder_name is not None and gt_data_folder_name is None:
         gt_data_folder_name = data_folder_name
     
@@ -384,6 +388,7 @@ if __name__ == '__main__':
     parameters[format]['data_folder_name'] = data_format_folder_name
     transform_format_folder_name = join(dataset_format_folder_name, transform_folder_name)
     parameters[format]['transform_folder_name'] = transform_format_folder_name
+    parameters[format]['use_data_primitives'] = use_data_primitives
 
     gt_transform_format_folder_name = None
     if gt_dataset_folder_name is not None and gt_data_folder_name is not None:
