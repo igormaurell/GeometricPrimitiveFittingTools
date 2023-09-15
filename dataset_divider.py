@@ -18,31 +18,29 @@ from lib.readers import DatasetReaderFactory
 from lib.utils import writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.division import computeGridOfRegions, divideOnceRandom, sampleDataOnRegion, computeSearchPoints
 
-def process_model_val(data, regions_grid, filename, val_number_points, abs_volume_threshold, relative_volume_threshold, ind):
+def process_model_val(data, regions_grid, filename, val_number_points, ind):
     size_x, size_y, _, _, _ = regions_grid.shape
     k = ind // (size_y * size_x)
     j = (ind // size_x) % size_y
     i = ind % size_x
 
     filename_curr = f'{filename}_{i}_{j}_{k}'
-    result = sampleDataOnRegion(regions_grid[i, j, k], data['points'], data['normals'], data['labels'], data['features_data'],
-                                val_number_points, filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
-                                relative_volume_threshold=relative_volume_threshold)
+    result = sampleDataOnRegion(regions_grid[i, j, k], data['points'], data['normals'],
+                                data['labels'], data['features_data'], val_number_points)
 
     result['filename'] = filename_curr
 
     return result
 
-def process_model_train(data, filename, train_number_points, train_min_number_points, abs_volume_threshold, relative_volume_threshold, ind):
+def process_model_train(data, filename, train_number_points, train_min_number_points, ind):
     result = {'points': np.array([])}
     filename_curr = f'{filename}_{ind}'
 
     search_points = data['search_points'] if 'search_points' in data.keys() else None
 
     while result['points'].shape[0] < train_min_number_points:
-        result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features_data'], train_region_size, train_number_points,
-                                  filter_features_by_volume=True, abs_volume_threshold=abs_volume_threshold,
-                                  relative_volume_threshold=relative_volume_threshold, search_points=search_points)
+        result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features_data'], 
+                                  train_region_size, train_number_points, search_points=search_points)
     
     result['filename'] = filename_curr
 
@@ -100,8 +98,6 @@ if __name__ == '__main__':
     parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
     parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=5000, help='')
     parser.add_argument('-vmnp', '--val_min_number_points', type=int, default=0, help='')
-    parser.add_argument('-avt', '--abs_volume_threshold', type=float, default=0., help='')
-    parser.add_argument('-rvt', '--relative_volume_threshold', type=float, default=0., help='')
     parser.add_argument('-tr', '--train_random_times', type=float, default=1., help='number of train regions is n = train_random_times*(model_volume/region_volume)')
     parser.add_argument('-tg', '--train_grid', action='store_true', help='flag to use division by grid in training models, it is used by default if train_random_times is 0. It is possible to use both at the same time.')
     parser.add_argument('-imnp', '--instance_min_number_points', type=float, default = 1, help='filter geometries by number of points.')
@@ -130,8 +126,6 @@ if __name__ == '__main__':
     val_region_size = parse_size_arg(args['val_region_size'], region_axis=region_axis)
     train_number_points = args['train_number_points']
     val_number_points = args['val_number_points']
-    abs_volume_threshold = args['abs_volume_threshold']
-    relative_volume_threshold = args['relative_volume_threshold']
     instance_min_number_points = args['instance_min_number_points']
     instance_min_number_points = int(instance_min_number_points) if instance_min_number_points >= 1 else instance_min_number_points
 
@@ -212,11 +206,8 @@ if __name__ == '__main__':
         print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
         full_len = np.prod(regions_grid.shape[:3])
 
-        # results = [process_model_val(data, regions_grid, filename, val_number_points,
-        #                            abs_volume_threshold, relative_volume_threshold, ind) for ind in tqdm(range(full_len))]
-
-        results = thread_map(partial(process_model_val, data, regions_grid, filename, val_number_points,
-                              abs_volume_threshold, relative_volume_threshold), range(full_len), chunksize=1)
+        results = thread_map(partial(process_model_val, data, regions_grid, filename, val_number_points),
+                             range(full_len), chunksize=1)
         
         for j, result in enumerate(tqdm(results)):
             n_p = len(result['points'])
@@ -254,8 +245,8 @@ if __name__ == '__main__':
             regions_grid = computeGridOfRegions(data['points'], train_region_size)
             full_len = np.prod(regions_grid.shape[:3])
 
-            results += thread_map(partial(process_model_val, data, regions_grid, filename, train_number_points,
-                                   abs_volume_threshold, relative_volume_threshold), range(full_len), chunksize=1)
+            results += thread_map(partial(process_model_val, data, regions_grid, filename, train_number_points,),
+                                  range(full_len), chunksize=1)
             
         if train_random_times > 0:
             size_points = np.max(data['points'], axis=0) -  np.min(data['points'], axis=0)
@@ -270,12 +261,11 @@ if __name__ == '__main__':
 
             if num_models > 1:
                 results += thread_map(partial(process_model_train, data, filename, train_number_points,
-                                       train_min_number_points, abs_volume_threshold, relative_volume_threshold),
-                                       range(num_models), chunksize=1)
+                                       train_min_number_points), range(num_models), chunksize=1)
             else:
-                res = sampleDataOnRegion(np.asarray((np.min(data['points'], axis=0), np.max(data['points'], axis=0))), data['points'], data['normals'],
-                                            data['labels'], data['features_data'], train_number_points, filter_features_by_volume=True,
-                                            abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
+                res = sampleDataOnRegion(np.asarray((np.min(data['points'], axis=0), np.max(data['points'], axis=0))),
+                                         data['points'], data['normals'], data['labels'], data['features_data'],
+                                         train_number_points)
                 res['filename'] = f'{filename}_0'
                 results += [res]
        

@@ -78,33 +78,16 @@ def randomSamplingPointsOnRegion(points, ll, ur, n_points):
 
     return indices
 
-def featuresIndicesByPointsIndices(features_point_indices, points_indices, filter_by_volume=True, points=None, abs_volume_threshold=0., relative_volume_threshold=0.2):
+def featuresIndicesByPointsIndices(features_point_indices, points_indices):
     features_indices = []
-    if filter_by_volume and points is None:
-        print('Parameter points is need when filter_by_volume=True. The full point cloud must be used.')
     for i, fpi in enumerate(features_point_indices):
         fpi.sort()
         keep_fpi = sortedIndicesIntersection(fpi, points_indices)
         if len(keep_fpi) > 0:
-            if filter_by_volume and points is not None:
-                points_of_feature = points[fpi]
-                volume_of_feature = np.linalg.norm((np.max(points_of_feature, 0) - np.min(points_of_feature, 0)), ord=2)
-                
-                if volume_of_feature > abs_volume_threshold:
-                    points_of_feature_crop = points[keep_fpi]
-                    volume_of_feature_crop = np.linalg.norm((np.max(points_of_feature_crop, 0) - np.min(points_of_feature_crop, 0)), ord=2)
-
-                    volume_relative = volume_of_feature_crop/volume_of_feature
-
-                    if volume_relative > relative_volume_threshold and volume_of_feature_crop > abs_volume_threshold:
-                        features_indices.append(i)
-            else:
-                features_indices.append(i)
-
+            features_indices.append(i)
     return np.array(features_indices)
 
-def sampleDataOnRegion(region, points, normals, labels, features_data, n_points, filter_features_by_volume=True,
-                       abs_volume_threshold=0., relative_volume_threshold=0.2):
+def sampleDataOnRegion(region, points, normals, labels, features_data, n_points):
     ll = region[0, :]
     ur = region[1, :]
 
@@ -127,15 +110,6 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
     if features_indices[0] == -1:
         features_indices = features_indices[1:]
 
-    # features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
-
-    # features_indices2 = featuresIndicesByPointsIndices(features_point_indices, indices, filter_by_volume=filter_features_by_volume, points=points,
-    #                                                   abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
-
-    #print('1:', features_indices)
-    #print('2:', features_indices2)
-
-    #assert np.all(features_indices == features_indices2), f'{features_indices} != {features_indices2}'
     
     features_data_part = [None] * len(features_data)
     for fi in features_indices:
@@ -151,8 +125,7 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points,
 
     return result
 
-def divideOnceRandom(points, normals, labels, features_data, region_size, n_points, filter_features_by_volume=True,
-                     abs_volume_threshold=0., relative_volume_threshold=0.2, search_points=None):
+def divideOnceRandom(points, normals, labels, features_data, region_size, n_points, search_points=None):
 
     if search_points is None:
         middle_point = points[random.randint(0, points.shape[0] - 1)]
@@ -161,5 +134,4 @@ def divideOnceRandom(points, normals, labels, features_data, region_size, n_poin
 
     region = computeRegionAroundPoint(middle_point, region_size)
 
-    return sampleDataOnRegion(region, points, normals, labels, features_data, n_points, filter_features_by_volume=filter_features_by_volume,
-                       abs_volume_threshold=abs_volume_threshold, relative_volume_threshold=relative_volume_threshold)
+    return sampleDataOnRegion(region, points, normals, labels, features_data, n_points)
