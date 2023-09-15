@@ -63,6 +63,7 @@ class BaseDatasetWriter:
         else:
             return [], []
         if permutation is None:
+            random.seed(1234)
             random.shuffle(filenames)
         else:
             filenames = [filenames[index] for index in permutation]

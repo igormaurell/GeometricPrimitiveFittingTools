@@ -198,6 +198,7 @@ VERBOSE = False
 write_segmentation_gt = False
 write_points_error = False
 box_plot = False
+ignore_primitives_orientation = False
 
 def process(data_tuple):
     if len(data_tuple) == 1:
@@ -267,7 +268,8 @@ def process(data_tuple):
                 dataset_errors[filename][tp]['invalid_primitives'].append(i)
 
             if len(indices) > 0 and primitive is not None:
-                distances, angles = primitive.computeErrors(points_curr, normals=normals_curr)
+                distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
+                                                            symmetric_normals=ignore_primitives_orientation)
                 dataset_errors[filename][tp]['distances'].append(distances)
                 dataset_errors[filename][tp]['angles'].append(angles)
 
@@ -275,7 +277,8 @@ def process(data_tuple):
                     indices_gt = fpi_gt[i]
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
-                    distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr)
+                    distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
+                                                                            symmetric_normals=ignore_primitives_orientation)
                     dataset_errors[filename][tp]['distances_to_gt'].append(distances_to_gt)
                     dataset_errors[filename][tp]['normals_to_gt'].append(angles_to_gt)
 
@@ -348,6 +351,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_use_data_primitives', action='store_true')
     parser.add_argument('--use_noisy_points', action='store_true')
     parser.add_argument('--use_noisy_normals', action='store_true')
+    parser.add_argument('--ignore_primitives_orientation', action='store_true')
 
     args = vars(parser.parse_args())
 
@@ -371,6 +375,7 @@ if __name__ == '__main__':
     use_data_primitives = not args['no_use_data_primitives']
     use_noisy_points = args['use_noisy_points']
     use_noisy_normals = args['use_noisy_normals']
+    ignore_primitives_orientation = args['ignore_primitives_orientation']
 
     if gt_dataset_folder_name is not None and gt_data_folder_name is None:
         gt_data_folder_name = data_folder_name
