@@ -45,12 +45,14 @@ def pca_numpy(array):
     return S, U
 
 def addPointsNoise(points, normals, limit=0.01):
+    np.random.seed(1234)
     noise = normals * np.random.uniform(-limit, limit, (points.shape[0],1))
     points = points + noise.astype(np.float32)
     #not adding noise on normals yet
     return points
 
 def addNormalsNoise(normals, limit=3):
+    np.random.seed(1234)
     limit = np.deg2rad(limit)
     random_angles = np.random.uniform(-limit, limit, len(normals)) 
 
@@ -192,7 +194,6 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 if __name__ == '__main__':
-    np.random.seed(1234)
     SIZE = 2000
     origin_points = np.zeros((SIZE, 3))
     normals = np.zeros((SIZE, 3))
