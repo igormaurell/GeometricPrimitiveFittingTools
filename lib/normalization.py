@@ -51,12 +51,13 @@ def addPointsNoise(points, normals, limit=0.01):
     return points
 
 def addNormalsNoise(normals, limit=3):
+    limit = np.deg2rad(limit)
     random_angles = np.random.uniform(-limit, limit, len(normals)) 
 
     zenith_angles = np.arccos(normals[:, 2])  # Zenith angle
     azimuth_angles = np.arctan2(normals[:, 1], normals[:, 0])  # Azimuth angle
 
-    noisy_zenith_angles = zenith_angles + np.deg2rad(random_angles)
+    noisy_zenith_angles = zenith_angles + random_angles
 
     noisy_normals = np.column_stack((
         np.sin(noisy_zenith_angles) * np.cos(azimuth_angles),
@@ -65,10 +66,8 @@ def addNormalsNoise(normals, limit=3):
     ))
 
     #making the noise random in a angle around the original axis (this can be simplified)
-    rotate_angles = np.random.uniform(0, 360, len(normals))
-    for i, axis, angle_deg in zip(range(len(normals)), normals, rotate_angles):
-        angle_rad = np.deg2rad(angle_deg)
-
+    rotate_angles = np.random.uniform(0, 2*np.pi, len(normals))
+    for i, axis, angle_rad in zip(range(len(normals)), normals, rotate_angles):
         cos_theta = np.cos(angle_rad)
         sin_theta = np.sin(angle_rad)
         ux, uy, uz = axis
