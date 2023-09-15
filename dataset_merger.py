@@ -209,7 +209,7 @@ if __name__ == '__main__':
         num_points = 0
         gt_labels = None
         for div_filename in divided_filenames:
-            data = reader.step(use_data_primitives=use_data_primitives)
+            data = reader.step()
             if gt_reader is not None:
                 gt_data = gt_reader.step()
                 if gt_labels is None:

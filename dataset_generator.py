@@ -26,7 +26,8 @@ if __name__ == '__main__':
     parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere,torus,bspline', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere,torus,bspline')
     parser.add_argument('-c', '--centralize', action='store_true', help='')
     parser.add_argument('-a', '--align', action='store_true', help='')
-    parser.add_argument('-nl', '--noise_limit', type=float, default = 0., help='')
+    parser.add_argument('-pnl', '--points_noise_limit', type=float, default = 0., help='')
+    parser.add_argument('-nnl', '--normals_noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
     for format in DatasetWriterFactory.WRITERS_DICT.keys():
@@ -34,7 +35,8 @@ if __name__ == '__main__':
         parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
         parser.add_argument(f'-{format}_c', f'--{format}_centralize', action='store_true', help='')
         parser.add_argument(f'-{format}_a', f'--{format}_align', action='store_true', help='')
-        parser.add_argument(f'-{format}_nl', f'--{format}_noise_limit', type=float, help='')
+        parser.add_argument(f'-{format}_pnl', f'--{format}_points_noise_limit', type=float, help='')
+        parser.add_argument(f'-{format}_nnl', f'--{format}_normals_noise_limit', type=float, help='')
         parser.add_argument(f'-{format}_crf', f'--{format}_cube_reescale_factor', type=float, help='')
 
     parser.add_argument('--dataset_folder_name', type=str, default = 'dataset', help='dataset folder name.')
@@ -62,7 +64,8 @@ if __name__ == '__main__':
     surface_types = [s.lower() for s in args['surface_types'].split(',')]
     centralize = args['centralize']
     align = args['align']
-    noise_limit = args['noise_limit']
+    points_noise_limit = args['points_noise_limit']
+    normals_noise_limit = args['normals_noise_limit']
     cube_reescale_factor = args['cube_reescale_factor']
 
     mps_ns = args['mesh_point_sampling_n_samples']
@@ -95,8 +98,10 @@ if __name__ == '__main__':
         parameters[format]['normalization']['centralize'] = p or centralize
         p = args[f'{format}_align']
         parameters[format]['normalization']['align'] = p or align
-        p = args[f'{format}_noise_limit']
-        parameters[format]['normalization']['add_noise'] = p if p is not None else noise_limit
+        p = args[f'{format}_points_noise_limit']
+        parameters[format]['normalization']['points_noise'] = p if p is not None else points_noise_limit
+        p = args[f'{format}_normals_noise_limit']
+        parameters[format]['normalization']['normals_noise'] = p if p is not None else normals_noise_limit
         p = args[f'{format}_cube_reescale_factor']
         parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor
         parameters[format]['train_percentage'] = train_percentage

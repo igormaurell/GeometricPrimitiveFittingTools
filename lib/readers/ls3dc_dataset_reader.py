@@ -56,6 +56,9 @@ class LS3DCDatasetReader(BaseDatasetReader):
             if noisy_points is None and gt_points is not None:
                 noisy_points = gt_points.copy()
             gt_normals = h5_file['gt_normals'][()] if 'gt_normals' in h5_file.keys() else None
+            noisy_normals = h5_file['noisy_normals'][()] if 'noisy_normals' in h5_file.keys() else None
+            if noisy_normals is None and gt_normals is not None:
+                noisy_normals = gt_normals.copy()
             labels = h5_file['gt_labels'][()] if 'gt_labels' in h5_file.keys() else None
             gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
             matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
@@ -80,11 +83,12 @@ class LS3DCDatasetReader(BaseDatasetReader):
             
             if unormalize:
                 gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-                noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
+                noisy_points, noisy_normals, _ = unNormalize(noisy_points, transforms, normals=noisy_normals, features=[])
 
         result = {
             'noisy_points': noisy_points,
             'points': gt_points,
+            'noisy_normals': noisy_normals,
             'normals': gt_normals,
             'labels': labels,
             'features_data': features_data,

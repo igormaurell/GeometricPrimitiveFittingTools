@@ -208,8 +208,8 @@ def process(data_tuple):
         data = mergeQueryAndGTData(data, gt_data)
 
     filename = data['filename'] if 'filename' in data.keys() else str(i)
-    points = data['points']
-    normals = data['normals']
+    points = data['noisy_points'] if use_noisy_points else data['points']
+    normals = data['noisy_normals'] if use_noisy_normals else data['normals']
 
     labels = data['labels']
     labels[labels < -1] = -1 # removing non_gt_features
@@ -345,8 +345,9 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--show_box_plot', action='store_true', help='show box plot of the data.')
 
     parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
-
     parser.add_argument('--no_use_data_primitives', action='store_true')
+    parser.add_argument('--use_noisy_points', action='store_true')
+    parser.add_argument('--use_noisy_normals', action='store_true')
 
     args = vars(parser.parse_args())
 
@@ -367,8 +368,9 @@ if __name__ == '__main__':
     box_plot = args['show_box_plot']
 
     use_gt_transform = args['use_gt_transform']
-
     use_data_primitives = not args['no_use_data_primitives']
+    use_noisy_points = args['use_noisy_points']
+    use_noisy_normals = args['use_noisy_normals']
 
     if gt_dataset_folder_name is not None and gt_data_folder_name is None:
         gt_data_folder_name = data_folder_name

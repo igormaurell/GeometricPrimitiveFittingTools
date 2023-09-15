@@ -7,7 +7,6 @@ import uuid
 import os
 from collections.abc import Iterable
 
-from lib.normalization import normalize
 from lib.utils import filterFeaturesData, computeFeaturesPointIndices
 
 from .base_dataset_writer import BaseDatasetWriter
@@ -23,8 +22,9 @@ class HPNetDatasetWriter(BaseDatasetWriter):
     def __init__(self, parameters):
         super().__init__(parameters)
 
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None,
-             features_point_indices=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None,
+             noisy_normals=None, filename=None, features_point_indices=None, **kwargs):
+        
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -53,15 +53,16 @@ class HPNetDatasetWriter(BaseDatasetWriter):
         self.filenames_by_set[self.current_set_name].append(filename)
 
         with h5py.File(data_file_path, 'w') as h5_file:
-                
-            points, normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, 
-                                                                   normals=normals.copy(), features=features_data)
+            
+            points, noisy_points, normals, noisy_normals, features_data, transforms = self.normalize(points, noisy_points, normals,
+                                                                                                    noisy_normals, features_data)
 
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
-                
-            h5_file.create_dataset('points', data=points)
-            h5_file.create_dataset('normals', data=normals)
+            
+            # hdf5 does not have fields to write gt points and gt normals, just writing noisy so
+            h5_file.create_dataset('points', data=noisy_points)
+            h5_file.create_dataset('normals', data=noisy_normals)
             if 'gt_indices' in kwargs:
                 h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'].astype(np.int32))
             if 'matching' in kwargs:

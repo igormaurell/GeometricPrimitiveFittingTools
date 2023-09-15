@@ -44,11 +44,45 @@ def pca_numpy(array):
     S, U = np.linalg.eig(array.T @ array)
     return S, U
 
-def addNoise(points, normals, limit=0.01):
+def addPointsNoise(points, normals, limit=0.01):
     noise = normals * np.random.uniform(-limit, limit, (points.shape[0],1))
     points = points + noise.astype(np.float32)
     #not adding noise on normals yet
     return points
+
+def addNormalsNoise(normals, limit=3):
+    random_angles = np.random.uniform(-limit, limit, len(normals)) 
+
+    zenith_angles = np.arccos(normals[:, 2])  # Zenith angle
+    azimuth_angles = np.arctan2(normals[:, 1], normals[:, 0])  # Azimuth angle
+
+    noisy_zenith_angles = zenith_angles + np.deg2rad(random_angles)
+
+    noisy_normals = np.column_stack((
+        np.sin(noisy_zenith_angles) * np.cos(azimuth_angles),
+        np.sin(noisy_zenith_angles) * np.sin(azimuth_angles),
+        np.cos(noisy_zenith_angles)
+    ))
+
+    #making the noise random in a angle around the original axis (this can be simplified)
+    rotate_angles = np.random.uniform(0, 360, len(normals))
+    for i, axis, angle_deg in zip(range(len(normals)), normals, rotate_angles):
+        angle_rad = np.deg2rad(angle_deg)
+
+        cos_theta = np.cos(angle_rad)
+        sin_theta = np.sin(angle_rad)
+        ux, uy, uz = axis
+
+        # TODO: make a function
+        rotation_matrix = np.array([
+            [cos_theta + ux**2 * (1 - cos_theta), ux*uy*(1 - cos_theta) - uz*sin_theta, ux*uz*(1 - cos_theta) + uy*sin_theta],
+            [uy*ux*(1 - cos_theta) + uz*sin_theta, cos_theta + uy**2 * (1 - cos_theta), uy*uz*(1 - cos_theta) - ux*sin_theta],
+            [uz*ux*(1 - cos_theta) - uy*sin_theta, uz*uy*(1 - cos_theta) + ux*sin_theta, cos_theta + uz**2 * (1 - cos_theta)]
+        ])
+
+        noisy_normals[i, :] = np.dot(rotation_matrix, (noisy_normals[i, :][:, np.newaxis]))[:, 0]
+
+    return noisy_normals
 
 def rotateUtil(points, transform, normals=None, features=[]):
     points = (transform @ points.T).T
@@ -142,11 +176,42 @@ def normalize(points, parameters,  normals=None, features=[]):
         points, features, transforms['translation'] = centralize(points, features)
     if 'align' in parameters.keys() and parameters['align'] == True:
         points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features)
-    if 'add_noise' in parameters.keys() and parameters['add_noise'] != 0.:
+    if 'points_noise' in parameters.keys() and parameters['points_noise'] != 0.:
         assert normals is not None
-        points = addNoise(points, normals, parameters['add_noise'])
+        points = addPointsNoise(points, normals, parameters['points_noise'])
+    if 'normals_noise' in parameters.keys() and parameters['normals_noise'] != 0.:
+        assert normals is not None
+        normals = addNormalsNoise(normals, parameters['normals_noise'])
     if 'cube_rescale' in parameters.keys() and parameters['cube_rescale'] > 0:
         points, features, scale = cubeRescale(points, features, parameters['cube_rescale'])
         transforms['scale'] *= scale
 
     return points, normals, features, transforms
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+
+if __name__ == '__main__':
+    np.random.seed(1234)
+    SIZE = 2000
+    origin_points = np.zeros((SIZE, 3))
+    normals = np.zeros((SIZE, 3))
+    a = np.random.rand(1,3)
+    normals[:, :] = a/np.linalg.norm(a)
+
+    normals[1:, :] = addNormalsNoise(normals[1:,:], limit=10)
+    normals[0, :] *= 1.5
+    
+    normals*=-1
+
+    X, Y, Z = zip(*origin_points)
+    U, V, W = zip(*normals)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.quiver(X, Y, Z, U, V, W, arrow_length_ratio=0.1, pivot='tip', colors=np.concatenate((np.array([1., 0, 0])[np.newaxis, :], np.zeros((SIZE - 1, 3))), axis=0),
+              linewidths=([4.0] + [0.5 for _ in range(SIZE-1)]))
+    ax.set_xlim([0, 1])
+    ax.set_ylim([0, 1])
+    ax.set_zlim([0, 1])
+    plt.show()

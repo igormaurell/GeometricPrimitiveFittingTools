@@ -1,5 +1,6 @@
 from abc import abstractmethod
-from copy import deepcopy
+from lib.normalization import normalize
+from asGeometryOCCWrapper.geometry.base_geometry import angleDeviation
 import random
 from math import ceil, floor
 
@@ -8,6 +9,30 @@ class BaseDatasetWriter:
     def __init__(self, parameters):
         self.setParameters(parameters)
         self.reset()
+    
+    def normalize(self, points, noisy_points, normals, noisy_normals, features_data):
+        points_noise_limit = 0.
+        normals_noise_limit = 0.
+        if 'points_noise' in self.normalization_parameters.keys():
+            points_noise_limit = self.normalization_parameters['points_noise']
+            self.normalization_parameters['points_noise'] = 0.
+        if 'normals_noise' in self.normalization_parameters.keys():
+            normals_noise_limit = self.normalization_parameters['normals_noise']
+            self.normalization_parameters['normals_noise'] = 0.
+
+        noisy_points = points.copy() if noisy_points is None else noisy_points
+        noisy_normals = normals.copy() if noisy_normals is None else noisy_normals
+            
+        points, normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters, 
+                                                                normals=normals.copy(), features=features_data)
+
+        self.normalization_parameters['points_noise'] = points_noise_limit
+        noisy_points, _, _, _ = normalize(noisy_points, self.normalization_parameters, normals=normals.copy())
+            
+        self.normalization_parameters['normals_noise'] = normals_noise_limit
+        _, noisy_normals, _, _ = normalize(points.copy(), self.normalization_parameters, normals=noisy_normals)
+
+        return points, noisy_points, normals, noisy_normals, features_data, transforms
     
     def reset(self):
         self.current_set_name = 'train'
@@ -53,5 +78,6 @@ class BaseDatasetWriter:
         self.reset()
 
     @abstractmethod
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None,
+             noisy_normals=None, filename=None, features_point_indices=None, **kwargs):
         pass

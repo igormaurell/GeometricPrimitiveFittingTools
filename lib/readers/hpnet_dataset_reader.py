@@ -141,7 +141,9 @@ class HPNetDatasetReader(BaseDatasetReader):
                 points, normals, features_data = unNormalize(points, transforms, normals=normals, features=features_data)
 
         result = {
+            'noisy_points': points.copy(),
             'points': points,
+            'noisy_normals': normals.copy(),
             'normals': normals,
             'labels': labels,
             'features_data': features_data,
