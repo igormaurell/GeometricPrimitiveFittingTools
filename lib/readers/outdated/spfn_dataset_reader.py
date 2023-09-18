@@ -6,7 +6,7 @@ import re
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.normalization import unNormalize
+from lib.normalization import applyTransforms
 from lib.utils import translateFeature, strUpperFirstLetter
 
 class SpfnDatasetReader(BaseDatasetReader):
@@ -74,9 +74,9 @@ class SpfnDatasetReader(BaseDatasetReader):
                 meta = translateFeature(meta, SpfnDatasetReader.FEATURES_BY_TYPE, SpfnDatasetReader.FEATURES_MAPPING)
                 features_data[i] = meta
 
-        if unNormalize:
-            gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-            noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
+        if applyTransforms:
+            gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)
+            noisy_points, _, _ = applyTransforms(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,

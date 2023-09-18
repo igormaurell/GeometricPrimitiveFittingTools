@@ -87,9 +87,16 @@ def featuresIndicesByPointsIndices(features_point_indices, points_indices):
             features_indices.append(i)
     return np.array(features_indices)
 
-def sampleDataOnRegion(region, points, normals, labels, features_data, n_points):
+def sampleDataOnRegion(region, data, n_points):
     ll = region[0, :]
     ur = region[1, :]
+
+    points = data['points']
+    noisy_points = data['noisy_points']
+    normals = data['normals']
+    noisy_normals = data['noisy_normals']
+    labels = data['labels']
+    features_data = data['features_data']
 
     indices = randomSamplingPointsOnRegion(points, ll, ur, n_points)
 
@@ -103,7 +110,9 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points)
         }
 
     points_part = points[indices]
+    noisy_points_part = noisy_points[indices]
     normals_part = normals[indices]
+    noisy_normals_part = noisy_normals[indices]
     labels_part = labels[indices]
 
     features_indices = np.unique(labels_part)
@@ -117,7 +126,9 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points)
 
     result = {
         'points': points_part,
+        'noisy_points': noisy_points_part,
         'normals': normals_part,
+        'noisy_normals': noisy_normals_part,
         'labels': labels_part,
         'global_indices': indices,
         'features_data': features_data_part,
@@ -125,7 +136,8 @@ def sampleDataOnRegion(region, points, normals, labels, features_data, n_points)
 
     return result
 
-def divideOnceRandom(points, normals, labels, features_data, region_size, n_points, search_points=None):
+def divideOnceRandom(data, region_size, n_points, search_points=None):
+    points = data['points']
 
     if search_points is None:
         middle_point = points[random.randint(0, points.shape[0] - 1)]
@@ -134,4 +146,4 @@ def divideOnceRandom(points, normals, labels, features_data, region_size, n_poin
 
     region = computeRegionAroundPoint(middle_point, region_size)
 
-    return sampleDataOnRegion(region, points, normals, labels, features_data, n_points)
+    return sampleDataOnRegion(region, data, n_points)

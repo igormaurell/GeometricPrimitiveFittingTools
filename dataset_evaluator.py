@@ -315,7 +315,7 @@ def process(data_tuple):
     
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
-        #points, _, _ = unNormalize(points, transforms, invert=False)
+        #points, _, _ = applyTransforms(points, transforms, invert=False)
         writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
         types_filename = f'{filename}_types.obj'
         writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))

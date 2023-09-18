@@ -6,7 +6,7 @@ import re
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.normalization import unNormalize
+from lib.normalization import applyTransforms
 
 def decode_string(binary_string):
     return binary_string.decode('utf-8')
@@ -53,6 +53,8 @@ class LS3DCDatasetReader(BaseDatasetReader):
         with h5py.File(data_file_path, 'r') as h5_file:
             gt_points = h5_file['gt_points'][()] if 'gt_points' in h5_file.keys() else None
             noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
+            print(filename)
+            print(noisy_points[:10, :])
             if noisy_points is None and gt_points is not None:
                 noisy_points = gt_points.copy()
             gt_normals = h5_file['gt_normals'][()] if 'gt_normals' in h5_file.keys() else None
@@ -82,8 +84,8 @@ class LS3DCDatasetReader(BaseDatasetReader):
                 features_data[i] = hdf5_group_to_dict(g['parameters'])
             
             if unormalize:
-                gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-                noisy_points, noisy_normals, _ = unNormalize(noisy_points, transforms, normals=noisy_normals, features=[])
+                gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)
+                noisy_points, noisy_normals, _ = applyTransforms(noisy_points, transforms, normals=noisy_normals, features=[])
 
         result = {
             'noisy_points': noisy_points,

@@ -142,7 +142,7 @@ def cubeRescale(points, features=[], factor=1):
     points, _, features = reescaleUtil(points, f, features=features)
     return points, features, f
 
-def unNormalize(points, transforms, normals=None, features=[], invert=True):
+def applyTransforms(points, transforms, normals=None, features=[], invert=True):
     transform_functions = {
         'translation': translateUtil,
         'rotation': rotateUtil,
@@ -163,7 +163,7 @@ def unNormalize(points, transforms, normals=None, features=[], invert=True):
 
     return points, normals, features
 
-def normalize(points, parameters,  normals=None, features=[]):
+def normalize(points, parameters, normals=None, features=[]):
     transforms = {
         'translation': np.zeros(3),
         'rotation': np.eye(3),
@@ -173,16 +173,16 @@ def normalize(points, parameters,  normals=None, features=[]):
 
     if 'rescale' in parameters.keys():
         points, features, transforms['scale'] = rescale(points, features, parameters['rescale'])
-    if 'centralize' in parameters.keys() and parameters['centralize'] == True:
-        points, features, transforms['translation'] = centralize(points, features)
-    if 'align' in parameters.keys() and parameters['align'] == True:
-        points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features)
     if 'points_noise' in parameters.keys() and parameters['points_noise'] != 0.:
         assert normals is not None
         points = addPointsNoise(points, normals, parameters['points_noise'])
     if 'normals_noise' in parameters.keys() and parameters['normals_noise'] != 0.:
         assert normals is not None
         normals = addNormalsNoise(normals, parameters['normals_noise'])
+    if 'centralize' in parameters.keys() and parameters['centralize'] == True:
+        points, features, transforms['translation'] = centralize(points, features)
+    if 'align' in parameters.keys() and parameters['align'] == True:
+        points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features)
     if 'cube_rescale' in parameters.keys() and parameters['cube_rescale'] > 0:
         points, features, scale = cubeRescale(points, features, parameters['cube_rescale'])
         transforms['scale'] *= scale

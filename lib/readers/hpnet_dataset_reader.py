@@ -5,7 +5,7 @@ import numpy as np
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.normalization import unNormalize
+from lib.normalization import applyTransforms
 from lib.utils import computeFeaturesPointIndices
 from lib.fitting_func import FittingFunctions
 
@@ -42,9 +42,11 @@ class HPNetDatasetReader(BaseDatasetReader):
 
         with open(transforms_file_path, 'rb') as pkl_file:
             transforms = pickle.load(pkl_file)
-
+        
         with h5py.File(data_file_path, 'r') as h5_file:
             points = h5_file['points'][()] if 'points' in h5_file.keys() else None
+            print(filename)
+            print(points[:10, :])
             normals = h5_file['normals'][()] if 'normals' in h5_file.keys() else None
             labels = h5_file['labels'][()] if 'labels' in h5_file.keys() else None
             prim = h5_file['prim'][()] if 'prim' in h5_file.keys() else None
@@ -138,7 +140,7 @@ class HPNetDatasetReader(BaseDatasetReader):
                 features_data[label] = feature
 
             if unormalize:
-                points, normals, features_data = unNormalize(points, transforms, normals=normals, features=features_data)
+                points, normals, features_data = applyTransforms(points, transforms, normals=normals, features=features_data)
 
         result = {
             'noisy_points': points.copy(),

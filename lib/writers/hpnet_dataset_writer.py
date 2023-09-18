@@ -55,7 +55,7 @@ class HPNetDatasetWriter(BaseDatasetWriter):
         with h5py.File(data_file_path, 'w') as h5_file:
             
             points, noisy_points, normals, noisy_normals, features_data, transforms = self.normalize(points, noisy_points, normals,
-                                                                                                    noisy_normals, features_data)
+                                                                                                     noisy_normals, features_data)
 
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)

@@ -25,8 +25,7 @@ def process_model_val(data, regions_grid, filename, val_number_points, ind):
     i = ind % size_x
 
     filename_curr = f'{filename}_{i}_{j}_{k}'
-    result = sampleDataOnRegion(regions_grid[i, j, k], data['points'], data['normals'],
-                                data['labels'], data['features_data'], val_number_points)
+    result = sampleDataOnRegion(regions_grid[i, j, k], data, val_number_points)
 
     result['filename'] = filename_curr
 
@@ -39,8 +38,7 @@ def process_model_train(data, filename, train_number_points, train_min_number_po
     search_points = data['search_points'] if 'search_points' in data.keys() else None
 
     while result['points'].shape[0] < train_min_number_points:
-        result = divideOnceRandom(data['points'], data['normals'], data['labels'], data['features_data'], 
-                                  train_region_size, train_number_points, search_points=search_points)
+        result = divideOnceRandom(data, train_region_size, train_number_points, search_points=search_points)
     
     result['filename'] = filename_curr
 
@@ -101,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('-tr', '--train_random_times', type=float, default=1., help='number of train regions is n = train_random_times*(model_volume/region_volume)')
     parser.add_argument('-tg', '--train_grid', action='store_true', help='flag to use division by grid in training models, it is used by default if train_random_times is 0. It is possible to use both at the same time.')
     parser.add_argument('-imnp', '--instance_min_number_points', type=float, default = 1, help='filter geometries by number of points.')
+    parser.add_argument('--no_use_data_primitives', action='store_true')
 
     args = vars(parser.parse_args())
 
@@ -135,6 +134,8 @@ if __name__ == '__main__':
     train_random_times = args['train_random_times']
     train_grid = args['train_grid']
 
+    use_data_primitives = not args['no_use_data_primitives']
+
     input_parameters = {}
     output_parameters = {}
 
@@ -148,6 +149,7 @@ if __name__ == '__main__':
     input_parameters[input_format]['data_folder_name'] = input_data_format_folder_name
     input_transform_format_folder_name = join(input_dataset_format_folder_name, transform_folder_name)
     input_parameters[input_format]['transform_folder_name'] = input_transform_format_folder_name
+    input_parameters[input_format]['use_data_primitives'] = use_data_primitives
 
     for format in output_formats:
 
@@ -264,8 +266,7 @@ if __name__ == '__main__':
                                        train_min_number_points), range(num_models), chunksize=1)
             else:
                 res = sampleDataOnRegion(np.asarray((np.min(data['points'], axis=0), np.max(data['points'], axis=0))),
-                                         data['points'], data['normals'], data['labels'], data['features_data'],
-                                         train_number_points)
+                                         data, train_number_points)
                 res['filename'] = f'{filename}_0'
                 results += [res]
        
