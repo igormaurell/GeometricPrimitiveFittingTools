@@ -53,8 +53,6 @@ class LS3DCDatasetReader(BaseDatasetReader):
         with h5py.File(data_file_path, 'r') as h5_file:
             gt_points = h5_file['gt_points'][()] if 'gt_points' in h5_file.keys() else None
             noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
-            print(filename)
-            print(noisy_points[:10, :])
             if noisy_points is None and gt_points is not None:
                 noisy_points = gt_points.copy()
             gt_normals = h5_file['gt_normals'][()] if 'gt_normals' in h5_file.keys() else None

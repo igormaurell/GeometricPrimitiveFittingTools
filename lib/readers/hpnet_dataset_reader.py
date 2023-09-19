@@ -45,8 +45,6 @@ class HPNetDatasetReader(BaseDatasetReader):
         
         with h5py.File(data_file_path, 'r') as h5_file:
             points = h5_file['points'][()] if 'points' in h5_file.keys() else None
-            print(filename)
-            print(points[:10, :])
             normals = h5_file['normals'][()] if 'normals' in h5_file.keys() else None
             labels = h5_file['labels'][()] if 'labels' in h5_file.keys() else None
             prim = h5_file['prim'][()] if 'prim' in h5_file.keys() else None
