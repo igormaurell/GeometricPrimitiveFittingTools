@@ -106,9 +106,10 @@ def generateErrorsLogDict(errors):
         summd = 0.
         summa = 0.
         for i in range(len(ind_distances)):
-            number_of_valid_points += len(ind_distances[i])
-            summd += np.sum(ind_distances[i])
-            summa += np.sum(ind_angles[i])
+            if not np.any(np.isnan(ind_distances[i])) and not np.any(np.isnan(ind_angles[i])):
+                number_of_valid_points += len(ind_distances[i])
+                summd += np.sum(ind_distances[i])
+                summa += np.sum(ind_angles[i])
 
         number_of_valid_gt_points = 0
         ind_gt_distances = e['distances_to_gt']
@@ -119,9 +120,10 @@ def generateErrorsLogDict(errors):
             summdgt = 0.
             summagt = 0.
             for i in range(len(ind_gt_distances)):
-                number_of_valid_gt_points += len(ind_gt_angles[i])
-                summdgt += np.sum(ind_gt_distances[i])
-                summagt += np.sum(ind_gt_angles[i])
+                if not np.any(np.isnan(ind_gt_distances[i])) and not np.any(np.isnan(ind_gt_angles[i])):
+                    number_of_valid_gt_points += len(ind_gt_angles[i])
+                    summdgt += np.sum(ind_gt_distances[i])
+                    summagt += np.sum(ind_gt_angles[i])
         else:
             summdgt = -1.
             summagt = -1.
@@ -181,6 +183,8 @@ def filterLog(logs_dict):
         if 'mean_normal_gt_error' in result[tp]:
             if result[tp]['mean_normal_gt_error'] < 0:
                 del result[tp]['mean_normal_gt_error']
+        if 'mean_normal_gt_error' not in result[tp] and 'mean_distance_gt_error' not in result[tp]:
+            del result[tp]['number_of_valid_gt_points']
         if 'mean_iou' in result[tp]:
             if result[tp]['mean_iou'] < 0:
                 del result[tp]['mean_iou']

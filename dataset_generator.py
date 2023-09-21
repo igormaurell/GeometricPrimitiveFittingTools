@@ -240,9 +240,11 @@ if __name__ == '__main__':
             if points_healing:
                 if use_original_noise:
                     noisy_points = points.copy()
-                points = points_new
+                not_nan_mask = ~np.any(np.isnan(points_new), axis=1)
+                points[not_nan_mask] = points_new[not_nan_mask]
             if normals_healing:
-                normals = normals_new
+                not_nan_mask = ~np.any(np.isnan(normals_new), axis=1)
+                normals[not_nan_mask] = normals_new[not_nan_mask]
             print('Done.\n')
 
         print('Writing...')
