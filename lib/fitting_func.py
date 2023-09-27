@@ -30,7 +30,7 @@ def best_lambda(A):
 
     for i in range(7):
         A_dash = A + lamb * torch.eye(cols)
-        if cols == torch.matrix_rank(A_dash):
+        if cols == torch.linalg.matrix_rank(A_dash):
             # we achieved the required rank
             break
         else:
@@ -54,7 +54,7 @@ class LeastSquares:
             ipdb.set_trace()
 
         # Assuming A to be full column rank
-        if cols == torch.matrix_rank(A):
+        if cols == torch.linalg.matrix_rank(A):
             # Full column rank
             q, r = torch.qr(A)
             x = torch.inverse(r) @ q.transpose(1, 0) @ Y

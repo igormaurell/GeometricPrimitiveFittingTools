@@ -10,6 +10,7 @@ from lib.readers import DatasetReaderFactory
 from lib.utils import computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.matching import mergeQueryAndGTData
 from lib.evaluator import computeIoUs
+from lib.primitives import ResidualLoss
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
@@ -106,10 +107,9 @@ def generateErrorsLogDict(errors):
         summd = 0.
         summa = 0.
         for i in range(len(ind_distances)):
-            if not np.any(np.isnan(ind_distances[i])) and not np.any(np.isnan(ind_angles[i])):
-                number_of_valid_points += len(ind_distances[i])
-                summd += np.sum(ind_distances[i])
-                summa += np.sum(ind_angles[i])
+            number_of_valid_points += len(ind_distances[i])
+            summd += np.nanmean(ind_distances[i]) if len(ind_distances[i]) > 0 else 0.
+            summa += np.nanmean(ind_angles[i]) if len(ind_angles[i]) > 0 else 0.
 
         number_of_valid_gt_points = 0
         ind_gt_distances = e['distances_to_gt']
@@ -120,10 +120,9 @@ def generateErrorsLogDict(errors):
             summdgt = 0.
             summagt = 0.
             for i in range(len(ind_gt_distances)):
-                if not np.any(np.isnan(ind_gt_distances[i])) and not np.any(np.isnan(ind_gt_angles[i])):
-                    number_of_valid_gt_points += len(ind_gt_angles[i])
-                    summdgt += np.sum(ind_gt_distances[i])
-                    summagt += np.sum(ind_gt_angles[i])
+                number_of_valid_gt_points += len(ind_gt_angles[i])
+                summdgt += np.nanmean(ind_gt_distances[i]) if len(ind_gt_distances[i]) > 0 else 0.
+                summagt += np.nanmean(ind_gt_angles[i]) if len(ind_gt_angles[i]) > 0 else 0.
         else:
             summdgt = -1.
             summagt = -1.
@@ -150,23 +149,26 @@ def generateErrorsLogDict(errors):
 def computeLogMeans(logs_dict, denominator=0):
     result = deepcopy(logs_dict)
     for tp in logs_dict.keys():
-        number_valid_points = result[tp]['number_of_valid_points'] if result[tp]['number_of_valid_points'] > 0 else 1
-        number_valid_points = number_valid_points if denominator == 0 else denominator
+        #number_valid_points = result[tp]['number_of_valid_points'] if result[tp]['number_of_valid_points'] > 0 else 1
+        #number_valid_points = number_valid_points if denominator == 0 else denominator
 
-        number_of_valid_gt_points = result[tp]['number_of_valid_gt_points'] if result[tp]['number_of_valid_gt_points'] > 0 else 1
-        number_of_valid_gt_points = number_of_valid_gt_points if denominator == 0 else denominator
+        #number_of_valid_gt_points = result[tp]['number_of_valid_gt_points'] if result[tp]['number_of_valid_gt_points'] > 0 else 1
+        #number_of_valid_gt_points = number_of_valid_gt_points if denominator == 0 else denominator
 
         number_of_primitives = result[tp]['number_of_primitives'] - result[tp]['number_of_void_primitives']
         number_of_primitives = number_of_primitives if denominator == 0 else denominator
 
+        number_of_valid_primitives = result[tp]['number_of_primitives'] - result[tp]['number_of_invalid_primitives']
+        number_of_valid_primitives = number_of_valid_primitives if denominator == 0 else denominator
+
         if 'mean_distance_error' in result[tp]:
-            result[tp]['mean_distance_error'] = result[tp]['mean_distance_error']/number_valid_points
+            result[tp]['mean_distance_error'] = result[tp]['mean_distance_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
         if 'mean_normal_error' in result[tp]:
-            result[tp]['mean_normal_error'] = result[tp]['mean_normal_error']/number_valid_points
+            result[tp]['mean_normal_error'] = result[tp]['mean_normal_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
         if 'mean_distance_gt_error' in result[tp]:
-            result[tp]['mean_distance_gt_error'] = result[tp]['mean_distance_gt_error']/number_of_valid_gt_points
+            result[tp]['mean_distance_gt_error'] = result[tp]['mean_distance_gt_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
         if 'mean_normal_gt_error' in result[tp]:
-            result[tp]['mean_normal_gt_error'] = result[tp]['mean_normal_gt_error']/number_of_valid_gt_points
+            result[tp]['mean_normal_gt_error'] = result[tp]['mean_normal_gt_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
         if 'mean_iou' in result[tp]:
             result[tp]['mean_iou'] = result[tp]['mean_iou']/number_of_primitives if number_of_primitives > 0 else 0.
         if 'mean_type_iou' in result[tp]:
@@ -212,6 +214,8 @@ def process(data_tuple):
         data, gt_data = data_tuple
         data = mergeQueryAndGTData(data, gt_data)
 
+    residual_distance = ResidualLoss()
+
     filename = data['filename'] if 'filename' in data.keys() else str(i)
     points = data['noisy_points'] if use_noisy_points else data['points']
     normals = data['noisy_normals'] if use_noisy_normals else data['normals']
@@ -224,7 +228,7 @@ def process(data_tuple):
         print('Invalid Model.')
         return None
     
-    dataset_errors[filename] = {}
+    dataset_errors = {}
 
     colors_instances = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
     colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
@@ -258,40 +262,51 @@ def process(data_tuple):
             except:
                 tp = feature['type']
                 
-            if tp not in dataset_errors[filename]:
-                dataset_errors[filename][tp] = {'number_of_points': 0, 'distances': [], 'angles': [],
+            if tp not in dataset_errors:
+                dataset_errors[tp] = {'number_of_points': 0, 'distances': [], 'angles': [],
                                                 'distances_to_gt': [], 'normals_to_gt': [], 'void_primitives': [],
                                                 'invalid_primitives': [], 'instance_ious': [], 'type_ious': []}
 
-            dataset_errors[filename][tp]['number_of_points'] += len(indices)
+            dataset_errors[tp]['number_of_points'] += len(indices)
 
             if len(indices) == 0:
-                dataset_errors[filename][tp]['void_primitives'].append(i)
-                dataset_errors[filename][tp]['invalid_primitives'].append(i)
+                dataset_errors[tp]['void_primitives'].append(i)
+                dataset_errors[tp]['invalid_primitives'].append(i)
             elif primitive is None:
-                dataset_errors[filename][tp]['invalid_primitives'].append(i)
+                dataset_errors[tp]['invalid_primitives'].append(i)
 
             if len(indices) > 0 and primitive is not None:
-                distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
-                                                            symmetric_normals=ignore_primitives_orientation)
-                dataset_errors[filename][tp]['distances'].append(distances)
-                dataset_errors[filename][tp]['angles'].append(angles)
+                if not no_use_occ_geometries:
+                    distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
+                                                                symmetric_normals=ignore_primitives_orientation)
+                else:
+                    distances = residual_distance.residual_loss(points_curr, feature)
+                    angles = []
+
+                dataset_errors[tp]['distances'].append(distances)
+                dataset_errors[tp]['angles'].append(angles)
 
                 if fpi_gt is not None:
                     indices_gt = fpi_gt[i]
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
-                    distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
-                                                                            symmetric_normals=ignore_primitives_orientation)
-                    dataset_errors[filename][tp]['distances_to_gt'].append(distances_to_gt)
-                    dataset_errors[filename][tp]['normals_to_gt'].append(angles_to_gt)
+                    
+                    if not no_use_occ_geometries:
+                        distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
+                                                                                symmetric_normals=ignore_primitives_orientation)
+                    else:
+                        distances_to_gt = residual_distance.residual_loss(points_gt_curr, feature)
+                        angles_to_gt = []
+
+                    dataset_errors[tp]['distances_to_gt'].append(distances_to_gt)
+                    dataset_errors[tp]['normals_to_gt'].append(angles_to_gt)
 
                 
             if len(indices) > 0:
                 if gt_data is not None:
-                    dataset_errors[filename][tp]['instance_ious'].append(instance_ious[i])
+                    dataset_errors[tp]['instance_ious'].append(instance_ious[i])
                     gt_tp = gt_data['features_data'][i]['type']
-                    dataset_errors[filename][tp]['type_ious'].append(tp==gt_tp)
+                    dataset_errors[tp]['type_ious'].append(tp==gt_tp)
 
                 if write_segmentation_gt:
                     colors_instances[indices, :] = computeRGB(colors_full[i%len(colors_full)])
@@ -309,8 +324,8 @@ def process(data_tuple):
                 #     colors_types[error_ang, :] = np.array([0, 0, 0])
                 #     colors_instances[error_both, :] = np.array([255, 0, 255])
                 #     colors_types[error_both, :] = np.array([255, 0, 255])
-
-    logs_dict = generateErrorsLogDict(dataset_errors[filename])
+    
+    logs_dict = generateErrorsLogDict(dataset_errors)
     logs_dict_final = computeLogMeans(logs_dict)
     logs_dict_final['Total']['number_of_points'] += np.count_nonzero(labels==-1)
 
@@ -324,7 +339,7 @@ def process(data_tuple):
         types_filename = f'{filename}_types.obj'
         writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
     if box_plot:
-        fig = generateErrorsBoxPlot(dataset_errors[filename])
+        fig = generateErrorsBoxPlot(dataset_errors)
         plt.figure(fig.number)
         plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
         plt.close()
@@ -355,6 +370,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_use_data_primitives', action='store_true')
     parser.add_argument('--use_noisy_points', action='store_true')
     parser.add_argument('--use_noisy_normals', action='store_true')
+    parser.add_argument('--no_use_occ_geometries', action='store_true')
     parser.add_argument('--ignore_primitives_orientation', action='store_true')
 
     args = vars(parser.parse_args())
@@ -379,6 +395,7 @@ if __name__ == '__main__':
     use_data_primitives = not args['no_use_data_primitives']
     use_noisy_points = args['use_noisy_points']
     use_noisy_normals = args['use_noisy_normals']
+    no_use_occ_geometries = args['no_use_occ_geometries']
     ignore_primitives_orientation = args['ignore_primitives_orientation']
 
     if gt_dataset_folder_name is not None and gt_data_folder_name is None:
@@ -454,7 +471,6 @@ if __name__ == '__main__':
         else:
             readers = zip(reader)
 
-        dataset_errors = {}
         full_logs_dicts = {}
 
         results = process_map(process, readers, max_workers=32, chunksize=1)
