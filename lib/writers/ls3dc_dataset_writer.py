@@ -26,7 +26,7 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
         super().__init__(parameters)
 
     def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None,
-             filename=None, features_point_indices=None, **kwargs):
+             noisy_normals=None, filename=None, features_point_indices=None, **kwargs):
         if filename is None:
             filename = str(uuid.uuid4())
         
@@ -53,11 +53,6 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
         self.filenames_by_set[self.current_set_name].append(filename)
 
         with h5py.File(data_file_path, 'w') as h5_file:
-            noise_limit = 0.
-
-            if 'add_noise' in self.normalization_parameters.keys():
-                noise_limit = self.normalization_parameters['add_noise']
-                self.normalization_parameters['add_noise'] = 0.
             
             if 'gt_indices' in kwargs:
                 h5_file.create_dataset('gt_indices', data=kwargs['gt_indices'].astype(np.int32))
@@ -65,23 +60,19 @@ class LS3DCDatasetWriter(BaseDatasetWriter):
                 h5_file.create_dataset('matching', data=kwargs['matching'].astype(np.int32))
             if 'global_indices' in kwargs:
                 h5_file.create_dataset('global_indices', data=kwargs['global_indices'].astype(np.int32))
+
+            points, noisy_points, normals, noisy_normals, features_data, transforms = self.normalize(points, noisy_points, normals,
+                                                                                                     noisy_normals, features_data)
                 
-            gt_points, gt_normals, features_data, transforms = normalize(points.copy(), self.normalization_parameters,
-                                                                         normals=normals.copy(), features=features_data)
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
 
-            h5_file.create_dataset('gt_points', data=gt_points)
-            if gt_normals is not None:
-                h5_file.create_dataset('gt_normals', data=gt_normals)
-
-            if noise_limit == 0.:
-                noisy_points = gt_points
-            else:
-                self.normalization_parameters['add_noise'] = noise_limit
-                noisy_points, _, _, _ = normalize(points, self.normalization_parameters, normals=normals)
-                
+            h5_file.create_dataset('gt_points', data=points)
             h5_file.create_dataset('noisy_points', data=noisy_points)
+
+            if normals is not None:
+                h5_file.create_dataset('gt_normals', data=normals)
+                h5_file.create_dataset('noisy_normals', data=noisy_normals)
 
             if labels is not None:
                 h5_file.create_dataset('gt_labels', data=labels)

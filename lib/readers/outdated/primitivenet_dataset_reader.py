@@ -8,7 +8,7 @@ import numpy as np
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.normalization import unNormalize
+from lib.normalization import applyTransforms
 from lib.utils import translateFeature, strUpperFirstLetter
 
 class PrimitivenetDatasetReader(BaseDatasetReader):
@@ -72,8 +72,8 @@ class PrimitivenetDatasetReader(BaseDatasetReader):
                 meta = translateFeature(meta, PrimitivenetDatasetReader.FEATURES_BY_TYPE, PrimitivenetDatasetReader.FEATURES_MAPPING)
                 features_data.append(meta)
 
-        gt_points, gt_normals, features_data = unNormalize(gt_points, transforms, normals=gt_normals, features=features_data)
-        noisy_points, _, _ = unNormalize(noisy_points, transforms, normals=None, features=[])
+        gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)
+        noisy_points, _, _ = applyTransforms(noisy_points, transforms, normals=None, features=[])
 
         result = {
             'noisy_points': noisy_points,

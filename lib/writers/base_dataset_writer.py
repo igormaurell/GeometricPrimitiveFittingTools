@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from copy import deepcopy
+from lib.normalization import normalize, applyTransforms
 import random
 from math import ceil, floor
 
@@ -8,6 +8,17 @@ class BaseDatasetWriter:
     def __init__(self, parameters):
         self.setParameters(parameters)
         self.reset()
+    
+    def normalize(self, points, noisy_points, normals, noisy_normals, features_data):
+        noisy_points = points.copy() if noisy_points is None else noisy_points
+        noisy_normals = normals.copy() if noisy_normals is None else noisy_normals
+            
+        noisy_points, noisy_normals, features_data, transforms = normalize(noisy_points, self.normalization_parameters, 
+                                                                           normals=noisy_normals, features=features_data)
+        
+        points, normals, _ = applyTransforms(points, transforms, normals=normals, invert=False)
+
+        return points, noisy_points, normals, noisy_normals, features_data, transforms
     
     def reset(self):
         self.current_set_name = 'train'
@@ -38,6 +49,7 @@ class BaseDatasetWriter:
         else:
             return [], []
         if permutation is None:
+            random.seed(1234)
             random.shuffle(filenames)
         else:
             filenames = [filenames[index] for index in permutation]
@@ -53,5 +65,6 @@ class BaseDatasetWriter:
         self.reset()
 
     @abstractmethod
-    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None, filename=None, features_point_indices=None, **kwargs):
+    def step(self, points, normals=None, labels=None, features_data=[], noisy_points=None,
+             noisy_normals=None, filename=None, features_point_indices=None, **kwargs):
         pass

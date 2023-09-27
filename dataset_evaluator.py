@@ -106,9 +106,10 @@ def generateErrorsLogDict(errors):
         summd = 0.
         summa = 0.
         for i in range(len(ind_distances)):
-            number_of_valid_points += len(ind_distances[i])
-            summd += np.sum(ind_distances[i])
-            summa += np.sum(ind_angles[i])
+            if not np.any(np.isnan(ind_distances[i])) and not np.any(np.isnan(ind_angles[i])):
+                number_of_valid_points += len(ind_distances[i])
+                summd += np.sum(ind_distances[i])
+                summa += np.sum(ind_angles[i])
 
         number_of_valid_gt_points = 0
         ind_gt_distances = e['distances_to_gt']
@@ -119,9 +120,10 @@ def generateErrorsLogDict(errors):
             summdgt = 0.
             summagt = 0.
             for i in range(len(ind_gt_distances)):
-                number_of_valid_gt_points += len(ind_gt_angles[i])
-                summdgt += np.sum(ind_gt_distances[i])
-                summagt += np.sum(ind_gt_angles[i])
+                if not np.any(np.isnan(ind_gt_distances[i])) and not np.any(np.isnan(ind_gt_angles[i])):
+                    number_of_valid_gt_points += len(ind_gt_angles[i])
+                    summdgt += np.sum(ind_gt_distances[i])
+                    summagt += np.sum(ind_gt_angles[i])
         else:
             summdgt = -1.
             summagt = -1.
@@ -181,6 +183,8 @@ def filterLog(logs_dict):
         if 'mean_normal_gt_error' in result[tp]:
             if result[tp]['mean_normal_gt_error'] < 0:
                 del result[tp]['mean_normal_gt_error']
+        if 'mean_normal_gt_error' not in result[tp] and 'mean_distance_gt_error' not in result[tp]:
+            del result[tp]['number_of_valid_gt_points']
         if 'mean_iou' in result[tp]:
             if result[tp]['mean_iou'] < 0:
                 del result[tp]['mean_iou']
@@ -198,6 +202,7 @@ VERBOSE = False
 write_segmentation_gt = False
 write_points_error = False
 box_plot = False
+ignore_primitives_orientation = False
 
 def process(data_tuple):
     if len(data_tuple) == 1:
@@ -208,8 +213,8 @@ def process(data_tuple):
         data = mergeQueryAndGTData(data, gt_data)
 
     filename = data['filename'] if 'filename' in data.keys() else str(i)
-    points = data['points']
-    normals = data['normals']
+    points = data['noisy_points'] if use_noisy_points else data['points']
+    normals = data['noisy_normals'] if use_noisy_normals else data['normals']
 
     labels = data['labels']
     labels[labels < -1] = -1 # removing non_gt_features
@@ -267,7 +272,8 @@ def process(data_tuple):
                 dataset_errors[filename][tp]['invalid_primitives'].append(i)
 
             if len(indices) > 0 and primitive is not None:
-                distances, angles = primitive.computeErrors(points_curr, normals=normals_curr)
+                distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
+                                                            symmetric_normals=ignore_primitives_orientation)
                 dataset_errors[filename][tp]['distances'].append(distances)
                 dataset_errors[filename][tp]['angles'].append(angles)
 
@@ -275,7 +281,8 @@ def process(data_tuple):
                     indices_gt = fpi_gt[i]
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
-                    distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr)
+                    distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
+                                                                            symmetric_normals=ignore_primitives_orientation)
                     dataset_errors[filename][tp]['distances_to_gt'].append(distances_to_gt)
                     dataset_errors[filename][tp]['normals_to_gt'].append(angles_to_gt)
 
@@ -312,7 +319,7 @@ def process(data_tuple):
     
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
-        #points, _, _ = unNormalize(points, transforms, invert=False)
+        #points, _, _ = applyTransforms(points, transforms, invert=False)
         writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
         types_filename = f'{filename}_types.obj'
         writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
@@ -345,8 +352,10 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--show_box_plot', action='store_true', help='show box plot of the data.')
 
     parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
-
     parser.add_argument('--no_use_data_primitives', action='store_true')
+    parser.add_argument('--use_noisy_points', action='store_true')
+    parser.add_argument('--use_noisy_normals', action='store_true')
+    parser.add_argument('--ignore_primitives_orientation', action='store_true')
 
     args = vars(parser.parse_args())
 
@@ -367,8 +376,10 @@ if __name__ == '__main__':
     box_plot = args['show_box_plot']
 
     use_gt_transform = args['use_gt_transform']
-
     use_data_primitives = not args['no_use_data_primitives']
+    use_noisy_points = args['use_noisy_points']
+    use_noisy_normals = args['use_noisy_normals']
+    ignore_primitives_orientation = args['ignore_primitives_orientation']
 
     if gt_dataset_folder_name is not None and gt_data_folder_name is None:
         gt_data_folder_name = data_folder_name
