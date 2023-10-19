@@ -1,11 +1,13 @@
 # from .spfn_dataset_reader import SpfnDatasetReader
 # from .primitivenet_dataset_reader import PrimitivenetDatasetReader
+from .parsenet_dataset_reader import ParsenetDatasetReader
 from .ls3dc_dataset_reader import LS3DCDatasetReader
 from .hpnet_dataset_reader import HPNetDatasetReader
 
 class DatasetReaderFactory:
     READERS_DICT = {
         #'spfn': SpfnDatasetReader,
+        'parsenet': ParsenetDatasetReader,
         'ls3dc': LS3DCDatasetReader,
         #'primitivenet': PrimitivenetDatasetReader,
         'hpnet': HPNetDatasetReader

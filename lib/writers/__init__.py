@@ -1,6 +1,6 @@
 # from .spfn_dataset_writer import SpfnDatasetWriter
 # from .primitivenet_dataset_writer import PrimitivenetDatasetWriter
-# from .parsenet_dataset_writer import ParsenetDatasetWriter
+from .parsenet_dataset_writer import ParsenetDatasetWriter
 from .ls3dc_dataset_writer import LS3DCDatasetWriter
 from .hpnet_dataset_writer import HPNetDatasetWriter
 
@@ -13,7 +13,7 @@ class DatasetWriterFactory:
     WRITERS_DICT = {
         # 'spfn': SpfnDatasetWriter,
         # 'primitivenet': PrimitivenetDatasetWriter,
-        # 'parsenet': ParsenetDatasetWriter,
+        'parsenet': ParsenetDatasetWriter,
         'ls3dc': LS3DCDatasetWriter,
         'hpnet': HPNetDatasetWriter
     }

@@ -378,7 +378,7 @@ if __name__ == '__main__':
     folder_name = args['folder']
     format = args['format']
     gt_format = args['gt_format']
-    gt_format = format if gt_format is None else gt_format
+    #gt_format = format if gt_format is None else gt_format
     dataset_folder_name = args['dataset_folder_name']
     gt_dataset_folder_name = args['gt_dataset_folder_name']
     data_folder_name = args['data_folder_name']
@@ -398,11 +398,13 @@ if __name__ == '__main__':
     no_use_occ_geometries = args['no_use_occ_geometries']
     ignore_primitives_orientation = args['ignore_primitives_orientation']
 
-    if gt_dataset_folder_name is not None and gt_data_folder_name is None:
-        gt_data_folder_name = data_folder_name
-    
-    if gt_data_folder_name is not None and gt_dataset_folder_name is None:
-        gt_dataset_folder_name = dataset_folder_name
+    if gt_dataset_folder_name is not None or gt_data_folder_name is not None or gt_format is not None:
+        if gt_data_folder_name is None:
+            gt_data_folder_name = data_folder_name
+        if gt_dataset_folder_name is None:
+            gt_dataset_folder_name = dataset_folder_name
+        if gt_format is None:
+            gt_format = format
 
     parameters = {}
     gt_parameters = {}
