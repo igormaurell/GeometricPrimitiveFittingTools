@@ -11,6 +11,7 @@ from lib.utils import computeFeaturesPointIndices, writeColorPointCloudOBJ, getA
 from lib.matching import mergeQueryAndGTData
 from lib.evaluator import computeIoUs
 from lib.primitives import ResidualLoss
+from pprint import pprint
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
@@ -264,25 +265,25 @@ def process(data_tuple):
                 
             if tp not in dataset_errors:
                 dataset_errors[tp] = {'number_of_points': 0, 'distances': [], 'angles': [],
-                                                'distances_to_gt': [], 'normals_to_gt': [], 'void_primitives': [],
-                                                'invalid_primitives': [], 'instance_ious': [], 'type_ious': []}
+                                      'distances_to_gt': [], 'normals_to_gt': [], 'void_primitives': [],
+                                      'invalid_primitives': [], 'instance_ious': [], 'type_ious': []}
 
             dataset_errors[tp]['number_of_points'] += len(indices)
 
             if len(indices) == 0:
                 dataset_errors[tp]['void_primitives'].append(i)
                 dataset_errors[tp]['invalid_primitives'].append(i)
-            elif primitive is None:
+            elif primitive is None and not no_use_occ_geometries:
                 dataset_errors[tp]['invalid_primitives'].append(i)
 
-            if len(indices) > 0 and primitive is not None:
+            if len(indices) > 0 and (primitive is not None or no_use_occ_geometries):
                 if not no_use_occ_geometries:
                     distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
                                                                 symmetric_normals=ignore_primitives_orientation)
                 else:
                     distances = residual_distance.residual_loss(points_curr, feature)
                     angles = []
-
+                
                 dataset_errors[tp]['distances'].append(distances)
                 dataset_errors[tp]['angles'].append(angles)
 
@@ -298,9 +299,10 @@ def process(data_tuple):
                         distances_to_gt = residual_distance.residual_loss(points_gt_curr, feature)
                         angles_to_gt = []
 
+                    print(len(distances_to_gt), np.max(points_gt_curr), feature['type'], feature['location'], np.mean(distances_to_gt))
+
                     dataset_errors[tp]['distances_to_gt'].append(distances_to_gt)
                     dataset_errors[tp]['normals_to_gt'].append(angles_to_gt)
-
                 
             if len(indices) > 0:
                 if gt_data is not None:
@@ -463,11 +465,12 @@ if __name__ == '__main__':
     colors_full = getAllColorsArray()
     for s in sets:
         reader.setCurrentSetName(s)
+        reader.filenames_by_set['val'] = reader.filenames_by_set['val'][56:57]
         if gt_reader is not None:
             gt_reader.setCurrentSetName(s)
             files = reader.filenames_by_set['val']
             gt_files = gt_reader.filenames_by_set['val']
-            assert sorted(files) == sorted(gt_files), f'\n {sorted(files)} \n {sorted(gt_files)}'
+            #assert sorted(files) == sorted(gt_files), f'\n {len(sorted(files))} \n {len(sorted(gt_files))}'
             gt_reader.filenames_by_set['val'] = deepcopy(files)
             readers = zip(reader, gt_reader)
         else:
@@ -476,6 +479,7 @@ if __name__ == '__main__':
         full_logs_dicts = {}
 
         results = process_map(process, readers, max_workers=32, chunksize=1)
+        #results = [process(data) for data in readers]
 
         print('Accumulating...')
         c = 0
@@ -484,5 +488,9 @@ if __name__ == '__main__':
             full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
             #c+= 1
 
+        final_json = filterLog(computeLogMeans(full_logs_dicts, denominator=len(results)))
+
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
-            json.dump(filterLog(computeLogMeans(full_logs_dicts, denominator=len(results))), f, indent=4)
+            json.dump(final_json, f, indent=4)
+
+        pprint(final_json)

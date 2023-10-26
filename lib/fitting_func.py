@@ -3,6 +3,10 @@ import torch
 from torch.autograd import Function
 import open3d as o3d
 
+torch.manual_seed(2)
+np.random.seed(2)
+EPS = np.finfo(np.float32).eps
+
 read_point_cloud = o3d.io.read_point_cloud
 write_point_cloud = o3d.io.write_point_cloud
 PointCloud = o3d.geometry.PointCloud
@@ -16,8 +20,6 @@ def write_ply(fn, point, normal=None, color=None):
   if normal is not None:
     ply.normals = Vector3dVector(normal)
   write_point_cloud(fn, ply)
-
-EPS = np.finfo(np.float32).eps
 
 def best_lambda(A):
     """
@@ -38,6 +40,64 @@ def best_lambda(A):
             lamb *= 10
     return lamb
 
+def guard_exp(x, max_value=75, min_value=-75):
+    x = torch.clamp(x, max=max_value, min=min_value)
+    return torch.exp(x)
+
+def weights_normalize(weights, bw):
+    """
+    Assuming that weights contains dot product of embedding of a
+    points with embedding of cluster center, we want to normalize
+    these weights to get probabilities. Since the clustering is
+    gotten by mean shift clustering, we use the same kernel to compute
+    the probabilities also.
+    """
+    prob = guard_exp(weights / (bw ** 2) / 2)
+    prob = prob / torch.sum(prob, 0, keepdim=True)
+
+    # This is to avoid numerical issues
+    if weights.shape[0] == 1:
+        return prob
+
+    # This is done to ensure that max probability is 1 at the center.
+    # this will be helpful for the spline fitting network
+    prob = prob - torch.min(prob, 1, keepdim=True)[0]
+    prob = prob / (torch.max(prob, 1, keepdim=True)[0] + EPS)
+    return prob
+
+def svd_grad_K(S):
+    N = S.shape[0]
+    s1 = S.view((1, N))
+    s2 = S.view((N, 1))
+    diff = s2 - s1
+    plus = s2 + s1
+
+    # TODO Look into it
+    eps = torch.ones((N, N)) * 10 ** (-6)
+    eps = eps.cuda(S.get_device())
+    max_diff = torch.max(torch.abs(diff), eps)
+    sign_diff = torch.sign(diff)
+
+    K_neg = sign_diff * max_diff
+
+    # gaurd the matrix inversion
+    K_neg[torch.arange(N), torch.arange(N)] = 10 ** (-6)
+    K_neg = 1 / K_neg
+    K_pos = 1 / plus
+
+    ones = torch.ones((N, N)).cuda(S.get_device())
+    rm_diag = ones - torch.eye(N).cuda(S.get_device())
+    K = K_neg * K_pos * rm_diag
+    return K
+
+def compute_grad_V(U, S, V, grad_V):
+    N = S.shape[0]
+    K = svd_grad_K(S)
+    S = torch.eye(N).cuda(S.get_device()) * S.reshape((N, 1))
+    inner = K.T * (V.T @ grad_V)
+    inner = (inner + inner.T) / 2.0
+    return 2 * U @ S @ inner @ V.T
+
 class LeastSquares:
     def __init__(self):
         pass
@@ -54,6 +114,7 @@ class LeastSquares:
             ipdb.set_trace()
 
         # Assuming A to be full column rank
+        #print(torch.linalg.matrix_rank(A))
         if cols == torch.linalg.matrix_rank(A):
             # Full column rank
             q, r = torch.qr(A)
@@ -213,32 +274,31 @@ class FittingFunctions:
 
     @staticmethod
     def fit_cylinder_torch(points, normals, weights, show_warning=False):
-        if len(points) > 100:
-            # compute
-            # U, s, V = torch.svd(weights * normals)
-            weighted_normals = weights * normals
+        # compute
+        # U, s, V = torch.svd(weights * normals)
+        weighted_normals = weights * normals
 
-            if np.linalg.cond(weighted_normals.data.cpu().numpy()) > 1e5:
-                if show_warning:
-                    print("condition number is large in cylinder")
-                    print(torch.sum(normals).item(), torch.sum(points).item(), torch.sum(weights).item())
+        #print(np.max(points.cpu().numpy(), axis=0) - np.min(points.cpu().numpy(), axis=0))
 
-            U, s, V = FittingFunctions.CUSTOMSVD(weighted_normals)
-            a = V[:, -1]
-            a = torch.reshape(a, (1, 3))
+        #print(np.linalg.cond(weighted_normals.data.cpu().numpy()) )
+        if np.linalg.cond(weighted_normals.data.cpu().numpy()) > 1e5:
+            if show_warning:
+                print("condition number is large in cylinder")
+                print(torch.sum(normals).item(), torch.sum(points).item(), torch.sum(weights).item())
 
-            # find the projection onto a plane perpendicular to the axis
-            a = a.reshape((3, 1))
-            a = a / (torch.norm(a, 2) + EPS)
+        U, s, V = FittingFunctions.CUSTOMSVD(weighted_normals)
+        a = V[:, -1]
+        a = torch.reshape(a, (1, 3))
 
-            prj_circle = points - ((points @ a).permute(1, 0) * a).permute(1, 0)
+        # find the projection onto a plane perpendicular to the axis
+        a = a.reshape((3, 1))
+        a = -(a / (torch.norm(a, 2) + EPS))
 
-            # torch doesn't have least square for
-            center, radius = FittingFunctions.fit_sphere_torch(prj_circle, normals, weights)
-        else:
-            a = np.array([0,0,0])
-            center = np.array([0,0,0])
-            radius = np.array([-1])
+        prj_circle = points - ((points @ a).permute(1, 0) * a).permute(1, 0)
+        
+        # torch doesn't have least square for
+        center, radius = FittingFunctions.fit_sphere_torch(prj_circle, normals, weights)
+
         return a, center, radius
 
     @staticmethod
@@ -288,11 +348,12 @@ class FittingFunctions:
     @staticmethod
     def fit(primitive_type, points, normals, weights=None):
         if weights is None:
-            weights = np.ones([points.shape[0], 1])
+            weights = torch.from_numpy(np.ones([points.shape[0], 1], dtype=np.float32))
+        else:
+            weights = weights[:, None]
         
         points = torch.from_numpy(points)
         normals = torch.from_numpy(normals)
-        weights = torch.from_numpy(weights)
 
         result = FittingFunctions.FUNCTION_BY_TYPE[primitive_type](points, normals, weights)
         new_result = []

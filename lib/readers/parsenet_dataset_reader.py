@@ -2,6 +2,8 @@ import pickle
 import h5py
 from os.path import join, exists
 import numpy as np
+import torch
+import statistics as stats
 
 from .base_dataset_reader import BaseDatasetReader
 
@@ -22,14 +24,57 @@ def get_data_at_index(data, index):
 
 def collect_data_from_h5(h5_file):
     data = {}
-    data['points'] = h5_file['points'][()] if 'points' in h5_file.keys() else None
-    data['normals'] = h5_file['normals'][()] if 'normals' in h5_file.keys() else None
-    data['labels'] = h5_file['labels'][()] if 'labels' in h5_file.keys() else None
-    data['prim'] = h5_file['prim'][()] if 'prim' in h5_file.keys() else None
-    data['gt_indices'] = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
-    data['matching'] = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
-    data['global_indices'] = h5_file['global_indices'][()] if 'global_indices' in h5_file.keys() else None
+    data['points'] = h5_file['points'][()].astype(np.float32) if 'points' in h5_file.keys() else None
+    data['normals'] = h5_file['normals'][()].astype(np.float32) if 'normals' in h5_file.keys() else None
+    data['labels'] = h5_file['labels'][()].astype(np.int32) if 'labels' in h5_file.keys() else None
+    data['prim'] = h5_file['prim'][()].astype(np.int32) if 'prim' in h5_file.keys() else None
+    data['gt_indices'] = h5_file['gt_indices'][()].astype(np.int32) if 'gt_indices' in h5_file.keys() else None
+    data['matching'] = h5_file['matching'][()].astype(np.int32) if 'matching' in h5_file.keys() else None
+    data['global_indices'] = h5_file['global_indices'][()].astype(np.int32) if 'global_indices' in h5_file.keys() else None
     return data
+
+def to_one_hot(target, maxx=50, device_id=0):
+    if isinstance(target, np.ndarray):
+        target = torch.from_numpy(target.astype(np.int64))
+    N = target.shape[0]
+    target_one_hot = torch.zeros((N, maxx))
+
+    target_one_hot = target_one_hot
+    target_t = target.unsqueeze(1)
+    target_one_hot = target_one_hot.scatter_(1, target_t.long(), 1)
+    return target_one_hot
+
+def guard_exp(x, max_value=75, min_value=-75):
+    x = torch.clamp(x, max=max_value, min=min_value)
+    return torch.exp(x)
+
+def labels_to_one_hot(labels, num_classes):
+    one_hot = np.zeros((len(labels), num_classes), dtype=np.int64)
+    valid_labels_mask = labels >= 0
+    one_hot[valid_labels_mask, labels[valid_labels_mask]] = 1
+    return one_hot
+
+def weights_normalize(weights, bw):
+    """
+    Assuming that weights contains dot product of embedding of a
+    points with embedding of cluster center, we want to normalize
+    these weights to get probabilities. Since the clustering is
+    gotten by mean shift clustering, we use the same kernel to compute
+    the probabilities also.
+    """
+    prob = guard_exp(weights / (bw ** 2) / 2)
+    prob = prob / torch.sum(prob, 0, keepdim=True)
+
+    # This is to avoid numerical issues
+    if weights.shape[0] == 1:
+        return prob
+
+    # This is done to ensure that max probability is 1 at the center.
+    # this will be helpful for the spline fitting network
+    prob = prob - torch.min(prob, 1, keepdim=True)[0]
+    prob = prob / (torch.max(prob, 1, keepdim=True)[0] + np.finfo(np.float32).eps)
+    return prob
+
 
 class ParsenetDatasetReader(BaseDatasetReader):
     PRIMITIVES_MAP = {
@@ -45,16 +90,20 @@ class ParsenetDatasetReader(BaseDatasetReader):
         if exists(path):
             with h5py.File(path, 'r') as h5_file:
                 data = collect_data_from_h5(h5_file)
+            path = join(self.data_folder_name, f'{set_name}_ids.txt')
 
-        path = join(self.data_folder_name, f'{set_name}_ids.txt')
-        with open(path, 'r') as txt_file:
-            filenames = txt_file.read().split('\n')
-            if len(filenames[-1].strip()) == 0:
-               filenames.pop(-1) 
+            assert exists(path), f'{path} file does not exist.'
+
+            with open(path, 'r') as txt_file:
+                filenames = txt_file.read().split('\n')
+                if len(filenames[-1].strip()) == 0:
+                    filenames.pop(-1)
+        else:
+            filenames = []
 
         for i, filename in enumerate(filenames):
             self.data_by_set[set_name][filename] = get_data_at_index(data, i) 
-
+            
         self.filenames_by_set[set_name] = filenames
 
     def __init__(self, parameters):
@@ -87,6 +136,14 @@ class ParsenetDatasetReader(BaseDatasetReader):
         matching = data['matching'] if 'matching' in data.keys() else None
         global_indices = data['global_indices'] if 'global_indices' in data.keys() else None
 
+        # weights = labels_to_one_hot(labels, np.max(labels) + 1)
+        # weights = torch.from_numpy(weights.astype(np.float32))
+
+        # weights = weights_normalize(weights, float(0.01))
+        # weights = torch.transpose(weights, 1, 0)
+        # weights = to_one_hot(
+        #     torch.max(weights, 1)[1].data, weights.shape[1])
+
         # if local_2_global_map is not None:
         #     valid_labels_mask = labels != -1
         #     labels[valid_labels_mask] = local_2_global_map[labels[valid_labels_mask]]
@@ -101,21 +158,25 @@ class ParsenetDatasetReader(BaseDatasetReader):
 
         fpi = computeFeaturesPointIndices(labels, size=max_size)
 
+        #print('----------------------------------')
         features_data = [None]*max_size  
         for label in unique_labels:
             indices = fpi[label]
             types = prim[indices]
-            types_unique, types_counts = np.unique(types, return_counts=True)
-            argmax = np.argmax(types_counts)
-            tp_id = types_unique[argmax]
+            tp_id = stats.mode(types)
 
-            valid_indices = indices[np.where(types==tp_id)[0].astype(np.int32)]
+            #valid_indices = indices[np.where(types==tp_id)[0].astype(np.int32)]
+
+            #if indices.shape[0] < 20:
+            #    continue
 
             feature = {}
             tp = ParsenetDatasetReader.PRIMITIVES_MAP[tp_id]
             feature['type'] = tp
 
-            primitive_params = FittingFunctions.fit(tp, points[indices], normals[indices])
+            #print(weights[label, indices].shape, torch.unique(weights[label, indices]))
+
+            primitive_params = FittingFunctions.fit(tp, points[indices], normals[indices])#, weights=weights[label, indices] + np.finfo(np.float32).eps)
 
             if tp == 'Plane':
                 z_axis, d = primitive_params
@@ -138,8 +199,8 @@ class ParsenetDatasetReader(BaseDatasetReader):
 
             elif tp == 'Cylinder':
                 z_axis, location, radius = primitive_params
-                if radius > 10 or location[0] > 10 or location[1] > 10 or location[2] > 10:
-                    radius = -1
+                # if radius > 10 or location[0] > 10 or location[1] > 10 or location[2] > 10:
+                #     radius = -1
 
                 feature['z_axis'] = z_axis.tolist()
                 feature['location'] = location.tolist()
@@ -150,11 +211,11 @@ class ParsenetDatasetReader(BaseDatasetReader):
                     
                 feature['location'] = location.tolist()
                 feature['radius'] = radius
-            
+                        
             features_data[label] = feature
-
-        if unormalize:
-            points, normals, features_data = applyTransforms(points, transforms, normals=normals, features=features_data)
+            
+        #if unormalize:
+        #    points, normals, features_data = applyTransforms(points, transforms, normals=normals, features=features_data)
 
         result = {
             'noisy_points': points.copy(),

@@ -179,6 +179,8 @@ class ComputePrimitiveDistance:
         # distance.register_hook(self.print_norm)
         distance = distance ** 2
 
+        length = len(distance)
+
         if sqrt:
             distance = guard_sqrt(distance)
 

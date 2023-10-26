@@ -55,12 +55,12 @@ def createNestedPieGraph(labels, in_data, out_data, title='', number_in_per_out=
     ax.legend(wedges[0], labels,
             title="Types",
             loc="lower right",
-            bbox_to_anchor=(0.6, 0, 0.5, 1), fontsize='large')
+            bbox_to_anchor=(0.6, 0, 0.5, 1), fontsize='x-large')
 
     return fig
 
-def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface'):
-    fig, ax = plt.subplots(figsize=(10.5, 6))
+def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface', **kwargs):
+    fig, ax = plt.subplots(figsize=(14, 8))
 
     size = 0.8
 
@@ -108,12 +108,91 @@ def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface'
     
     return fig
 
-def createBarGraph(columns, data, title='', y_label=''):
-    colors = plt.cm.BuGn(np.linspace(0.5, 1, len(data)))
-    fig = plt.figure()
-    plt.bar(columns, data, width=0.4, color=colors)
-    plt.ylabel(y_label)
-    plt.title(title)
+def createBarGraph(labels, data, title='', num_models=1, geometry_type='surface', data_label='Amount'):
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    if geometry_type == 'curve':
+        colors = np.asarray([list(CurveFactory.FEATURES_CURVE_CLASSES[l].getColor()) + [255] for l in labels])
+    elif geometry_type == 'surface':
+        colors = np.asarray([list(SurfaceFactory.FEATURES_SURFACE_CLASSES[l].getColor()) + [255] for l in labels])
+    else:
+        assert False
+
+    colors = colors/255.
+
+    width = 0.2
+    offset = 0.1
+
+    data_sum = sum(data)
+    percents = [(d/data_sum) for d in data]
+
+    sorted_indices = sorted(range(len(labels)), key=lambda x: data[x])
+    
+    x = []
+    for i in sorted_indices:
+        last_pos = x[-1] if len(x) > 0 else 0
+        pos = last_pos + width + offset
+        rects = ax.bar(pos, data[i], width, label=labels[i], color=colors[i])
+        ax.bar_label(rects, fmt=f'{round(percents[i]*100, 2)}% (\u03BC = {(data[i]//num_models):.1E})', padding=3) 
+        #ax.annotate(f'{height:.0%}', (x + width/2, y + height*1.02), ha='center')
+        x.append(pos)
+    
+    #ax.legend(loc='upper left', ncols=3)
+    ax.set_ylabel(data_label, fontsize=14)
+    ax.set_xlabel('Types', fontsize=14)
+    ax.set_title(title, pad=32.0, fontsize=20)
+    ax.set_xticks(x, [labels[i] for i in sorted_indices])
+
+    # for attribute, measurement in penguin_means.items():
+    #     offset = width * multiplier
+    #     rects = ax.bar(x + offset, measurement, width, label=attribute)
+    #     ax.bar_label(rects, padding=3)
+    #     multiplier += 1
+    
+    return fig
+
+def createBarHGraph(labels, data, title='', num_models=1, geometry_type='surface', data_label='Amount'):
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    if geometry_type == 'curve':
+        colors = np.asarray([list(CurveFactory.FEATURES_CURVE_CLASSES[l].getColor()) + [255] for l in labels])
+    elif geometry_type == 'surface':
+        colors = np.asarray([list(SurfaceFactory.FEATURES_SURFACE_CLASSES[l].getColor()) + [255] for l in labels])
+    else:
+        assert False
+
+    colors = colors/255.
+
+    height = 0.2
+    offset = 0.1
+
+    data_sum = sum(data)
+    percents = [(d/data_sum) for d in data]
+
+    sorted_indices = sorted(range(len(labels)), key=lambda x: data[x])
+    
+    y = []
+    for i in sorted_indices:
+        last_pos = y[-1] if len(y) > 0 else 0
+        pos = last_pos + height + offset
+        rects = ax.barh(pos, data[i], height, label=labels[i], color=colors[i])
+        ax.bar_label(rects, fmt=f'{round(percents[i]*100, 2)}% (\u03BC = {(data[i]//num_models):.1E})', padding=3) 
+        y.append(pos)
+    
+    #ax.legend(loc='upper left', ncols=3)
+    ax.set_xlabel(data_label, fontsize=14)
+    ax.set_ylabel('Types', fontsize=14)
+    ax.set_title(title, pad=32.0, fontsize=20)
+    ax.set_yticks(y, [labels[i] for i in sorted_indices])
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1.2*max(data))
+
+    # for attribute, measurement in penguin_means.items():
+    #     offset = width * multiplier
+    #     rects = ax.bar(x + offset, measurement, width, label=attribute)
+    #     ax.bar_label(rects, padding=3)
+    #     multiplier += 1
+    
     return fig
 
 def saveFigs(fig1, fig2, fig3, fig4, fig5, folder_name):
@@ -133,7 +212,13 @@ def saveFigs(fig1, fig2, fig3, fig4, fig5, folder_name):
     plt.savefig(f'{folder_name}/area_surfaces.png', transparent=True, dpi=600)
     plt.close()
 
-def statsData2Graphs(data, num_models=1):
+def statsData2Graphs(data, num_models=1, graph='pie'):
+    if graph=='bar':
+        func = createBarGraph
+    elif graph=='barh':
+        func = createBarHGraph
+    elif graph=='pie':
+        func = createPieGraph
     ##curves
     columns_curves = []
     data_number = []
@@ -146,10 +231,10 @@ def statsData2Graphs(data, num_models=1):
             # data_small.append(d['number_curves']-d['number_small_curves'])
             # data_small.append(d['number_small_curves'])
     #fig_number_curves = createNestedPieGraph(columns_curves, data_number, data_small, title='Nuber of Curves per Type')
-    fig_number_curves = createPieGraph(columns_curves, data_number, title='Number of Curves per Type', 
-                                       num_models=num_models, geometry_type='curve')
-    fig_number_vertices = createPieGraph(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve', 
-                                         num_models=num_models, geometry_type='curve')
+    fig_number_curves = func(columns_curves, data_number, title='Number of Curves per Type', 
+                             num_models=num_models, geometry_type='curve', data_label='Amount')
+    fig_number_vertices = func(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve', 
+                               num_models=num_models, geometry_type='curve', data_label='Amount')
 
     ##surfaces
     columns_surfaces = []
@@ -165,9 +250,12 @@ def statsData2Graphs(data, num_models=1):
         # data_small.append(d['number_surfaces']-d['number_small_surfaces'])
         # data_small.append(d['number_small_surfaces'])
     #fig_number_surfaces = createNestedPieGraph(columns_surfaces, data_number, data_small, title='Nuber of Surfaces per Type')
-    fig_number_surfaces = createPieGraph(columns_surfaces, data_number, title='Number of Surfaces per Type', num_models=num_models)
-    fig_number_faces = createPieGraph(columns_surfaces, data_faces,  title='Number of Faces per Type of Surface', num_models=num_models)
-    fig_area = createPieGraph(columns_surfaces, data_area,  title='Area per Type of Surface', num_models=num_models)
+    fig_number_surfaces = func(columns_surfaces, data_number, title='Number of Surfaces per Type',
+                                         num_models=num_models, data_label='Amount')
+    fig_number_faces = func(columns_surfaces, data_faces,  title='Number of Faces per Type of Surface',
+                                      num_models=num_models, data_label='Amount')
+    fig_area = func(columns_surfaces, data_area,  title='Area per Type of Surface',
+                              num_models=num_models, data_label='Area')
 
     return fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, fig_area
 

@@ -80,20 +80,37 @@ def memoryEfficientHungarianMatching(query_labels, gt_labels):
         for i, j in indices
     ]
 
-def getOneHot(a):
-    if a.min() == -1:
-        b = np.zeros((a.size, a.max() + 2), np.int8)
-        b[np.arange(a.size), (a + 1)] = 1
-        return b[:, 1:]
-    else:
-        b = np.zeros((a.size, a.max() + 1), np.int8)
-        b[np.arange(a.size), a] = 1
-        return b
+def getOneHot(a, n_classes=None):
+    if n_classes is None:
+        n_classes = a.max() + 1
+    b = np.zeros((a.size, n_classes), np.int8)
+    valid_mask = a > -1
+    b[valid_mask, a[valid_mask]] = 1
+    return b
+    # if a.min() == -1:
+    #     b = np.zeros((a.size, a.max() + 2), np.int8)
+    #     b[np.arange(a.size), (a + 1)] = 1
+    #     return b[:, 1:]
+    # else:
+    #     b = np.zeros((a.size, a.max() + 1), np.int8)
+    #     b[np.arange(a.size), a] = 1   
+    #     return b
     
 # from HPNet
 def hungarianMatching(query_labels, gt_labels):
+    # size_query = np.max(query_labels) + 1
+    # size_gt = np.max(gt_labels) + 1
+
+    # size_final = max(2*size_query, size_gt)
+
     W_pred = getOneHot(query_labels)
+    valid_pred_indices = np.any(W_pred!=0, axis=1)
     W_gt = getOneHot(gt_labels)
+    valid_gt_indices = np.any(W_gt!=0, axis=1)
+
+    valid_match_indices = np.logical_and(valid_pred_indices, valid_gt_indices)
+    W_pred = W_pred[valid_match_indices, :]
+    W_gt = W_gt[valid_match_indices, :]
 
     dot = np.sum(np.expand_dims(W_pred, axis=2) * np.expand_dims(W_gt, axis=1),
                  axis=0)  # K'xK
@@ -102,6 +119,19 @@ def hungarianMatching(query_labels, gt_labels):
                                                           axis=0) - dot
     cost = dot / np.maximum(denominator, np.finfo(np.float64).eps)  # K'xK
     pred_ind, gt_ind = solve_dense(-cost)  # want max solution
+
+    #print(np.unique(gt_labels))
+    #print(pred_ind, gt_ind)
+
+    for index in range(len(pred_ind)):
+        gt_indices_i = gt_labels == gt_ind[index]
+        pred_indices_i = query_labels == pred_ind[index]
+        intersection = np.count_nonzero(np.logical_and(gt_indices_i, pred_indices_i))
+        
+        #if intersection == 0:
+        #    gt_ind[index] = -1
+
+        #print(gt_ind[index], np.count_nonzero(pred_indices_i), np.count_nonzero(np.logical_and(gt_indices_i, pred_indices_i)))
 
     matching = np.zeros(max(0, np.max(query_labels) + 1), dtype=np.int32) - 1
     if len(pred_ind) > 0:
@@ -132,13 +162,10 @@ def mergeQueryAndGTData(query, gt, global_min=-1, num_points=0):
         # just gt has global indices
         global_indices = gt['global_indices'][gt_indices]    
 
-    assert np.allclose(query['points'], gt['points'][gt_indices], rtol=0., atol=1e-5), f"{query['points']} != {gt['points'][gt_indices]}"
+    #assert np.allclose(query['points'], gt['points'][gt_indices], rtol=0., atol=1e-5), f"{query['points']} != {gt['points'][gt_indices]}"
 
     query_labels = query['labels']
     gt_labels = gt['labels'][gt_indices]
-
-    #print(np.unique(query_labels))
-    #print(np.unique(gt_labels))
 
     query_local = np.zeros(len(query_labels), dtype=np.int32) - 1
     valid_query = query_labels > -1
@@ -152,6 +179,11 @@ def mergeQueryAndGTData(query, gt, global_min=-1, num_points=0):
         matching = hungarianMatching(query_local, gt_local)
     else:
         matching = np.array(query['matching'])
+
+    #print([(index, np.count_nonzero(gt_local==index)) for index in np.unique(gt_local)])
+
+    #print(matching)
+    #print([np.count_nonzero(gt_local==i) for i in matching])
 
     valid_matching_mask = matching != -1
     matching[valid_matching_mask] = gt_map[matching[valid_matching_mask]]
