@@ -3,6 +3,7 @@
 from .parsenet_dataset_writer import ParsenetDatasetWriter
 from .ls3dc_dataset_writer import LS3DCDatasetWriter
 from .hpnet_dataset_writer import HPNetDatasetWriter
+from .pcpnet_dataset_writer import PcpnetDatasetWriter
 
 import random
 
@@ -15,7 +16,8 @@ class DatasetWriterFactory:
         # 'primitivenet': PrimitivenetDatasetWriter,
         'parsenet': ParsenetDatasetWriter,
         'ls3dc': LS3DCDatasetWriter,
-        'hpnet': HPNetDatasetWriter
+        'hpnet': HPNetDatasetWriter,
+        'pcpnet': PcpnetDatasetWriter
     }
 
     def __init__(self, parameters):
