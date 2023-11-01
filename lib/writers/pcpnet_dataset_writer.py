@@ -31,18 +31,10 @@ class PcpnetDatasetWriter(BaseDatasetWriter):
         points, noisy_points, normals, noisy_normals, _, _ = self.normalize(points, noisy_points, normals, noisy_normals, [])
 
         with open(xyz_file_path, "w") as xyz_file:
-
-            for point in points:
-                xyz_file.write("{} {} {}\n".format(point[0], point[1], point[2]))
-
             for noisy_point in noisy_points:
                 xyz_file.write("{} {} {}\n".format(noisy_point[0], noisy_point[1], noisy_point[2]))
             
         with open(normals_file_path, "w") as normals_file:
-
-            for normal in normals:
-                normals_file.write("{} {} {}\n".format(normal[0], normal[1], normal[2]))
-            
             for noisy_normal in noisy_normals:
                 normals_file.write("{} {} {}\n".format(noisy_normal[0], noisy_normal[1], noisy_normal[2]))
 

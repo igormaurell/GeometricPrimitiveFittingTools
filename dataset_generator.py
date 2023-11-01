@@ -179,7 +179,8 @@ if __name__ == '__main__':
             mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
 
             if pcd_generation_method == 'sampling':
-                pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+                pass
+                # pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
             elif pcd_generation_method == 'lidar':
                 pcd, labels_mesh = rayCastingPointCloudGeneration(mesh)
             else:
