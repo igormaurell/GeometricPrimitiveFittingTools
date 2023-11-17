@@ -2,6 +2,7 @@ import pickle
 import h5py
 from os.path import join
 import numpy as np
+import statistics as stats
 
 from .base_dataset_reader import BaseDatasetReader
 
@@ -31,7 +32,7 @@ class HPNetDatasetReader(BaseDatasetReader):
             if self.filenames_by_set['val'][-1] == '':
                 self.filenames_by_set['val'].pop()
 
-    def step(self, unormalize=True, **kwargs):
+    def step(self, **kwargs):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
@@ -44,15 +45,15 @@ class HPNetDatasetReader(BaseDatasetReader):
             transforms = pickle.load(pkl_file)
         
         with h5py.File(data_file_path, 'r') as h5_file:
-            points = h5_file['points'][()] if 'points' in h5_file.keys() else None
-            normals = h5_file['normals'][()] if 'normals' in h5_file.keys() else None
-            labels = h5_file['labels'][()] if 'labels' in h5_file.keys() else None
-            prim = h5_file['prim'][()] if 'prim' in h5_file.keys() else None
-            params = h5_file['T_param'][()] if 'T_param' in h5_file.keys() else None
-            local_2_global_map = h5_file['local_2_global_map'][()] if 'local_2_global_map' in h5_file.keys() else None
-            gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
-            matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
-            global_indices = h5_file['global_indices'][()] if 'global_indices' in h5_file.keys() else None
+            points = h5_file['points'][()].astype(np.float32) if 'points' in h5_file.keys() else None
+            normals = h5_file['normals'][()].astype(np.float32) if 'normals' in h5_file.keys() else None
+            labels = h5_file['labels'][()].astype(np.int32) if 'labels' in h5_file.keys() else None
+            prim = h5_file['prim'][()].astype(np.int32) if 'prim' in h5_file.keys() else None
+            params = h5_file['T_param'][()].astype(np.float32) if 'T_param' in h5_file.keys() else None
+            local_2_global_map = h5_file['local_2_global_map'][()].astype(np.int32) if 'local_2_global_map' in h5_file.keys() else None
+            gt_indices = h5_file['gt_indices'][()].astype(np.int32) if 'gt_indices' in h5_file.keys() else None
+            matching = h5_file['matching'][()].astype(np.int32) if 'matching' in h5_file.keys() else None
+            global_indices = h5_file['global_indices'][()].astype(np.int32) if 'global_indices' in h5_file.keys() else None
 
             if local_2_global_map is not None:
                 valid_labels_mask = labels != -1
@@ -74,71 +75,33 @@ class HPNetDatasetReader(BaseDatasetReader):
             for label in unique_labels:
                 indices = fpi[label]
                 types = prim[indices]
-                types_unique, types_counts = np.unique(types, return_counts=True)
-                argmax = np.argmax(types_counts)
-                tp_id = types_unique[argmax]
+                tp_id = stats.mode(types)
 
                 valid_indices = indices[np.where(types==tp_id)[0].astype(np.int32)]
 
                 feature = {}
                 tp = HPNetDatasetReader.PRIMITIVES_MAP[tp_id]
-                feature['type'] = tp
 
                 if use_data_primitives:
                     primitive_params = params[valid_indices, :]
+                    params_curr = None
+                    if tp == 'Plane':
+                        params_curr = (primitive_params[0, 4:7], primitive_params[0, 7])
+                    elif tp == 'Cone':
+                        params_curr = (primitive_params[0, 18:21], primitive_params[0, 15:18], primitive_params[0, 21])
+                    elif tp == 'Cylinder':
+                        params_curr = (primitive_params[0, 8:11], primitive_params[0, 11:14], primitive_params[0, 14])
+                    elif tp == 'Sphere':
+                        params_curr = (primitive_params[0, :3], primitive_params[0, 3])
+                    feature = FittingFunctions.params2dict(params_curr, tp)
                 else:
-                    primitive_params = FittingFunctions.fit(tp, points[indices], normals[indices])
-
-                if tp == 'Plane':
-                    if use_data_primitives:
-                        z_axis, d = primitive_params[0, 4:7], primitive_params[0, 7]
-                    else:
-                        z_axis, d = primitive_params
-                    feature['z_axis'] = z_axis.tolist()
-                    feature['location'] = (d*z_axis).tolist()
-
-                elif tp == 'Cone':
-                    if use_data_primitives:
-                        location, apex, angle = primitive_params[0, 18:21], primitive_params[0, 15:18], primitive_params[0, 21]
-                    else:
-                        location, apex, angle = primitive_params
-
-                    axis = location - apex
-                    dist = np.linalg.norm(axis)
-                    z_axis = axis/dist
-                    radius = np.tan(angle)*dist
-
-                    feature['angle'] = angle
-                    feature['apex'] = apex.tolist()
-                    feature['location'] = location.tolist()
-                    feature['z_axis'] = z_axis.tolist()
-                    feature['radius'] = radius
-
-                elif tp == 'Cylinder':
-                    if use_data_primitives:
-                        z_axis, location, radius = primitive_params[0, 8:11], primitive_params[0, 11:14], primitive_params[0, 14]
-                    else:
-                        z_axis, location, radius = primitive_params
-                        if radius > 10 or location[0] > 10 or location[1] > 10 or location[2] > 10:
-                            radius = -1
-
-                    feature['z_axis'] = z_axis.tolist()
-                    feature['location'] = location.tolist()
-                    feature['radius'] = radius
-
-                elif tp == 'Sphere':
-                    if use_data_primitives:
-                        location, radius = primitive_params[0, :3], primitive_params[0, 3]
-                    else:
-                        location, radius = primitive_params
-                        
-                    feature['location'] = location.tolist()
-                    feature['radius'] = radius
+                    feature = FittingFunctions.fit(tp, points[indices], normals[indices])
                 
                 features_data[label] = feature
 
-            if unormalize:
+            if self.unnormalize:
                 points, normals, features_data = applyTransforms(points, transforms, normals=normals, features=features_data)
+            
 
         result = {
             'noisy_points': points.copy(),

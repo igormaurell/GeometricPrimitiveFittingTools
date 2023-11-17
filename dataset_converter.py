@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('-pnl', '--points_noise_limit', type=float, default = 0., help='')
     parser.add_argument('-nnl', '--normals_noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
+    parser.add_argument('-no', '--normalization_order', type=str, default = 'r,c,a,pn,nn,cr', help='')
 
     for format in DatasetWriterFactory.WRITERS_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
@@ -36,11 +37,12 @@ if __name__ == '__main__':
         parser.add_argument(f'-{format}_pnl', f'--{format}_points_noise_limit', type=float, help='')
         parser.add_argument(f'-{format}_nnl', f'--{format}_normals_noise_limit', type=float, help='')
         parser.add_argument(f'-{format}_crf', f'--{format}_cube_reescale_factor', type=float, help='')
+        parser.add_argument(f'-{format}_no', f'--{format}_normalization_order', type=str, help='')
 
     # TODO: add new normalization parameters for each output formats
 
     parser.add_argument('--input_dataset_folder_name', type=str, default = 'dataset_divided', help='input dataset folder name.')
-    parser.add_argument('--output_dataset_folder_name', type=str, default = 'dataset_merged', help='output dataset folder name.')
+    parser.add_argument('--output_dataset_folder_name', type=str, default = '', help='output dataset folder name.')
     parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
 
@@ -59,9 +61,11 @@ if __name__ == '__main__':
     points_noise_limit = args['points_noise_limit']
     normals_noise_limit = args['normals_noise_limit']
     cube_reescale_factor = args['cube_reescale_factor']
+    normalization_order = args['normalization_order'].split(',')
 
     input_dataset_folder_name = args['input_dataset_folder_name']
     output_dataset_folder_name = args['output_dataset_folder_name']
+    output_dataset_folder_name = input_dataset_folder_name if output_dataset_folder_name == '' else output_dataset_folder_name
     data_folder_name = args['data_folder_name']
     transform_folder_name = args['transform_folder_name']
 
@@ -93,6 +97,7 @@ if __name__ == '__main__':
         output_parameters[format]['filter_features']['curve_types'] = p if p is not None else curve_types
         p = args[f'{format}_surface_types']
         output_parameters[format]['filter_features']['surface_types'] = p if p is not None else surface_types
+        
         p = args[f'{format}_centralize']
         output_parameters[format]['normalization']['centralize'] = p or centralize
         p = args[f'{format}_align']
@@ -103,6 +108,8 @@ if __name__ == '__main__':
         output_parameters[format]['normalization']['normals_noise'] = p if p is not None else normals_noise_limit
         p = args[f'{format}_cube_reescale_factor']
         output_parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor  
+        p = args[f'{format}_normalization_order']
+        output_parameters[format]['normalization']['normalization_order'] = p.split(',') if p is not None else normalization_order
 
         output_dataset_format_folder_name = join(folder_name, output_dataset_folder_name, format)
         output_parameters[format]['dataset_folder_name'] = output_dataset_format_folder_name

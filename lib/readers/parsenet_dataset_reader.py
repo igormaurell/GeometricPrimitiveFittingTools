@@ -113,7 +113,7 @@ class ParsenetDatasetReader(BaseDatasetReader):
         self.read_data('train')
         self.read_data('val')
 
-    def step(self, unormalize=True, **kwargs):
+    def step(self, **kwargs):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
@@ -130,23 +130,9 @@ class ParsenetDatasetReader(BaseDatasetReader):
         normals = data['normals'] if 'normals' in data.keys() else None
         labels = data['labels'] if 'labels' in data.keys() else None
         prim = data['prim'] if 'prim' in data.keys() else None
-        #params = h5_file['T_param'] if 'T_param' in h5_file.keys() else None
-        #local_2_global_map = h5_file['local_2_global_map'] if 'local_2_global_map' in h5_file.keys() else None
         gt_indices = data['gt_indices'] if 'gt_indices' in data.keys() else None
         matching = data['matching'] if 'matching' in data.keys() else None
         global_indices = data['global_indices'] if 'global_indices' in data.keys() else None
-
-        # weights = labels_to_one_hot(labels, np.max(labels) + 1)
-        # weights = torch.from_numpy(weights.astype(np.float32))
-
-        # weights = weights_normalize(weights, float(0.01))
-        # weights = torch.transpose(weights, 1, 0)
-        # weights = to_one_hot(
-        #     torch.max(weights, 1)[1].data, weights.shape[1])
-
-        # if local_2_global_map is not None:
-        #     valid_labels_mask = labels != -1
-        #     labels[valid_labels_mask] = local_2_global_map[labels[valid_labels_mask]]
 
         unique_labels = np.unique(labels)
         unique_labels = unique_labels[unique_labels != -1]
@@ -158,64 +144,19 @@ class ParsenetDatasetReader(BaseDatasetReader):
 
         fpi = computeFeaturesPointIndices(labels, size=max_size)
 
-        #print('----------------------------------')
         features_data = [None]*max_size  
         for label in unique_labels:
             indices = fpi[label]
             types = prim[indices]
             tp_id = stats.mode(types)
 
-            #valid_indices = indices[np.where(types==tp_id)[0].astype(np.int32)]
-
-            #if indices.shape[0] < 20:
-            #    continue
-
-            feature = {}
             tp = ParsenetDatasetReader.PRIMITIVES_MAP[tp_id]
-            feature['type'] = tp
-
-            #print(weights[label, indices].shape, torch.unique(weights[label, indices]))
-
-            primitive_params = FittingFunctions.fit(tp, points[indices], normals[indices])#, weights=weights[label, indices] + np.finfo(np.float32).eps)
-
-            if tp == 'Plane':
-                z_axis, d = primitive_params
-                feature['z_axis'] = z_axis.tolist()
-                feature['location'] = (d*z_axis).tolist()
-
-            elif tp == 'Cone':
-                location, apex, angle = primitive_params
-
-                axis = location - apex
-                dist = np.linalg.norm(axis)
-                z_axis = axis/dist
-                radius = np.tan(angle)*dist
-
-                feature['angle'] = angle
-                feature['apex'] = apex.tolist()
-                feature['location'] = location.tolist()
-                feature['z_axis'] = z_axis.tolist()
-                feature['radius'] = radius
-
-            elif tp == 'Cylinder':
-                z_axis, location, radius = primitive_params
-                # if radius > 10 or location[0] > 10 or location[1] > 10 or location[2] > 10:
-                #     radius = -1
-
-                feature['z_axis'] = z_axis.tolist()
-                feature['location'] = location.tolist()
-                feature['radius'] = radius
-
-            elif tp == 'Sphere':
-                location, radius = primitive_params
-                    
-                feature['location'] = location.tolist()
-                feature['radius'] = radius
+            feature = FittingFunctions.fit(tp, points[indices], normals[indices])
                         
             features_data[label] = feature
             
-        #if unormalize:
-        #    points, normals, features_data = applyTransforms(points, transforms, normals=normals, features=features_data)
+        if self.unnormalize:
+            points, normals, features_data = applyTransforms(points, transforms, normals=normals, features=features_data)
 
         result = {
             'noisy_points': points.copy(),

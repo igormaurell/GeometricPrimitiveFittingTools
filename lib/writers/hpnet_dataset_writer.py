@@ -27,7 +27,7 @@ class HPNetDatasetWriter(BaseDatasetWriter):
         
         if filename is None:
             filename = str(uuid.uuid4())
-        
+         
         data_file_path = os.path.join(self.data_folder_name, f'{filename}.h5')
         transforms_file_path = os.path.join(self.transform_folder_name, f'{filename}.pkl')
 
@@ -56,6 +56,9 @@ class HPNetDatasetWriter(BaseDatasetWriter):
             
             points, noisy_points, normals, noisy_normals, features_data, transforms = self.normalize(points, noisy_points, normals,
                                                                                                      noisy_normals, features_data)
+
+            if np.any(np.isnan(points)) or np.any(np.isnan(normals)) or np.any(np.isnan(noisy_points)) or np.any(np.isnan(noisy_normals)):
+                print(np.any(np.isnan(points)), np.any(np.isnan(normals)), np.any(np.isnan(noisy_points)), np.any(np.isnan(noisy_normals)))
 
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)
@@ -110,7 +113,9 @@ class HPNetDatasetWriter(BaseDatasetWriter):
                 h5_file.create_dataset('T_param',  data=primitive_params)
                 h5_file.create_dataset('labels', data=local_labels.astype(np.int32))
                 h5_file.create_dataset('local_2_global_map', data=np.asarray(local_2_global_map, dtype=np.int32))
-                
+
+        if not os.path.exists(data_file_path):
+            assert False  
         return True
 
     def finish(self, permutation=None):

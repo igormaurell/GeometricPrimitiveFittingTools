@@ -21,6 +21,10 @@ FEATURE_TYPE = {
 
 EPS = np.finfo(np.float32).eps
 
+def normalize_vectors(vectors):
+    new_vectors = np.asarray([v/np.linalg.norm(v) for v in vectors])
+    return new_vectors
+
 def rotation_matrix_a_to_b(A, B):
     cos = np.dot(A, B)
     sin = np.linalg.norm(np.cross(B, A))
@@ -161,6 +165,8 @@ def applyTransforms(points, transforms, normals=None, features=[], invert=True):
     for key in t['sequence']:
         points, normals, features = transform_functions[key](points, t[key], normals=normals, features=features)
 
+    normals = normalize_vectors(normals)
+
     return points, normals, features
 
 def normalize(points, parameters, normals=None, features=[]):
@@ -168,24 +174,36 @@ def normalize(points, parameters, normals=None, features=[]):
         'translation': np.zeros(3),
         'rotation': np.eye(3),
         'scale': 1.,
-        'sequence': ['translation', 'rotation', 'scale']
+        'sequence': []
     }
 
-    if 'rescale' in parameters.keys():
-        points, features, transforms['scale'] = rescale(points, features, parameters['rescale'])
-    if 'points_noise' in parameters.keys() and parameters['points_noise'] != 0.:
-        assert normals is not None
-        points = addPointsNoise(points, normals, parameters['points_noise'])
-    if 'normals_noise' in parameters.keys() and parameters['normals_noise'] != 0.:
-        assert normals is not None
-        normals = addNormalsNoise(normals, parameters['normals_noise'])
-    if 'centralize' in parameters.keys() and parameters['centralize'] == True:
-        points, features, transforms['translation'] = centralize(points, features)
-    if 'align' in parameters.keys() and parameters['align'] == True:
-        points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features)
-    if 'cube_rescale' in parameters.keys() and parameters['cube_rescale'] > 0:
-        points, features, scale = cubeRescale(points, features, parameters['cube_rescale'])
-        transforms['scale'] *= scale
+    order = parameters['normalization_order'] if 'normalization_order' in parameters else ['r','c','a','pn','nn','cr']
+
+    for n in order:
+        if n=='r' and 'rescale' in parameters.keys():
+            points, features, scale = rescale(points, features, parameters['rescale'])
+            transforms['scale'] *= scale
+            if 'scale' not in transforms['sequence']:
+                transforms['sequence'].append('scale') 
+        if n=='pn' and 'points_noise' in parameters.keys() and parameters['points_noise'] != 0.:
+            assert normals is not None
+            points = addPointsNoise(points, normals, parameters['points_noise'])
+        if n=='nn' and 'normals_noise' in parameters.keys() and parameters['normals_noise'] != 0.:
+            assert normals is not None
+            normals = addNormalsNoise(normals, parameters['normals_noise'])
+            normals = normalize_vectors(normals)
+        if n=='c' and 'centralize' in parameters.keys() and parameters['centralize'] == True:
+            points, features, transforms['translation'] = centralize(points, features)
+            transforms['sequence'].append('translation') 
+        if n=='a' and 'align' in parameters.keys() and parameters['align'] == True:
+            points, normals, features, transforms['rotation'] = alignCanonical(points, normals, features)
+            transforms['sequence'].append('rotation')
+            normals = normalize_vectors(normals)
+        if n=='cr' and 'cube_rescale' in parameters.keys() and parameters['cube_rescale'] > 0:
+            points, features, scale = cubeRescale(points, features, parameters['cube_rescale'])
+            transforms['scale'] *= scale
+            if 'scale' not in transforms['sequence']:
+                transforms['sequence'].append('scale')
 
     return points, normals, features, transforms
 

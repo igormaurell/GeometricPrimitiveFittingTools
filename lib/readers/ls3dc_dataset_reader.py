@@ -3,10 +3,12 @@ import h5py
 import csv
 from os.path import join
 import re
+import numpy as np
 
 from .base_dataset_reader import BaseDatasetReader
 
 from lib.normalization import applyTransforms
+from lib.fitting_func import FittingFunctions
 
 def decode_string(binary_string):
     return binary_string.decode('utf-8')
@@ -38,7 +40,7 @@ class LS3DCDatasetReader(BaseDatasetReader):
             data = [d[:d.rfind('.')] for d in data]
             self.filenames_by_set['val'] = data
 
-    def step(self, unormalize=True, **kwargs):
+    def step(self, **kwargs):
         assert self.current_set_name in self.filenames_by_set.keys()
 
         index = self.steps_by_set[self.current_set_name]%len(self.filenames_by_set[self.current_set_name])
@@ -51,18 +53,18 @@ class LS3DCDatasetReader(BaseDatasetReader):
             transforms = pickle.load(pkl_file)
 
         with h5py.File(data_file_path, 'r') as h5_file:
-            gt_points = h5_file['gt_points'][()] if 'gt_points' in h5_file.keys() else None
-            noisy_points = h5_file['noisy_points'][()] if 'noisy_points' in h5_file.keys() else None
+            gt_points = h5_file['gt_points'][()].astype(np.float32) if 'gt_points' in h5_file.keys() else None
+            noisy_points = h5_file['noisy_points'][()].astype(np.float32) if 'noisy_points' in h5_file.keys() else None
             if noisy_points is None and gt_points is not None:
                 noisy_points = gt_points.copy()
-            gt_normals = h5_file['gt_normals'][()] if 'gt_normals' in h5_file.keys() else None
-            noisy_normals = h5_file['noisy_normals'][()] if 'noisy_normals' in h5_file.keys() else None
+            gt_normals = h5_file['gt_normals'][()].astype(np.float32) if 'gt_normals' in h5_file.keys() else None
+            noisy_normals = h5_file['noisy_normals'][()].astype(np.float32) if 'noisy_normals' in h5_file.keys() else None
             if noisy_normals is None and gt_normals is not None:
                 noisy_normals = gt_normals.copy()
-            labels = h5_file['gt_labels'][()] if 'gt_labels' in h5_file.keys() else None
-            gt_indices = h5_file['gt_indices'][()] if 'gt_indices' in h5_file.keys() else None
-            matching = h5_file['matching'][()] if 'matching' in h5_file.keys() else None
-            global_indices = h5_file['global_indices'][()] if 'global_indices' in h5_file.keys() else None
+            labels = h5_file['gt_labels'][()].astype(np.int32) if 'gt_labels' in h5_file.keys() else None
+            gt_indices = h5_file['gt_indices'][()].astype(np.int32) if 'gt_indices' in h5_file.keys() else None
+            matching = h5_file['matching'][()].astype(np.int32) if 'matching' in h5_file.keys() else None
+            global_indices = h5_file['global_indices'][()].astype(np.int32) if 'global_indices' in h5_file.keys() else None
 
             found_soup_ids = []
             soup_id_to_key = {}
@@ -79,9 +81,16 @@ class LS3DCDatasetReader(BaseDatasetReader):
             found_soup_ids.sort()
             for i in found_soup_ids:
                 g = h5_file[soup_id_to_key[i]]
-                features_data[i] = hdf5_group_to_dict(g['parameters'])
+                feature = hdf5_group_to_dict(g['parameters'])
+                if not self.use_data_primitives:
+                    tp = feature['type']
+                    mask = labels==i
+                    points = noisy_points if not self.fit_noisy_points else gt_points
+                    normals = noisy_normals if not self.fit_noisy_normals else gt_normals
+                    feature = FittingFunctions.fit_by_global(tp, points, normals, mask)
+                features_data[i] = feature
             
-            if unormalize:
+            if self.unnormalize:
                 gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)
                 noisy_points, noisy_normals, _ = applyTransforms(noisy_points, transforms, normals=noisy_normals, features=[])
 

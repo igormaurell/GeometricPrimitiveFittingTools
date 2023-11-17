@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch.autograd import Function
 import open3d as o3d
+from lib.normalization import cubeRescale, rescale
 
 torch.manual_seed(2)
 np.random.seed(2)
@@ -117,7 +118,7 @@ class LeastSquares:
         #print(torch.linalg.matrix_rank(A))
         if cols == torch.linalg.matrix_rank(A):
             # Full column rank
-            q, r = torch.qr(A)
+            q, r = torch.linalg.qr(A)
             x = torch.inverse(r) @ q.transpose(1, 0) @ Y
         else:
             # rank(A) < n, do regularized least square.
@@ -346,7 +347,21 @@ class FittingFunctions:
     }
 
     @staticmethod
-    def fit(primitive_type, points, normals, weights=None):
+    def fit_by_global(primitive_type, points_full, normals_full, mask, weights=None):
+        points_full, _, scale = cubeRescale(points_full.copy())
+
+        points = points_full[mask]
+        normals = normals_full[mask]
+
+        feature = FittingFunctions.fit(primitive_type, points, normals, weights=weights, scale=1.0)
+        _, features, _ = rescale(points, features=[feature], factor=1./scale)
+        feature = features[0]
+
+        return feature
+
+
+    @staticmethod
+    def fit(primitive_type, points, normals, weights=None, scale=1.0):
         if weights is None:
             weights = torch.from_numpy(np.ones([points.shape[0], 1], dtype=np.float32))
         else:
@@ -365,5 +380,66 @@ class FittingFunctions:
             r_np = r_np.flatten()
             r_np = r_np if len(r_np) > 1 else r_np[0]
             new_result.append(r_np)
+
+        primitive_params = tuple(new_result)
+
+        feature = FittingFunctions.params2dict(primitive_params, primitive_type)
+        if feature is not None:
+            feature = FittingFunctions.validate_feature(feature, scale)
+
+        return feature
+
+    @staticmethod
+    def validate_feature(feature, scale):
+        if feature['type'] == 'Cone':
+            pass
+
+        if feature['type']  == 'Cylinder':
+            threshold = 10*scale
+            if feature['radius'] > threshold or feature['location'][0] > threshold or \
+               feature['location'][1] > threshold or feature['location'][2] > threshold:
+                
+                feature['invalid'] = True
+        return feature
+
+    @staticmethod
+    def params2dict(params, primitive_type):
+        feature = {'type': primitive_type}
+
+        if primitive_type == 'Plane':
+            z_axis, d = params
+
+            feature['z_axis'] = z_axis.tolist()
+            feature['location'] = (d*z_axis).tolist()
+
+        elif primitive_type == 'Cone':
+            location, apex, angle = params
+
+            axis = location - apex
+            dist = np.linalg.norm(axis)
+            z_axis = axis/dist
+            radius = np.tan(angle)*dist
+
+            feature['angle'] = float(angle)
+            feature['apex'] = apex.tolist()
+            feature['location'] = location.tolist()
+            feature['z_axis'] = z_axis.tolist()
+            feature['radius'] = float(radius)
+
+        elif primitive_type == 'Cylinder':
+            z_axis, location, radius = params
+
+            feature['z_axis'] = z_axis.tolist()
+            feature['location'] = location.tolist()
+            feature['radius'] = float(radius)
+
+        elif primitive_type == 'Sphere':
+            location, radius = params
+
+            feature['location'] = location.tolist()
+            feature['radius'] = float(radius)
         
-        return tuple(new_result)
+        else:
+            return None
+    
+        return feature

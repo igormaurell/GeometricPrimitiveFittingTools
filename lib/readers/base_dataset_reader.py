@@ -21,6 +21,9 @@ class BaseDatasetReader:
         self.data_folder_name = parameters['data_folder_name'] if 'data_folder_name' in parameters.keys() else None
         self.transform_folder_name = parameters['transform_folder_name'] if 'transform_folder_name' in parameters.keys() else None
         self.use_data_primitives = parameters['use_data_primitives'] if 'use_data_primitives' in parameters.keys() else True
+        self.fit_noisy_points = parameters['fit_noisy_points'] if 'fit_noisy_points' in parameters.keys() else False
+        self.fit_noisy_normals = parameters['fit_noisy_normals'] if 'fit_noisy_normals' in parameters.keys() else False
+        self.unnormalize = parameters['unnormalize'] if 'unnormalize' in parameters.keys() else False
 
     def reset(self):
         self.current_set_name = 'train'

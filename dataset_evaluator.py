@@ -11,6 +11,7 @@ from lib.utils import computeFeaturesPointIndices, writeColorPointCloudOBJ, getA
 from lib.matching import mergeQueryAndGTData
 from lib.evaluator import computeIoUs
 from lib.primitives import ResidualLoss
+from lib.normalization import rescale
 from pprint import pprint
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
@@ -23,17 +24,14 @@ def printAndReturn(text):
     print(text)
     return text
 
-def generateErrorsBoxPlot(errors, individual=True, all_models=False):
+def generateErrorsBoxPlot(errors, distances_key='distances', angles_key='angles'):
     data_distances = []
     data_angles = []
     data_labels = []
-    if all_models:
-        pass
-    else:
-        for tp, e in errors.items():
-            data_labels.append(tp)
-            data_distances.append(np.concatenate(e['distances']) if len(e['distances']) > 0 else [])
-            data_angles.append(np.concatenate(e['angles']) if len(e['angles']) > 0 else [])
+    for tp, e in errors.items():
+        data_labels.append(tp)
+        data_distances.append(np.concatenate(e[distances_key]) if len(e[distances_key]) > 0 else [])
+        data_angles.append(np.concatenate(e[angles_key]) if len(e[angles_key]) > 0 else [])
     fig, (ax1, ax2) = plt.subplots(2, 1)
     fig.tight_layout(pad=2.0)
     ax1.set_title('Distance Deviation (m)')
@@ -114,7 +112,7 @@ def generateErrorsLogDict(errors):
 
         number_of_valid_gt_points = 0
         ind_gt_distances = e['distances_to_gt']
-        ind_gt_angles = e['normals_to_gt']
+        ind_gt_angles = e['angles_to_gt']
         summdgt = 0.
         summagt = 0.
         if len(ind_gt_distances) > 0:
@@ -250,6 +248,11 @@ def process(data_tuple):
 
         gt_points = gt_data['points']
         gt_normals = gt_data['normals']
+    
+    if not no_use_occ_geometries:
+        points, features, _ = rescale(points, features=features, factor=1000)
+        if gt_data is not None:
+            gt_points, _, _ = rescale(gt_points, features=[], factor=1000)
 
     for i, feature in enumerate(features):
         indices = fpi[i]
@@ -259,13 +262,13 @@ def process(data_tuple):
             primitive = None
             try:
                 primitive = SurfaceFactory.fromDict(feature)
-                tp = primitive.getType()             
+                tp = primitive.getType()     
             except:
                 tp = feature['type']
                 
             if tp not in dataset_errors:
                 dataset_errors[tp] = {'number_of_points': 0, 'distances': [], 'angles': [],
-                                      'distances_to_gt': [], 'normals_to_gt': [], 'void_primitives': [],
+                                      'distances_to_gt': [], 'angles_to_gt': [], 'void_primitives': [],
                                       'invalid_primitives': [], 'instance_ious': [], 'type_ious': []}
 
             dataset_errors[tp]['number_of_points'] += len(indices)
@@ -273,17 +276,22 @@ def process(data_tuple):
             if len(indices) == 0:
                 dataset_errors[tp]['void_primitives'].append(i)
                 dataset_errors[tp]['invalid_primitives'].append(i)
-            elif primitive is None and not no_use_occ_geometries:
+            #elif primitive is None and not no_use_occ_geometries:
+            #    dataset_errors[tp]['invalid_primitives'].append(i)
+            elif 'invalid' in feature and feature['invalid']:
                 dataset_errors[tp]['invalid_primitives'].append(i)
 
-            if len(indices) > 0 and (primitive is not None or no_use_occ_geometries):
-                if not no_use_occ_geometries:
+            if len(indices) > 0 and ('invalid' not in feature or not feature['invalid']):
+                if not no_use_occ_geometries and primitive is not None:
                     distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
                                                                 symmetric_normals=ignore_primitives_orientation)
                 else:
                     distances = residual_distance.residual_loss(points_curr, feature)
                     angles = []
                 
+                if not no_use_occ_geometries:
+                    distances /= 1000.
+
                 dataset_errors[tp]['distances'].append(distances)
                 dataset_errors[tp]['angles'].append(angles)
 
@@ -292,17 +300,20 @@ def process(data_tuple):
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
                     
-                    if not no_use_occ_geometries:
+                    if not no_use_occ_geometries and primitive is not None:
                         distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
                                                                                 symmetric_normals=ignore_primitives_orientation)
                     else:
                         distances_to_gt = residual_distance.residual_loss(points_gt_curr, feature)
                         angles_to_gt = []
+                    
+                    if not no_use_occ_geometries:
+                        distances_to_gt /= 1000.
 
-                    print(len(distances_to_gt), np.max(points_gt_curr), feature['type'], feature['location'], np.mean(distances_to_gt))
+                    #print(len(distances_to_gt), np.max(points_gt_curr), feature['type'], feature['location'], np.mean(distances_to_gt))
 
-                    dataset_errors[tp]['distances_to_gt'].append(distances_to_gt)
-                    dataset_errors[tp]['normals_to_gt'].append(angles_to_gt)
+                    dataset_errors[tp]['distances_to_gt'].append(distances_to_gt.astype(np.float32))
+                    dataset_errors[tp]['angles_to_gt'].append(angles_to_gt)
                 
             if len(indices) > 0:
                 if gt_data is not None:
@@ -331,12 +342,18 @@ def process(data_tuple):
     logs_dict_final = computeLogMeans(logs_dict)
     logs_dict_final['Total']['number_of_points'] += np.count_nonzero(labels==-1)
 
+    filtered_logs_dict_final = filterLog(logs_dict_final)
+
+    #print(data['filename'], logs_dict_final['Total']['mean_distance_gt_error'])
+
     with open(f'{log_format_folder_name}/{filename}.json', 'w') as f:
-        json.dump(filterLog(logs_dict_final), f, indent=4)
+        json.dump(filtered_logs_dict_final, f, indent=4)
     
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
         #points, _, _ = applyTransforms(points, transforms, invert=False)
+        if not no_use_occ_geometries:
+            points /= 1000.
         writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
         types_filename = f'{filename}_types.obj'
         writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
@@ -344,6 +361,10 @@ def process(data_tuple):
         fig = generateErrorsBoxPlot(dataset_errors)
         plt.figure(fig.number)
         plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
+        plt.close()
+        fig2 = generateErrorsBoxPlot(dataset_errors, distances_key='distances_to_gt', angles_key='angles_to_gt')
+        plt.figure(fig2.number)
+        plt.savefig(f'{box_plot_format_folder_name}/{filename}_to_gt.png')
         plt.close()
     
     return logs_dict_final
@@ -374,11 +395,12 @@ if __name__ == '__main__':
     parser.add_argument('--use_noisy_normals', action='store_true')
     parser.add_argument('--no_use_occ_geometries', action='store_true')
     parser.add_argument('--ignore_primitives_orientation', action='store_true')
+    parser.add_argument('-un', '--unnormalize', action='store_true', help='')
 
     args = vars(parser.parse_args())
 
     folder_name = args['folder']
-    format = args['format']
+    input_format = args['format']
     gt_format = args['gt_format']
     #gt_format = format if gt_format is None else gt_format
     dataset_folder_name = args['dataset_folder_name']
@@ -399,6 +421,7 @@ if __name__ == '__main__':
     use_noisy_normals = args['use_noisy_normals']
     no_use_occ_geometries = args['no_use_occ_geometries']
     ignore_primitives_orientation = args['ignore_primitives_orientation']
+    unnormalize = args['unnormalize']
 
     if gt_dataset_folder_name is not None or gt_data_folder_name is not None or gt_format is not None:
         if gt_data_folder_name is None:
@@ -406,21 +429,22 @@ if __name__ == '__main__':
         if gt_dataset_folder_name is None:
             gt_dataset_folder_name = dataset_folder_name
         if gt_format is None:
-            gt_format = format
+            gt_format = input_format
 
     parameters = {}
     gt_parameters = {}
 
-    assert format in DatasetReaderFactory.READERS_DICT.keys()
+    assert input_format in DatasetReaderFactory.READERS_DICT.keys()
 
-    parameters[format] = {}
-    dataset_format_folder_name = join(folder_name, dataset_folder_name, format)
-    parameters[format]['dataset_folder_name'] = dataset_format_folder_name
+    parameters[input_format] = {}
+    dataset_format_folder_name = join(folder_name, dataset_folder_name, input_format)
+    parameters[input_format]['dataset_folder_name'] = dataset_format_folder_name
     data_format_folder_name = join(dataset_format_folder_name, data_folder_name)
-    parameters[format]['data_folder_name'] = data_format_folder_name
+    parameters[input_format]['data_folder_name'] = data_format_folder_name
     transform_format_folder_name = join(dataset_format_folder_name, transform_folder_name)
-    parameters[format]['transform_folder_name'] = transform_format_folder_name
-    parameters[format]['use_data_primitives'] = use_data_primitives
+    parameters[input_format]['transform_folder_name'] = transform_format_folder_name
+    parameters[input_format]['use_data_primitives'] = use_data_primitives
+    parameters[input_format]['unnormalize'] = unnormalize
 
     gt_transform_format_folder_name = None
     if gt_dataset_folder_name is not None and gt_data_folder_name is not None:
@@ -432,12 +456,13 @@ if __name__ == '__main__':
         gt_parameters[gt_format]['data_folder_name'] = gt_data_format_folder_name
         gt_transform_format_folder_name = join(gt_dataset_format_folder_name, transform_folder_name)
         gt_parameters[gt_format]['transform_folder_name'] = gt_transform_format_folder_name
+        gt_parameters[gt_format]['unnormalize'] = unnormalize
 
     if use_gt_transform and gt_transform_format_folder_name is not None:
         parameters[gt_format]['transform_folder_name'] = gt_transform_format_folder_name
 
     dataset_reader_factory = DatasetReaderFactory(parameters)
-    reader = dataset_reader_factory.getReaderByFormat(format)
+    reader = dataset_reader_factory.getReaderByFormat(input_format)
 
     gt_reader = None
     if len(gt_parameters) > 0:
@@ -465,12 +490,13 @@ if __name__ == '__main__':
     colors_full = getAllColorsArray()
     for s in sets:
         reader.setCurrentSetName(s)
-        reader.filenames_by_set['val'] = reader.filenames_by_set['val'][56:57]
+        size = len(reader.filenames_by_set['val'])
+        reader.filenames_by_set['val'] = reader.filenames_by_set['val']
         if gt_reader is not None:
             gt_reader.setCurrentSetName(s)
             files = reader.filenames_by_set['val']
             gt_files = gt_reader.filenames_by_set['val']
-            #assert sorted(files) == sorted(gt_files), f'\n {len(sorted(files))} \n {len(sorted(gt_files))}'
+            assert sorted(files) == sorted(gt_files), f'\n {len(sorted(files))} \n {len(sorted(gt_files))}'
             gt_reader.filenames_by_set['val'] = deepcopy(files)
             readers = zip(reader, gt_reader)
         else:
@@ -478,16 +504,36 @@ if __name__ == '__main__':
 
         full_logs_dicts = {}
 
-        results = process_map(process, readers, max_workers=32, chunksize=1)
-        #results = [process(data) for data in readers]
+        results = process_map(process, readers, max_workers=20, chunksize=1)
+        #results = [process(data) for data in tqdm(readers)]
 
         print('Accumulating...')
         c = 0
+        dataset_error_dict = {}
         for logs_dict in tqdm(results):
+            for k, v in logs_dict.items():
+                if k not in dataset_error_dict:
+                    dataset_error_dict[k] = {}
+                    for k2, v2 in v.items():
+                        dataset_error_dict[k][k2] = [[v2]]
+                else:
+                    for k2, v2 in v.items():
+                        dataset_error_dict[k][k2].append([v2])
+
             #print(reader.filenames_by_set['val'][c], logs_dict['Total']['mean_iou'])
             full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
             #c+= 1
 
+        if box_plot:
+            fig = generateErrorsBoxPlot(dataset_error_dict, distances_key='mean_distance_error', angles_key='mean_normal_error')
+            plt.figure(fig.number)
+            plt.savefig(f'{box_plot_format_folder_name}/{s}.png')
+            plt.close()
+            fig2 = generateErrorsBoxPlot(dataset_error_dict, distances_key='mean_distance_gt_error', angles_key='mean_normal_gt_error')
+            plt.figure(fig2.number)
+            plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
+            plt.close()
+        
         final_json = filterLog(computeLogMeans(full_logs_dicts, denominator=len(results)))
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:

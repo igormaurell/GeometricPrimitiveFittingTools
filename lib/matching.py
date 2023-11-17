@@ -95,49 +95,81 @@ def getOneHot(a, n_classes=None):
     #     b = np.zeros((a.size, a.max() + 1), np.int8)
     #     b[np.arange(a.size), a] = 1   
     #     return b
-    
+
+def hpnet_match(pred_one_hot, gt_one_hot):
+    dot = np.sum(np.expand_dims(pred_one_hot, axis=2) * np.expand_dims(gt_one_hot, axis=1),
+                 axis=0)  # K'xK
+    denominator = np.expand_dims(np.sum(pred_one_hot, axis=0),
+                                 axis=1) + np.expand_dims(np.sum(gt_one_hot, axis=0),
+                                                          axis=0) - dot
+    cost = dot / np.maximum(denominator, np.finfo(np.float64).eps)  # K'xK
+    pred_ind, gt_ind = solve_dense(-cost)  # want max solution
+
+    return pred_ind, gt_ind
+
+def relaxed_iou_fast(pred, gt):
+    batch_size, N, K = pred.shape
+    #normalize = torch.nn.functional.normalize
+    #one = torch.ones(1).cuda()
+
+    norms_p = np.expand_dims(np.sum(pred, 1), 2)
+    norms_g = np.expand_dims(np.sum(gt, 1), 1)
+    cost = []
+
+    for b in range(batch_size):
+        p = pred[b]
+        g = gt[b]
+        c_batch = []
+        dots = p.transpose(1, 0) @ g
+        r_iou = dots
+        r_iou = r_iou / (norms_p[b] + norms_g[b] - dots + 1e-7)
+        cost.append(r_iou)
+    cost = np.stack(cost, 0)
+    return cost
+
+def parsenet_match(pred_one_hot, gt_one_hot):
+
+    cost = relaxed_iou_fast(np.expand_dims(pred_one_hot, 0).astype(np.float32),
+                            np.expand_dims(gt_one_hot, 0).astype(np.float32))
+
+    # cost_ = 1.0 - torch.as_tensor(cost)
+    cost_ = 1.0 - cost
+    rids, cids = solve_dense(cost_[0])
+
+    return rids, cids
+
 # from HPNet
 def hungarianMatching(query_labels, gt_labels):
-    # size_query = np.max(query_labels) + 1
-    # size_gt = np.max(gt_labels) + 1
+    size_query = np.max(query_labels) + 1
+    size_gt = np.max(gt_labels) + 1
 
-    # size_final = max(2*size_query, size_gt)
-
-    W_pred = getOneHot(query_labels)
+    size_final = max(2*size_query, size_gt)
+    W_pred = getOneHot(query_labels, size_final)
     valid_pred_indices = np.any(W_pred!=0, axis=1)
-    W_gt = getOneHot(gt_labels)
+    W_gt = getOneHot(gt_labels, size_final)
     valid_gt_indices = np.any(W_gt!=0, axis=1)
 
     valid_match_indices = np.logical_and(valid_pred_indices, valid_gt_indices)
     W_pred = W_pred[valid_match_indices, :]
     W_gt = W_gt[valid_match_indices, :]
 
-    dot = np.sum(np.expand_dims(W_pred, axis=2) * np.expand_dims(W_gt, axis=1),
-                 axis=0)  # K'xK
-    denominator = np.expand_dims(np.sum(W_pred, axis=0),
-                                 axis=1) + np.expand_dims(np.sum(W_gt, axis=0),
-                                                          axis=0) - dot
-    cost = dot / np.maximum(denominator, np.finfo(np.float64).eps)  # K'xK
-    pred_ind, gt_ind = solve_dense(-cost)  # want max solution
-
-    #print(np.unique(gt_labels))
-    #print(pred_ind, gt_ind)
+    pred_ind, gt_ind = parsenet_match(W_pred, W_gt)
 
     for index in range(len(pred_ind)):
         gt_indices_i = gt_labels == gt_ind[index]
         pred_indices_i = query_labels == pred_ind[index]
-        intersection = np.count_nonzero(np.logical_and(gt_indices_i, pred_indices_i))
         
-        #if intersection == 0:
-        #    gt_ind[index] = -1
+        if (np.sum(gt_indices_i) == 0) or (np.sum(pred_indices_i) == 0):
+            gt_ind[index] = -1
+            continue
 
-        #print(gt_ind[index], np.count_nonzero(pred_indices_i), np.count_nonzero(np.logical_and(gt_indices_i, pred_indices_i)))
+        #print(gt_ind[index], np.count_nonzero(pred_indices_i), np.count_nonzero(gt_indices_i))
 
-    matching = np.zeros(max(0, np.max(query_labels) + 1), dtype=np.int32) - 1
+    matching = np.zeros(max(0, np.max(pred_ind) + 1), dtype=np.int32) - 1
     if len(pred_ind) > 0:
         matching[pred_ind] = gt_ind
 
-    return matching
+    return matching[:np.max(query_labels) + 1]
 
 def mergeQueryAndGTData(query, gt, global_min=-1, num_points=0):
     if 'gt_indices' in query:

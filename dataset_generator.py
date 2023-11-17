@@ -11,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif, computeFeaturesPointIndices
 from lib.writers import DatasetWriterFactory
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
@@ -29,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('-pnl', '--points_noise_limit', type=float, default = 0., help='')
     parser.add_argument('-nnl', '--normals_noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
+    parser.add_argument('-no', '--normalization_order', type=str, default = 'r,c,a,pn,nn,cr', help='')
 
     for format in DatasetWriterFactory.WRITERS_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
@@ -38,6 +39,7 @@ if __name__ == '__main__':
         parser.add_argument(f'-{format}_pnl', f'--{format}_points_noise_limit', type=float, help='')
         parser.add_argument(f'-{format}_nnl', f'--{format}_normals_noise_limit', type=float, help='')
         parser.add_argument(f'-{format}_crf', f'--{format}_cube_reescale_factor', type=float, help='')
+        parser.add_argument(f'-{format}_no', f'--{format}_normalization_order', type=str, default = 'r,c,a,pn,nn,cr', help='')
 
     parser.add_argument('--dataset_folder_name', type=str, default = 'dataset', help='dataset folder name.')
     parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')
@@ -67,6 +69,7 @@ if __name__ == '__main__':
     points_noise_limit = args['points_noise_limit']
     normals_noise_limit = args['normals_noise_limit']
     cube_reescale_factor = args['cube_reescale_factor']
+    normalization_order = args['normalization_order'].split(',')
 
     mps_ns = args['mesh_point_sampling_n_samples']
     delete_old_pc = args['delete_old_pc']
@@ -104,6 +107,8 @@ if __name__ == '__main__':
         parameters[format]['normalization']['normals_noise'] = p if p is not None else normals_noise_limit
         p = args[f'{format}_cube_reescale_factor']
         parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor
+        p = args[f'{format}_normalization_order']
+        parameters[format]['normalization']['normalization_order'] = p.split(',') if p is not None else normalization_order
         parameters[format]['train_percentage'] = train_percentage
         parameters[format]['min_number_points'] = min_number_points
         dataset_format_folder_name = join(folder_name, dataset_folder_name, format)

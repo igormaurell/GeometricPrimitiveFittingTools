@@ -62,33 +62,114 @@ def addDictionaries(dict1, dict2):
     result_dict = dict1.copy()
 
     for key in dict2.keys():
-        if (key in concatenate_keys or key in merge_keys) and key not in result_dict:
-            result_dict[key] = dict2[key]
-        elif key in concatenate_keys:
-            if isinstance(result_dict[key], np.ndarray):
+        if key in concatenate_keys:
+            if key not in result_dict:
+                result_dict[key] = dict2[key]
+            elif isinstance(result_dict[key], np.ndarray):
                 result_dict[key] = np.concatenate((result_dict[key], dict2[key]))
             else:
                 result_dict[key] += dict2[key]
         elif key in merge_keys:
-            if isinstance(dict2[key], dict):
-                # merge surfaces and curves
-                pass
+            if key not in result_dict:
+                i = 0
+                result_dict[key] = []
+                while i < len(dict2[key]):
+                    if dict2[key][i] is None:
+                        result_dict[key].append(None)
+                    else:
+                        result_dict[key].append([(dict2[key][i], np.count_nonzero(dict2['labels'] == i))])
+                    i+= 1
+            elif isinstance(dict2[key], dict):
+                assert False, 'merge surfaces and curves not implemented yet'
             else:
                 i = 0
                 while i < len(result_dict[key]) and i < len(dict2[key]):
                     if result_dict[key][i] is not None and dict2[key][i] is not None:
-                        pass
+                        result_dict[key][i].append((dict2[key][i], np.count_nonzero(dict2['labels'] == i)))
                         # verify if is equal or merge parameters 
                     elif dict2[key][i] is not None:
-                        result_dict[key][i] = dict2[key][i]
+                        result_dict[key][i] = [(dict2[key][i], np.count_nonzero(dict2['labels'] == i))]
                     
                     i+= 1
 
-                if i < len(dict2[key]):
-                    result_dict[key] += dict2[key][i:]
-
+                while i < len(dict2[key]):
+                    if dict2[key][i] is None:
+                        result_dict[key].append(None)
+                    else:
+                        result_dict[key].append([(dict2[key][i], np.count_nonzero(dict2['labels'] == i))])
+                    i+= 1
     return result_dict
-        
+
+def mergeByMax(counts, features):
+    ind = counts.index(max(counts))
+    return features[ind]
+
+def mergeByWeightedMean(counts, features):
+    total_count = sum(counts)
+    weights = [counts[ind]/total_count for ind in range(len(counts))]
+    new_f = {}
+    for ind, f in enumerate(features):
+        for key, value in f.items():
+            if isinstance(value, str):
+                new_f[key] = value
+            elif isinstance(value, bool):
+                if key not in new_f:
+                    new_f[key] = value
+                else:
+                    new_f[key] = new_f[key] or value
+            elif isinstance(value, list):
+                if key not in new_f:
+                    new_f[key] = []
+                    for k in range(len(value)):
+                        new_f[key].append(value[k]*weights[ind])
+                else:
+                    for k in range(len(value)):
+                        new_f[key][k] += value[k]*weights[ind]
+            else:
+                if key not in new_f:
+                    new_f[key] = value*weights[ind]
+                else:
+                    new_f[key] += value*weights[ind]
+    return new_f
+    
+def mergeFeatures(features, method='max'):
+    new_features = [None for _ in range(len(features))]
+    for i in range(len(features)):
+        if features[i] is not None:
+            just_features = [x[0] for x in features[i]]
+            counts = [x[1] for x in features[i]]
+            types_count = {}
+            types_indices = {}
+            for j in range(len(features[i])):
+                tp = just_features[j]['type']
+                if tp not in types_count:
+                    types_count[tp] = counts[j]
+                    types_indices[tp] = [j]
+                else:
+                    types_count[tp] += counts[j]
+                    types_indices[tp].append(j)
+
+            final_tp = None
+            final_count = -1
+            for tp, count in types_count.items():
+                if count > final_count:
+                    final_tp = tp
+                    final_count = count
+
+            final_indices = types_indices[final_tp]
+            just_features = [just_features[ind] for ind in final_indices]
+            counts = [counts[ind] for ind in final_indices]
+
+            funcs = {
+                'max': mergeByMax,
+                'wm': mergeByWeightedMean
+            }
+
+            new_f = funcs[method](counts, just_features)
+            new_features[i] = new_f
+
+    return new_features
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
@@ -97,12 +178,33 @@ if __name__ == '__main__':
     formats_txt = ','.join(DatasetWriterFactory.WRITERS_DICT.keys())
     parser.add_argument('output_formats', type=str, help='')
 
+    parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
+    parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
+    parser.add_argument('-c', '--centralize', action='store_true', help='')
+    parser.add_argument('-a', '--align', action='store_true', help='')
+    parser.add_argument('-pnl', '--points_noise_limit', type=float, default = 0., help='')
+    parser.add_argument('-nnl', '--normals_noise_limit', type=float, default = 0., help='')
+    parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
+    parser.add_argument('-no', '--normalization_order', type=str, default = 'r,c,a,pn,nn,cr', help='')
+
+    for format in DatasetWriterFactory.WRITERS_DICT.keys():
+        parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
+        parser.add_argument(f'-{format}_st', f'--{format}_surface_types', type=str, help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
+        parser.add_argument(f'-{format}_c', f'--{format}_centralize', action='store_true', help='')
+        parser.add_argument(f'-{format}_a', f'--{format}_align', action='store_true', help='')
+        parser.add_argument(f'-{format}_pnl', f'--{format}_points_noise_limit', type=float, help='')
+        parser.add_argument(f'-{format}_nnl', f'--{format}_normals_noise_limit', type=float, help='')
+        parser.add_argument(f'-{format}_crf', f'--{format}_cube_reescale_factor', type=float, help='')
+        parser.add_argument(f'-{format}_no', f'--{format}_normalization_order', type=str, help='')
+
     parser.add_argument('--input_dataset_folder_name', type=str, default = 'dataset_divided', help='input dataset folder name.')
+    parser.add_argument('--input_data_folder_name', type=str, default = 'data', help='input data folder name.')
     parser.add_argument('--input_gt_dataset_folder_name', type=str, help='input dataset folder name.')
-    parser.add_argument('--output_dataset_folder_name', type=str, default = 'dataset_merged', help='output dataset folder name.')
-    parser.add_argument('--data_folder_name', type=str, default = 'data', help='data folder name.')
     parser.add_argument('--input_gt_data_folder_name', type=str, help='input gt data folder name.')
+    parser.add_argument('--output_dataset_folder_name', type=str, default = 'dataset_merged', help='output dataset folder name.')
+    parser.add_argument('--output_data_folder_name', type=str, default = '', help='output data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
+    parser.add_argument('--merge_method', choices=['max', 'wm'], type=str, default = 'wm', help='')
 
     parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
 
@@ -113,20 +215,32 @@ if __name__ == '__main__':
     folder_name = args['folder']
     input_format = args['input_format']
     output_formats = [s.lower() for s in args['output_formats'].split(',')]
+    curve_types = [s.lower() for s in args['curve_types'].split(',')]
+    surface_types = [s.lower() for s in args['surface_types'].split(',')]
+    output_formats = [s.lower() for s in args['output_formats'].split(',')]
+    centralize = args['centralize']
+    align = args['align']
+    points_noise_limit = args['points_noise_limit']
+    normals_noise_limit = args['normals_noise_limit']
+    cube_reescale_factor = args['cube_reescale_factor']
+    normalization_order = args['normalization_order'].split(',')
 
     input_dataset_folder_name = args['input_dataset_folder_name']
     input_gt_dataset_folder_name = args['input_gt_dataset_folder_name']
     output_dataset_folder_name = args['output_dataset_folder_name']
-    data_folder_name = args['data_folder_name']
+    input_data_folder_name = args['input_data_folder_name']
+    output_data_folder_name = args['output_data_folder_name']
+    output_data_folder_name = input_data_folder_name if output_data_folder_name == '' else output_data_folder_name
     input_gt_data_folder_name = args['input_gt_data_folder_name']
     transform_folder_name = args['transform_folder_name']
+    merge_method = args['merge_method']
 
     use_gt_transform = args['use_gt_transform']
 
     use_data_primitives = not args['no_use_data_primitives']
 
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is None:
-        input_gt_data_folder_name = data_folder_name
+        input_gt_data_folder_name = input_data_folder_name
     
     if input_gt_data_folder_name is not None and input_gt_dataset_folder_name is None:
         input_gt_dataset_folder_name = input_dataset_folder_name
@@ -141,11 +255,12 @@ if __name__ == '__main__':
 
     input_dataset_format_folder_name = join(folder_name, input_dataset_folder_name, input_format)
     input_parameters[input_format]['dataset_folder_name'] = input_dataset_format_folder_name
-    input_data_format_folder_name = join(input_dataset_format_folder_name, data_folder_name)
+    input_data_format_folder_name = join(input_dataset_format_folder_name, input_data_folder_name)
     input_parameters[input_format]['data_folder_name'] = input_data_format_folder_name
     input_transform_format_folder_name = join(input_dataset_format_folder_name, transform_folder_name)
     input_parameters[input_format]['transform_folder_name'] = input_transform_format_folder_name
     input_parameters[input_format]['use_data_primitives'] = use_data_primitives
+    input_parameters[input_format]['unnormalize'] = True
 
     input_gt_transform_format_folder_name = None
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is not None:
@@ -157,6 +272,7 @@ if __name__ == '__main__':
         input_gt_parameters[input_format]['data_folder_name'] = input_gt_data_format_folder_name
         input_gt_transform_format_folder_name = join(input_gt_dataset_format_folder_name, transform_folder_name)
         input_gt_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
+        input_gt_parameters[input_format]['unnormalize'] = True
 
     if use_gt_transform and input_gt_transform_format_folder_name is not None:
         input_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
@@ -168,9 +284,27 @@ if __name__ == '__main__':
 
         output_parameters[format] = {'filter_features': {}, 'normalization': {}}
 
+        p = args[f'{format}_curve_types']
+        output_parameters[format]['filter_features']['curve_types'] = p if p is not None else curve_types
+        p = args[f'{format}_surface_types']
+        output_parameters[format]['filter_features']['surface_types'] = p if p is not None else surface_types
+        
+        p = args[f'{format}_centralize']
+        output_parameters[format]['normalization']['centralize'] = p or centralize
+        p = args[f'{format}_align']
+        output_parameters[format]['normalization']['align'] = p or align
+        p = args[f'{format}_points_noise_limit']
+        output_parameters[format]['normalization']['points_noise'] = p if p is not None else points_noise_limit
+        p = args[f'{format}_normals_noise_limit']
+        output_parameters[format]['normalization']['normals_noise'] = p if p is not None else normals_noise_limit
+        p = args[f'{format}_cube_reescale_factor']
+        output_parameters[format]['normalization']['cube_rescale'] = p if p is not None else cube_reescale_factor
+        p = args[f'{format}_normalization_order']
+        output_parameters[format]['normalization']['normalization_order'] = p.split(',') if p is not None else normalization_order
+
         output_dataset_format_folder_name = join(folder_name, output_dataset_folder_name, format)
         output_parameters[format]['dataset_folder_name'] = output_dataset_format_folder_name
-        output_data_format_folder_name = join(output_dataset_format_folder_name, data_folder_name)
+        output_data_format_folder_name = join(output_dataset_format_folder_name, output_data_folder_name)
         output_parameters[format]['data_folder_name'] = output_data_format_folder_name
         output_transform_format_folder_name = join(output_dataset_format_folder_name, transform_folder_name)
         output_parameters[format]['transform_folder_name'] = output_transform_format_folder_name
@@ -221,6 +355,8 @@ if __name__ == '__main__':
                 num_points += len(gt_data['points'])
 
             input_data = addDictionaries(input_data, data)
+
+        input_data['features_data'] = mergeFeatures(input_data['features_data'], merge_method)
 
         #adding non gt (primitives that are not in the ground truth but there are in prediction) ate the end of features list (and adjusting labels)
         if gt_reader is not None:

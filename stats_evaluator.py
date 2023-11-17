@@ -44,23 +44,23 @@ def createNestedPieGraph(labels, in_data, out_data, title='', number_in_per_out=
         absolute = int(pct/100.*np.sum(allvals))
         return "{:.1f}%\n({:d})".format(pct, absolute)
 
-    wedges = ax.pie(out_data, radius=1.1, colors=outer_colors, autopct=lambda pct: func(pct, in_data), pctdistance=0.85,
+    wedges = ax.pie(out_data, radius=1.1, colors=outer_colors, autopct=lambda pct: func(pct, in_data), fontsize='x-large', pctdistance=0.85,
         wedgeprops=dict(width=size, edgecolor='w'))
 
-    ax.pie(in_data, radius=1.1-size, colors=inner_colors, autopct=lambda pct: func(pct, in_data), pctdistance=1.15-size,
+    ax.pie(in_data, radius=1.1-size, colors=inner_colors, autopct=lambda pct: func(pct, in_data), fontsize='x-large', pctdistance=1.15-size,
         wedgeprops=dict(width=size, edgecolor='w'))
 
-    ax.set(title=title, loc='top', bbox_to_anchor=(0.6, 0, 0.5, 1))
+    #ax.set(title=title, loc='top', bbox_to_anchor=(0.6, 0, 0.5, 1))
 
     ax.legend(wedges[0], labels,
             title="Types",
             loc="lower right",
-            bbox_to_anchor=(0.6, 0, 0.5, 1), fontsize='x-large')
+            bbox_to_anchor=(0.6, 0, 0.5, 1), fontsize='xx-large')
 
     return fig
 
 def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface', **kwargs):
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(20, 8))
 
     size = 0.8
 
@@ -96,15 +96,16 @@ def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface'
         connectionstyle = "angle,angleA=0,angleB={}".format(ang)
         kw["arrowprops"].update({"connectionstyle": connectionstyle})
         ax.annotate(f'{round(percent*100, 2)}% (\u03BC = {data[i]//num_models})', xy=(x, y), xytext=(1.35*np.sign(x), 1.4*y),
-                    horizontalalignment=horizontalalignment, **kw)
+                    horizontalalignment=horizontalalignment, fontsize='xx-large', **kw)
 
     ax.set(aspect="equal", )
-    ax.set_title(title, pad=32.0, fontsize=20)
+    #ax.set_title(title, pad=32.0, fontsize=20)
     
-    ax.legend(wedges[0], labels,
+    plt.legend(wedges[0], labels,
             title="Types",
             loc="lower right",
-            bbox_to_anchor=(1.118, -0.15, 0.5, 1), fontsize='large')
+            fontsize='x-large')
+    plt.rcParams['legend.title_fontsize'] = 'xx-large'
     
     return fig
 
@@ -140,7 +141,7 @@ def createBarGraph(labels, data, title='', num_models=1, geometry_type='surface'
     #ax.legend(loc='upper left', ncols=3)
     ax.set_ylabel(data_label, fontsize=14)
     ax.set_xlabel('Types', fontsize=14)
-    ax.set_title(title, pad=32.0, fontsize=20)
+    #ax.set_title(title, pad=32.0, fontsize=20)
     ax.set_xticks(x, [labels[i] for i in sorted_indices])
 
     # for attribute, measurement in penguin_means.items():
@@ -152,7 +153,7 @@ def createBarGraph(labels, data, title='', num_models=1, geometry_type='surface'
     return fig
 
 def createBarHGraph(labels, data, title='', num_models=1, geometry_type='surface', data_label='Amount'):
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(24, 12))
 
     if geometry_type == 'curve':
         colors = np.asarray([list(CurveFactory.FEATURES_CURVE_CLASSES[l].getColor()) + [255] for l in labels])
@@ -176,14 +177,18 @@ def createBarHGraph(labels, data, title='', num_models=1, geometry_type='surface
         last_pos = y[-1] if len(y) > 0 else 0
         pos = last_pos + height + offset
         rects = ax.barh(pos, data[i], height, label=labels[i], color=colors[i])
-        ax.bar_label(rects, fmt=f'{round(percents[i]*100, 2)}% (\u03BC = {(data[i]//num_models):.1E})', padding=3) 
+        ax.bar_label(rects, fmt=f'  {round(percents[i]*100, 2)}%', padding=3, fontsize=38) 
         y.append(pos)
     
     #ax.legend(loc='upper left', ncols=3)
-    ax.set_xlabel(data_label, fontsize=14)
-    ax.set_ylabel('Types', fontsize=14)
-    ax.set_title(title, pad=32.0, fontsize=20)
-    ax.set_yticks(y, [labels[i] for i in sorted_indices])
+    ax.set_xlabel(data_label, fontsize=42, fontweight='bold')
+    ax.set_ylabel('Types', fontsize=42, fontweight='bold')
+    #ax.set_title(title, pad=32.0, fontsize=20)
+    ax.set_yticks(y, [labels[i] for i in sorted_indices], fontsize=40)
+    ax.tick_params(axis='x', labelsize=40)
+    t = ax.xaxis.get_offset_text()
+    t.set_size(40)
+    #plt.xticks(fontsize=30)
     ax.invert_yaxis()
     ax.set_xlim(0, 1.2*max(data))
 
@@ -197,22 +202,22 @@ def createBarHGraph(labels, data, title='', num_models=1, geometry_type='surface
 
 def saveFigs(fig1, fig2, fig3, fig4, fig5, folder_name):
     plt.figure(fig1.number)
-    plt.savefig(f'{folder_name}/number_curves.png', transparent=True, dpi=600)
+    plt.savefig(f'{folder_name}/number_curves.pdf', format='pdf', transparent=True, dpi=1200)
     plt.close()
     plt.figure(fig2.number)
-    plt.savefig(f'{folder_name}/number_vertices.png', transparent=True, dpi=600)
+    plt.savefig(f'{folder_name}/number_vertices.pdf', format='pdf', transparent=True, dpi=1200)
     plt.close()
     plt.figure(fig3.number)
-    plt.savefig(f'{folder_name}/number_surfaces.png', transparent=True, dpi=600)
+    plt.savefig(f'{folder_name}/number_surfaces.pdf', format='pdf', transparent=True, dpi=1200)
     plt.close()
     plt.figure(fig4.number)
-    plt.savefig(f'{folder_name}/number_faces.png', transparent=True, dpi=600)
+    plt.savefig(f'{folder_name}/number_faces.pdf', format='pdf', transparent=True, dpi=1200)
     plt.close()
     plt.figure(fig5.number)
-    plt.savefig(f'{folder_name}/area_surfaces.png', transparent=True, dpi=600)
+    plt.savefig(f'{folder_name}/area_surfaces.pdf', format='pdf', transparent=True, dpi=1200)
     plt.close()
 
-def statsData2Graphs(data, num_models=1, graph='pie'):
+def statsData2Graphs(data, num_models=1, graph='barh'):
     if graph=='bar':
         func = createBarGraph
     elif graph=='barh':
