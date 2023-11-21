@@ -7,7 +7,7 @@ import statistics as stats
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.normalization import applyTransforms
+from lib.normalization import applyTransforms, cubeRescale
 from lib.utils import computeFeaturesPointIndices
 from lib.fitting_func import FittingFunctions
 
@@ -143,7 +143,7 @@ class ParsenetDatasetReader(BaseDatasetReader):
             max_size = 0
 
         fpi = computeFeaturesPointIndices(labels, size=max_size)
-
+        points_scale = None
         features_data = [None]*max_size  
         for label in unique_labels:
             indices = fpi[label]
@@ -151,7 +151,9 @@ class ParsenetDatasetReader(BaseDatasetReader):
             tp_id = stats.mode(types)
 
             tp = ParsenetDatasetReader.PRIMITIVES_MAP[tp_id]
-            feature = FittingFunctions.fit(tp, points[indices], normals[indices])
+            if points_scale is None:
+                _, _, points_scale = cubeRescale(points.copy())
+            feature = FittingFunctions.fit(tp, points[indices], normals[indices], scale=1./points_scale)
                         
             features_data[label] = feature
             

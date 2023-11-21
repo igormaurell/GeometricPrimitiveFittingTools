@@ -6,7 +6,7 @@ import statistics as stats
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.normalization import applyTransforms
+from lib.normalization import applyTransforms, cubeRescale
 from lib.utils import computeFeaturesPointIndices
 from lib.fitting_func import FittingFunctions
 
@@ -71,6 +71,9 @@ class HPNetDatasetReader(BaseDatasetReader):
 
             use_data_primitives = self.use_data_primitives or params is None
 
+            
+
+            points_scale = None
             features_data = [None]*max_size  
             for label in unique_labels:
                 indices = fpi[label]
@@ -95,7 +98,9 @@ class HPNetDatasetReader(BaseDatasetReader):
                         params_curr = (primitive_params[0, :3], primitive_params[0, 3])
                     feature = FittingFunctions.params2dict(params_curr, tp)
                 else:
-                    feature = FittingFunctions.fit(tp, points[indices], normals[indices])
+                    if points_scale is None:
+                        _, _, points_scale = cubeRescale(points.copy())
+                    feature = FittingFunctions.fit(tp, points[indices], normals[indices], scale=1/points_scale)
                 
                 features_data[label] = feature
 

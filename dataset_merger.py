@@ -101,8 +101,7 @@ def addDictionaries(dict1, dict2):
     return result_dict
 
 def mergeByMax(counts, features):
-    ind = counts.index(max(counts))
-    return features[ind]
+    return features[0]
 
 def mergeByWeightedMean(counts, features):
     total_count = sum(counts)
@@ -131,16 +130,20 @@ def mergeByWeightedMean(counts, features):
                 else:
                     new_f[key] += value*weights[ind]
     return new_f
-    
+
+def maskValidFeatures(features):
+    return np.asarray([not ('invalid' in f and f['invalid'] == True) for f in features])
+
 def mergeFeatures(features, method='max'):
     new_features = [None for _ in range(len(features))]
     for i in range(len(features)):
         if features[i] is not None:
-            just_features = [x[0] for x in features[i]]
-            counts = [x[1] for x in features[i]]
+            features_curr = sorted(features[i], key=lambda x: x[1])[::-1]
+            just_features = [x[0] for x in features_curr]
+            counts = [x[1] for x in features_curr]
             types_count = {}
             types_indices = {}
-            for j in range(len(features[i])):
+            for j in range(len(features_curr)):
                 tp = just_features[j]['type']
                 if tp not in types_count:
                     types_count[tp] = counts[j]
@@ -160,12 +163,24 @@ def mergeFeatures(features, method='max'):
             just_features = [just_features[ind] for ind in final_indices]
             counts = [counts[ind] for ind in final_indices]
 
-            funcs = {
-                'max': mergeByMax,
-                'wm': mergeByWeightedMean
-            }
+            # special cases, no valid feature or just one valid
+            mask_valid = maskValidFeatures(just_features)
+            if np.count_nonzero(mask_valid) == 0:
+                new_f = just_features[0]
+            elif np.count_nonzero(mask_valid) == 1:
+                new_f = just_features[np.argmax(mask_valid)]
+            else:
+                # more than 2 valid features, removing the invalid ones
+                just_features = [just_features[ind] for ind in range(len(just_features)) if mask_valid[ind]]
+                counts = [counts[ind] for ind in range(len(counts)) if mask_valid[ind]]
 
-            new_f = funcs[method](counts, just_features)
+                funcs = {
+                    'max': mergeByMax,
+                    'wm': mergeByWeightedMean
+                }
+
+                new_f = funcs[method](counts, just_features)
+            
             new_features[i] = new_f
 
     return new_features
@@ -206,7 +221,8 @@ if __name__ == '__main__':
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
     parser.add_argument('--merge_method', choices=['max', 'wm'], type=str, default = 'wm', help='')
 
-    parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
+    parser.add_argument('--use_input_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
+    parser.add_argument('--no_use_output_gt_transform', action='store_false', help='')
 
     parser.add_argument('--no_use_data_primitives', action='store_true')
 
@@ -235,7 +251,7 @@ if __name__ == '__main__':
     transform_folder_name = args['transform_folder_name']
     merge_method = args['merge_method']
 
-    use_gt_transform = args['use_gt_transform']
+    use_input_gt_transform = args['use_input_gt_transform']
 
     use_data_primitives = not args['no_use_data_primitives']
 
@@ -274,7 +290,7 @@ if __name__ == '__main__':
         input_gt_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
         input_gt_parameters[input_format]['unnormalize'] = True
 
-    if use_gt_transform and input_gt_transform_format_folder_name is not None:
+    if use_input_gt_transform and input_gt_transform_format_folder_name is not None:
         input_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
 
     output_parameters = {}

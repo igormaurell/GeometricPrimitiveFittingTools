@@ -103,7 +103,11 @@ class LeastSquares:
     def __init__(self):
         pass
 
-    def lstsq(self, A, Y, lamb=0.0):
+    def lstsq(self, A, Y, lamb=0.0, max_points=85000): #more than 85k points throw an error
+        if A.shape[0] > max_points:
+            shuffled_indices = torch.randperm(A.size(0))
+            A = A[shuffled_indices[:max_points]]
+            Y = Y[shuffled_indices[:max_points]]
         """
         Differentiable least square
         :param A: m x n
@@ -235,7 +239,6 @@ class FittingFunctions:
 
     @staticmethod
     def fit_sphere_torch(points, normals, weights, show_warning=False):
-
         N = weights.shape[0]
         sum_weights = torch.sum(weights) + EPS
         A = 2 * (- points + torch.sum(points * weights, 0) / sum_weights)
@@ -345,20 +348,6 @@ class FittingFunctions:
         'Cone': fit_cone_torch.__func__,
         'Sphere': fit_sphere_torch.__func__
     }
-
-    @staticmethod
-    def fit_by_global(primitive_type, points_full, normals_full, mask, weights=None):
-        points_full, _, scale = cubeRescale(points_full.copy())
-
-        points = points_full[mask]
-        normals = normals_full[mask]
-
-        feature = FittingFunctions.fit(primitive_type, points, normals, weights=weights, scale=1.0)
-        _, features, _ = rescale(points, features=[feature], factor=1./scale)
-        feature = features[0]
-
-        return feature
-
 
     @staticmethod
     def fit(primitive_type, points, normals, weights=None, scale=1.0):

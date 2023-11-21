@@ -11,7 +11,7 @@ from lib.utils import computeFeaturesPointIndices, writeColorPointCloudOBJ, getA
 from lib.matching import mergeQueryAndGTData
 from lib.evaluator import computeIoUs
 from lib.primitives import ResidualLoss
-from lib.normalization import rescale
+from lib.normalization import rescale, cubeRescale
 from pprint import pprint
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
@@ -236,7 +236,6 @@ def process(data_tuple):
 
     instance_ious = []
     fpi_gt = None
-    gt_points = None
     gt_normals = None
     #type_ious = []
     if gt_data is not None:
@@ -249,10 +248,18 @@ def process(data_tuple):
         gt_points = gt_data['points']
         gt_normals = gt_data['normals']
     
+    reescale_factor = 1.
+    if cube_reescale_factor > 0:
+        if gt_points is not None:
+            _, _, reescale_factor = cubeRescale(gt_points.copy())
+        else:
+            _, _, reescale_factor = cubeRescale(points.copy())
+    
     if not no_use_occ_geometries:
         points, features, _ = rescale(points, features=features, factor=1000)
         if gt_data is not None:
-            gt_points, _, _ = rescale(gt_points, features=[], factor=1000)
+            gt_points, _, _ = rescale(gt_points, features=[], factor=1000)  
+        reescale_factor /= 1000
 
     for i, feature in enumerate(features):
         indices = fpi[i]
@@ -288,9 +295,8 @@ def process(data_tuple):
                 else:
                     distances = residual_distance.residual_loss(points_curr, feature)
                     angles = []
-                
-                if not no_use_occ_geometries:
-                    distances /= 1000.
+
+                distances *= reescale_factor
 
                 dataset_errors[tp]['distances'].append(distances)
                 dataset_errors[tp]['angles'].append(angles)
@@ -306,11 +312,8 @@ def process(data_tuple):
                     else:
                         distances_to_gt = residual_distance.residual_loss(points_gt_curr, feature)
                         angles_to_gt = []
-                    
-                    if not no_use_occ_geometries:
-                        distances_to_gt /= 1000.
-
-                    #print(len(distances_to_gt), np.max(points_gt_curr), feature['type'], feature['location'], np.mean(distances_to_gt))
+                
+                    distances_to_gt*= reescale_factor
 
                     dataset_errors[tp]['distances_to_gt'].append(distances_to_gt.astype(np.float32))
                     dataset_errors[tp]['angles_to_gt'].append(angles_to_gt)
@@ -396,6 +399,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_use_occ_geometries', action='store_true')
     parser.add_argument('--ignore_primitives_orientation', action='store_true')
     parser.add_argument('-un', '--unnormalize', action='store_true', help='')
+    parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
     args = vars(parser.parse_args())
 
@@ -422,6 +426,7 @@ if __name__ == '__main__':
     no_use_occ_geometries = args['no_use_occ_geometries']
     ignore_primitives_orientation = args['ignore_primitives_orientation']
     unnormalize = args['unnormalize']
+    cube_reescale_factor = args['cube_reescale_factor']
 
     if gt_dataset_folder_name is not None or gt_data_folder_name is not None or gt_format is not None:
         if gt_data_folder_name is None:

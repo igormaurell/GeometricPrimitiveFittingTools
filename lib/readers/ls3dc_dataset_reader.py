@@ -7,7 +7,7 @@ import numpy as np
 
 from .base_dataset_reader import BaseDatasetReader
 
-from lib.normalization import applyTransforms
+from lib.normalization import applyTransforms, cubeRescale
 from lib.fitting_func import FittingFunctions
 
 def decode_string(binary_string):
@@ -79,6 +79,7 @@ class LS3DCDatasetReader(BaseDatasetReader):
             max_size = max(found_soup_ids) + 1 if len(found_soup_ids) > 0 else 0
             features_data = [None]*max_size  
             found_soup_ids.sort()
+            points_scale = None
             for i in found_soup_ids:
                 g = h5_file[soup_id_to_key[i]]
                 feature = hdf5_group_to_dict(g['parameters'])
@@ -87,7 +88,9 @@ class LS3DCDatasetReader(BaseDatasetReader):
                     mask = labels==i
                     points = noisy_points if not self.fit_noisy_points else gt_points
                     normals = noisy_normals if not self.fit_noisy_normals else gt_normals
-                    feature = FittingFunctions.fit_by_global(tp, points, normals, mask)
+                    if points_scale is None:
+                        _, _, points_scale = cubeRescale(points.copy())
+                    feature = FittingFunctions.fit(tp, points[mask], normals[mask], scale=1/points_scale)
                 features_data[i] = feature
             
             if self.unnormalize:
