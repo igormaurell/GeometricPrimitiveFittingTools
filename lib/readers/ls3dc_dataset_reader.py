@@ -89,15 +89,18 @@ class LS3DCDatasetReader(BaseDatasetReader):
             points_scale = None
             for i in found_soup_ids:
                 g = h5_file[soup_id_to_key[i]]
+                points = noisy_points if not self.fit_noisy_points else gt_points
+                normals = noisy_normals if not self.fit_noisy_normals else gt_normals
+                if points_scale is None:
+                    _, _, points_scale = cubeRescale(points.copy())
+
                 feature = hdf5_group_to_dict(g['parameters'])
                 if not self.use_data_primitives:
                     tp = feature['type']
                     mask = labels==i
-                    points = noisy_points if not self.fit_noisy_points else gt_points
-                    normals = noisy_normals if not self.fit_noisy_normals else gt_normals
-                    if points_scale is None:
-                        _, _, points_scale = cubeRescale(points.copy())
                     feature = FittingFunctions.fit(tp, points[mask], normals[mask], scale=1/points_scale)
+                else:
+                    feature = FittingFunctions.validate_feature(feature, 1/points_scale)
                 features_data[i] = feature
             
             if self.unnormalize:

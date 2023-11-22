@@ -378,17 +378,25 @@ class FittingFunctions:
 
         return feature
 
+    # discarting very large cones and cylinders
     @staticmethod
     def validate_feature(feature, scale):
         if feature['type'] == 'Cone':
-            pass
+            threshold = 10*scale
+            threshold_arr = np.array([threshold, threshold, threshold])
+            if ('radius' in feature and feature['radius'] > threshold) or \
+               ('location' in feature and np.any(np.abs(np.asarray(feature['location'])) > threshold_arr)) or \
+               ('apex' in feature and  np.any(np.abs(np.asarray(feature['apex'])) > threshold_arr)):
+                
+                feature['invalid'] = True
 
         if feature['type']  == 'Cylinder':
             threshold = 10*scale
-            if feature['radius'] > threshold or feature['location'][0] > threshold or \
-               feature['location'][1] > threshold or feature['location'][2] > threshold:
+            threshold_arr = np.array([threshold, threshold, threshold])
+            if feature['radius'] > threshold or np.any(np.abs(np.asarray(feature['location'])) > threshold_arr):
                 
                 feature['invalid'] = True
+
         return feature
 
     @staticmethod

@@ -14,6 +14,7 @@ from lib.primitives import ResidualLoss
 from lib.normalization import rescale, cubeRescale
 from pprint import pprint
 from math import ceil
+from copy import deepcopy
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
@@ -206,6 +207,42 @@ write_points_error = False
 box_plot = False
 ignore_primitives_orientation = False
 
+def compute_deviations(points, normals, feature, reescale_factor=1):
+    distances = np.empty((points.shape[0],))
+    distances[:] = np.nan
+    angles = np.empty((normals.shape[0],))
+    angles[:] = np.nan
+
+    reescale_factor_curr = 1
+
+    if use_occ:
+        points, features_curr, _ = rescale(points, features=[feature], factor=1000)
+        feature = features_curr[0]
+        reescale_factor_curr *= 1000
+
+        try:
+            ## TODO: fix add copy inside asGeometryOCCWrapper
+            primitive = SurfaceFactory.fromDict(deepcopy(feature))
+            distances, angles = primitive.computeErrors(points, normals=normals,
+                                                        symmetric_normals=ignore_primitives_orientation)
+        except:
+            print(f"WARNING: fail buiding a {feature['type']} geometry. Params: {feature}")    
+    
+    nan_mask = np.isnan(distances)
+    distances[~nan_mask] /= reescale_factor_curr
+
+    if np.any(nan_mask):
+        print(f"WARNING: nan distances in {feature['type']} geometry. Params: {feature}")    
+        residual_distance = ResidualLoss()
+
+        points[nan_mask, :], features_curr, _ = rescale(points, features=[feature], factor=1/reescale_factor_curr)
+        feature = features_curr[0]
+        distances[nan_mask] = residual_distance.residual_loss(points[nan_mask, :], feature)
+    
+    distances*= reescale_factor
+
+    return distances, angles
+
 def process(data_tuple):
     if len(data_tuple) == 1:
         data = data_tuple[0]
@@ -213,8 +250,6 @@ def process(data_tuple):
     else:
         data, gt_data = data_tuple
         data = mergeQueryAndGTData(data, gt_data, force_match=force_match)
-
-    residual_distance = ResidualLoss()
 
     filename = data['filename'] if 'filename' in data.keys() else str(i)
     points = data['noisy_points'] if use_noisy_points else data['points']
@@ -251,33 +286,17 @@ def process(data_tuple):
     
     reescale_factor = 1.
     if cube_reescale_factor > 0:
-        if gt_points is not None:
+        if gt_data is not None:
             _, _, reescale_factor = cubeRescale(gt_points.copy())
         else:
             _, _, reescale_factor = cubeRescale(points.copy())
-    
-    if not no_use_occ_geometries:
-        points, features, _ = rescale(points, features=features, factor=1000)
-        if gt_data is not None:
-            gt_points, _, _ = rescale(gt_points, features=[], factor=1000)  
-        reescale_factor /= 1000
 
     for i, feature in enumerate(features):
         indices = fpi[i]
         if feature is not None and indices is not None:
             points_curr = points[indices]
-            normals_curr = normals[indices]
-            reescale_factor_curr = reescale_factor
-            primitive = None
-            if not no_use_occ_geometries:
-                try:
-                    primitive = SurfaceFactory.fromDict(feature)
-                    tp = primitive.getType()
-                except:
-                    pass
-            
-            if primitive is None:
-                tp = feature['type']
+            normals_curr = normals[indices]    
+            tp = feature['type']
                 
             if tp not in dataset_errors:
                 dataset_errors[tp] = {'number_of_points': 0, 'distances': [], 'angles': [],
@@ -295,19 +314,13 @@ def process(data_tuple):
                 dataset_errors[tp]['invalid_primitives'].append(i)
 
             if len(indices) > 0 and ('invalid' not in feature or not feature['invalid']):
-                if not no_use_occ_geometries and primitive is not None:
-                    distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
-                                                                symmetric_normals=ignore_primitives_orientation)
-                    print(len(distances), np.all(np.isnan(distances)))
-                else:
-                    if not no_use_occ_geometries:
-                        points_curr, features_curr, _ = rescale(points_curr, features=[feature], factor=1/1000)
-                        feature = features_curr[0]
-                        reescale_factor_curr *= 1000
-                    distances = residual_distance.residual_loss(points_curr, feature)
-                    angles = []
-                
-                distances*= reescale_factor_curr
+
+                distances, angles = compute_deviations(points_curr, normals_curr, deepcopy(feature), reescale_factor=reescale_factor)                
+
+                valid_distances = distances > 0
+                assert np.all(valid_distances), f'Negative distances: {distances[~valid_distances]}'
+                valid_angles = angles > 0
+                assert np.all(valid_angles), f'Negative angles: {angles[~valid_angles]}'
 
                 dataset_errors[tp]['distances'].append(distances)
                 dataset_errors[tp]['angles'].append(angles)
@@ -317,16 +330,11 @@ def process(data_tuple):
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
                     
-                    if not no_use_occ_geometries and primitive is not None:
-                        distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
-                                                                                symmetric_normals=ignore_primitives_orientation)
-                    else:
-                        if not no_use_occ_geometries:
-                            points_gt_curr, _, _ = rescale(points_gt_curr, factor=1/1000)
-                        distances_to_gt = residual_distance.residual_loss(points_gt_curr, feature)
-                        angles_to_gt = []
-                
-                    distances_to_gt*= reescale_factor_curr
+                    distances_to_gt, angles_to_gt = compute_deviations(points_gt_curr, normals_gt_curr, deepcopy(feature), reescale_factor=reescale_factor)
+                    valid_distances_to_gt = distances_to_gt > 0
+                    assert np.all(valid_distances_to_gt), f'Negative distances to GT: {distances_to_gt[~valid_distances_to_gt]}'
+                    valid_angles_to_gt = distances > 0
+                    assert np.all(valid_angles_to_gt), f'Negative angles to GT: {angles_to_gt[~valid_angles_to_gt]}'
 
                     dataset_errors[tp]['distances_to_gt'].append(distances_to_gt.astype(np.float32))
                     dataset_errors[tp]['angles_to_gt'].append(angles_to_gt)
@@ -339,10 +347,7 @@ def process(data_tuple):
 
                 if write_segmentation_gt:
                     colors_instances[indices, :] = computeRGB(colors_full[i%len(colors_full)])
-                    if primitive is not None:
-                        color = primitive.getColor()
-                    else:
-                        color = SurfaceFactory.FEATURES_SURFACE_CLASSES[feature['type']].getColor()
+                    color = SurfaceFactory.FEATURES_SURFACE_CLASSES[feature['type']].getColor()
                     colors_types[indices, :] = color
                 # if write_points_error:
                 #     error_dist, error_ang = computeErrorsArrays(indices, distances, angles)
@@ -365,12 +370,10 @@ def process(data_tuple):
     
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
-        #points, _, _ = applyTransforms(points, transforms, invert=False)
-        if not no_use_occ_geometries:
-            points /= 1000.
         writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
         types_filename = f'{filename}_types.obj'
         writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
+    
     if box_plot:
         fig = generateErrorsBoxPlot(dataset_errors)
         plt.figure(fig.number)
@@ -408,7 +411,7 @@ if __name__ == '__main__':
     parser.add_argument('--force_match', action='store_true')
     parser.add_argument('--use_noisy_points', action='store_true')
     parser.add_argument('--use_noisy_normals', action='store_true')
-    parser.add_argument('--no_use_occ_geometries', action='store_true')
+    parser.add_argument('--no_use_occ', action='store_true')
     parser.add_argument('--ignore_primitives_orientation', action='store_true')
     parser.add_argument('-w', '--workers', type=int, default=20, help='')
     parser.add_argument('-un', '--unnormalize', action='store_true', help='')
@@ -436,7 +439,7 @@ if __name__ == '__main__':
     use_data_primitives = not args['no_use_data_primitives']
     use_noisy_points = args['use_noisy_points']
     use_noisy_normals = args['use_noisy_normals']
-    no_use_occ_geometries = args['no_use_occ_geometries']
+    use_occ = not args['no_use_occ']
     ignore_primitives_orientation = args['ignore_primitives_orientation']
     workers = args['workers']
     unnormalize = args['unnormalize']
@@ -561,6 +564,7 @@ if __name__ == '__main__':
             plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
             plt.close()
         
+        print(full_logs_dicts['Total']['mean_distance_gt_error'])
         final_json = filterLog(computeLogMeans(full_logs_dicts, denominator=len(results)))
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
