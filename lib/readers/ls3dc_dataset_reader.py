@@ -1,7 +1,7 @@
 import pickle
 import h5py
 import csv
-from os.path import join
+from os.path import join, exists
 import re
 import numpy as np
 
@@ -28,17 +28,24 @@ def hdf5_group_to_dict(group):
 class LS3DCDatasetReader(BaseDatasetReader):
     def __init__(self, parameters):
         super().__init__(parameters)
+        
+        if exists(join(self.data_folder_name, 'train_models.csv')):
+            with open(join(self.data_folder_name, 'train_models.csv'), 'r', newline='') as f:
+                data = list(csv.reader(f, delimiter=',', quotechar='|'))
+                data = data[0] if len(data) > 0 else data
+                data = [d[:d.rfind('.')] for d in data]
+                self.filenames_by_set['train'] = data
+        else:
+            self.filenames_by_set['train'] = []
 
-        with open(join(self.data_folder_name, 'train_models.csv'), 'r', newline='') as f:
-            data = list(csv.reader(f, delimiter=',', quotechar='|'))
-            data = data[0] if len(data) > 0 else data
-            data = [d[:d.rfind('.')] for d in data]
-            self.filenames_by_set['train'] = data
-        with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
-            data = list(csv.reader(f, delimiter=',', quotechar='|'))
-            data = data[0] if len(data) > 0 else data
-            data = [d[:d.rfind('.')] for d in data]
-            self.filenames_by_set['val'] = data
+        if exists(join(self.data_folder_name, 'test_models.csv')):  
+            with open(join(self.data_folder_name, 'test_models.csv'), 'r', newline='') as f:
+                data = list(csv.reader(f, delimiter=',', quotechar='|'))
+                data = data[0] if len(data) > 0 else data
+                data = [d[:d.rfind('.')] for d in data]
+                self.filenames_by_set['val'] = data
+        else:
+            self.filenames_by_set['val'] = []
 
     def step(self, **kwargs):
         assert self.current_set_name in self.filenames_by_set.keys()
