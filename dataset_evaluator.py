@@ -76,6 +76,8 @@ METRICS_DICT = {
     'gt_angle': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'need_gt': True, 'reduction_key': 'mean'},
     'instance_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'},
     'type_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'}, 
+    'p_coverage': {'derivations': {'mean': np.nanmean}, 'reduction_key': 'mean'},
+    'gt_p_coverage': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'}
 }
 
 # Creating a base metrics dict (with void lists)
@@ -169,11 +171,8 @@ def compute_deviations(points, normals, feature, reescale_factor=1):
         points[nan_mask, :], features_curr, _ = rescale(points, features=[feature], factor=1/reescale_factor_curr)
         feature = features_curr[0]
         distances[nan_mask] = residual_distance.residual_loss(points[nan_mask, :], feature)
-    
-    distance = np.nan if np.all(np.isnan(distances)) else np.nanmean(distances)*reescale_factor
-    angle = np.nan if np.all(np.isnan(angles)) else np.nanmean(angles)
 
-    return distance, angle
+    return distances*reescale_factor, angles
 
 def np_encoder(object):
     if isinstance(object, np.generic):
@@ -254,7 +253,13 @@ def process(data_tuple):
 
             # Distances (residual)
             if len(indices) > 0 and ('invalid' not in feature or not feature['invalid']):
-                distance, angle = compute_deviations(points_curr, normals_curr, deepcopy(feature), reescale_factor=reescale_factor)
+                distances, angles = compute_deviations(points_curr, normals_curr, deepcopy(feature), reescale_factor=reescale_factor)
+
+                distance = np.nan if np.all(np.isnan(distances)) else np.nanmean(distances)
+                angle = np.nan if np.all(np.isnan(angles)) else np.nanmean(angles)
+
+                p_coverage_mask = distances < p_coverage_threshold
+                model_metrics[tp]['p_coverage'] += p_coverage_mask.tolist()
 
                 invalid_primitive = (distance >= reescale_factor*model_major_diagonal)              
 
@@ -263,7 +268,13 @@ def process(data_tuple):
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
                     
-                    gt_distance, gt_angle = compute_deviations(points_gt_curr, normals_gt_curr, deepcopy(feature), reescale_factor=reescale_factor)
+                    gt_distances, gt_angles = compute_deviations(points_gt_curr, normals_gt_curr, deepcopy(feature), reescale_factor=reescale_factor)
+
+                    gt_distance = np.nan if np.all(np.isnan(gt_distances)) else np.nanmean(gt_distances)
+                    gt_angle = np.nan if np.all(np.isnan(gt_angles)) else np.nanmean(gt_angles)
+
+                    gt_p_coverage_mask = gt_distances < p_coverage_threshold
+                    model_metrics[tp]['gt_p_coverage'] += gt_p_coverage_mask.tolist()
 
                     #invalid_primitive = invalid_primitive or (gt_distance >= reescale_factor*model_major_diagonal)
 
