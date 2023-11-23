@@ -59,6 +59,9 @@ write_points_error = False
 box_plot = False
 ignore_primitives_orientation = False
 
+def nancount(data):
+    return np.count_nonzero(~np.isnan(data))
+
 # TODO: transform Metrics into a class
 # The intention here is to make easier to add new metrics
 METRICS_DICT = {
@@ -67,10 +70,10 @@ METRICS_DICT = {
     'n_prim': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
     'n_invalid_prim': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
     'n_void_prim': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
-    'distance': {'derivations': {'mean': np.nanmean, 'count': len}, 'reduction_key': 'mean'},
-    'angle': {'derivations': {'mean': np.nanmean, 'count': len}, 'reduction_key': 'mean'},
-    'gt_distance': {'derivations': {'mean': np.nanmean, 'count': len}, 'need_gt': True, 'reduction_key': 'mean'},
-    'gt_angle': {'derivations': {'mean': np.nanmean, 'count': len}, 'need_gt': True, 'reduction_key': 'mean'},
+    'distance': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'reduction_key': 'mean'},
+    'angle': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'reduction_key': 'mean'},
+    'gt_distance': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'need_gt': True, 'reduction_key': 'mean'},
+    'gt_angle': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'need_gt': True, 'reduction_key': 'mean'},
     'instance_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'},
     'type_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'}, 
 }
@@ -359,6 +362,7 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--workers', type=int, default=20, help='')
     parser.add_argument('-un', '--unnormalize', action='store_true', help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
+    parser.add_argument('-pct', '--p_coverage_threshold', type=int, default=0.05, help='')
 
     args = vars(parser.parse_args())
 
@@ -387,6 +391,7 @@ if __name__ == '__main__':
     workers = args['workers']
     unnormalize = args['unnormalize']
     cube_reescale_factor = args['cube_reescale_factor']
+    p_coverage_threshold = args['p_coverage_threshold']
     force_match = args['force_match']
 
     if gt_dataset_folder_name is not None or gt_data_folder_name is not None or gt_format is not None:
@@ -481,6 +486,7 @@ if __name__ == '__main__':
         #results = [process(data) for data in tqdm(readers)]
 
         dataset_metrics_dict = concatenate_metrics_dict(results)
+        dataset_metrics_dict = metrics_dict_list2array(dataset_metrics_dict)
         derived_dataset_metrics_dict = compute_derived_metrics(dataset_metrics_dict)
 
         if box_plot:
