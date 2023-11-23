@@ -350,7 +350,7 @@ if __name__ == '__main__':
     files_dict = getMergedFilesDict(reader.filenames_by_set['val'])
 
     print('Generating merged models...')
-    for merged_filename, divided_filenames in tqdm(files_dict.items()):
+    for merged_filename, divided_filenames in tqdm(files_dict.items(), desc='Generating Merged Models', position=0):
         input_data = {}
         reader.filenames_by_set['val'] = sorted(divided_filenames)
         if gt_reader is not None:
@@ -358,7 +358,7 @@ if __name__ == '__main__':
         global_min = -1
         num_points = 0
         gt_labels = None
-        for div_filename in divided_filenames:
+        for div_filename in tqdm(divided_filenames, desc=f'Model {merged_filename}', position=1, leave=False):
             data = reader.step()
             if gt_reader is not None:
                 gt_data = gt_reader.step()

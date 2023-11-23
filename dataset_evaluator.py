@@ -19,6 +19,8 @@ from pprint import pprint
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
+from tqdm import trange
+from tqdm.contrib import tzip
 from tqdm.contrib.concurrent import process_map, thread_map
 
 from copy import deepcopy
@@ -97,12 +99,10 @@ def metrics_dict_list2array(d):
             new_d[tp][key] = np.asarray(value)
     return new_d
 
-def generate_total_key_metrics_dict(d):
-    total_dict = {}
+def generate_total_key_metrics_dict(d, with_gt=True):
+    total_dict = get_base_metrics_dict(with_gt=with_gt)
     for key, value in d.items():
         for key2, value2 in value.items():
-            if key2 not in total_dict:
-                total_dict[key2] = []
             total_dict[key2] += value2
     d['Total'] = total_dict
     return d
@@ -312,7 +312,7 @@ def process(data_tuple):
                 #     colors_types[error_both, :] = np.array([255, 0, 255])
 
     # Adding a key to compute the metrics agnostic of prim type
-    model_metrics = generate_total_key_metrics_dict(model_metrics)
+    model_metrics = generate_total_key_metrics_dict(model_metrics, with_gt=(gt_data is not None))
     model_metrics['Total']['n_no_prim_points'].append(np.count_nonzero(labels==-1))  # adding non primitivized points
 
     # Transforming from list to nd array each metric accumulator
@@ -484,15 +484,16 @@ if __name__ == '__main__':
                 print(f'Pred has {len(sorted(files))} files and GT has {len(sorted(gt_files))} files.')
                 continue
             gt_reader.filenames_by_set[s] = deepcopy(files)
-            readers = zip(reader, gt_reader)
+            readers = tzip(reader, gt_reader)
         else:
-            readers = zip(reader)
+            readers = tzip(reader)
 
         full_logs_dicts = {}
 
         max_workers = min(size, workers)
         chunksize = ceil(size/max_workers)
 
+        print(f'Evaluating {s} set:')
         results = process_map(process, readers, max_workers=max_workers, chunksize=chunksize)
         #results = [process(data) for data in tqdm(readers)]
 
