@@ -2,7 +2,8 @@ import numpy as np
 import torch
 from torch.autograd import Function
 import open3d as o3d
-from lib.normalization import cubeRescale, rescale
+from lib.normalization import rescale, translateUtil
+from copy import deepcopy
 
 torch.manual_seed(2)
 np.random.seed(2)
@@ -378,24 +379,29 @@ class FittingFunctions:
 
         return feature
 
+    # it is not seeing to be an smart approach for validation purposes, I will just primitives with mean distances major than the model major diagonal 
     # discarting very large cones and cylinders
     @staticmethod
     def validate_feature(feature, scale):
-        if feature['type'] == 'Cone':
-            threshold = 10*scale
-            threshold_arr = np.array([threshold, threshold, threshold])
-            if ('radius' in feature and feature['radius'] > threshold) or \
-               ('location' in feature and np.any(np.abs(np.asarray(feature['location'])) > threshold_arr)) or \
-               ('apex' in feature and  np.any(np.abs(np.asarray(feature['apex'])) > threshold_arr)):
-                
-                feature['invalid'] = True
+        # feature_transformed = [deepcopy(feature)]
+        # feature_transformed = translateUtil()
 
-        if feature['type']  == 'Cylinder':
-            threshold = 10*scale
-            threshold_arr = np.array([threshold, threshold, threshold])
-            if feature['radius'] > threshold or np.any(np.abs(np.asarray(feature['location'])) > threshold_arr):
+
+        # if feature['type'] == 'Cone':
+        #     threshold = 10*scale
+        #     threshold_arr = np.array([threshold, threshold, threshold])
+        #     if ('radius' in feature and feature['radius'] > threshold) or \
+        #        ('location' in feature and np.any(np.abs(np.asarray(feature['location'])) > threshold_arr)) or \
+        #        ('apex' in feature and  np.any(np.abs(np.asarray(feature['apex'])) > threshold_arr)):
                 
-                feature['invalid'] = True
+        #         feature['invalid'] = True
+
+        # if feature['type']  == 'Cylinder':
+        #     threshold = 10*scale
+        #     threshold_arr = np.array([threshold, threshold, threshold])
+        #     if feature['radius'] > threshold or np.any(np.abs(np.asarray(feature['location'])) > threshold_arr):
+                
+        #         feature['invalid'] = True
 
         return feature
 
