@@ -349,7 +349,6 @@ if __name__ == '__main__':
 
     files_dict = getMergedFilesDict(reader.filenames_by_set['val'])
 
-    print('Generating merged models...')
     for merged_filename, divided_filenames in tqdm(files_dict.items(), desc='Generating Merged Models', position=0):
         input_data = {}
         reader.filenames_by_set['val'] = sorted(divided_filenames)

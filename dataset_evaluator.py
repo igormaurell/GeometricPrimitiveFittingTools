@@ -4,9 +4,8 @@ from os.path import join, exists
 from os import makedirs
 import numpy as np
 from shutil import rmtree
-from tqdm import tqdm
 import matplotlib.pyplot as plt
-from lib.readers import DatasetReaderFactory
+from lib.readers import DatasetReaderFactory, PredAndGTDatasetReader
 from lib.utils import computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.matching import mergeQueryAndGTData
 from lib.evaluator import computeIoUs
@@ -19,9 +18,8 @@ from pprint import pprint
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
-from tqdm import trange
-from tqdm.contrib import tzip
-from tqdm.contrib.concurrent import process_map, thread_map
+from multiprocessing import Pool
+from tqdm import tqdm
 
 from copy import deepcopy
 
@@ -178,13 +176,13 @@ def np_encoder(object):
     if isinstance(object, np.generic):
         return object.item()
 
-def process(data_tuple):
-    if len(data_tuple) == 1:
-        data = data_tuple[0]
-        gt_data = None
-    else:
+def process(data_tuple, index):
+    if len(data_tuple) == 2:
         data, gt_data = data_tuple
         data = mergeQueryAndGTData(data, gt_data, force_match=force_match)
+    else:
+        data = data_tuple[0]
+        gt_data = None
 
     filename = data['filename'] if 'filename' in data.keys() else str(i)
     points = data['noisy_points'] if use_noisy_points else data['points']
@@ -229,7 +227,7 @@ def process(data_tuple):
     if gt_data is not None:
         model_major_diagonal = np.linalg.norm(np.max(gt_points, axis=0) - np.min(gt_points, axis=0))
     else:
-        model_major_diagonal = np.linalg.norm(np.max(points, axis=0) - np.min(gt_points, axis=0))
+        model_major_diagonal = np.linalg.norm(np.max(points, axis=0) - np.min(points, axis=0))
 
     for i, feature in enumerate(features):
         indices = fpi[i]
@@ -334,14 +332,15 @@ def process(data_tuple):
         plt.figure(fig.number)
         plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
         plt.close()
-        fig2 = generateErrorsBoxPlot(model_metrics, distances_key='gt_distance', angles_key='gt_angle')
-        plt.figure(fig2.number)
-        plt.savefig(f'{box_plot_format_folder_name}/{filename}_gt.png')
-        plt.close()
-    
+        if gt_data is not None:
+            fig2 = generateErrorsBoxPlot(model_metrics, distances_key='gt_distance', angles_key='gt_angle')
+            plt.figure(fig2.number)
+            plt.savefig(f'{box_plot_format_folder_name}/{filename}_gt.png')
+            plt.close()
+        
     model_metrics_reduced = reduce_derived_model_metrics(derived_model_metrics)
     
-    return model_metrics_reduced
+    return model_metrics_reduced, index
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for evaluate predictions')
@@ -483,18 +482,43 @@ if __name__ == '__main__':
             if sorted(files) != sorted(gt_files):
                 print(f'Pred has {len(sorted(files))} files and GT has {len(sorted(gt_files))} files.')
                 continue
+            reader.filenames_by_set[s] = deepcopy(files)
             gt_reader.filenames_by_set[s] = deepcopy(files)
-            readers = tzip(reader, gt_reader)
         else:
-            readers = tzip(reader)
+            gt_reader = None
 
         full_logs_dicts = {}
 
+        workers = 20
         max_workers = min(size, workers)
-        chunksize = ceil(size/max_workers)
 
-        print(f'Evaluating {s} set:')
-        results = process_map(process, readers, max_workers=max_workers, chunksize=chunksize)
+        pool = Pool(max_workers)
+
+        results = [None]*size
+        pbar = tqdm(total=size)
+        def update(*a):
+            a = a[0]
+            results[a[1]] = a[0]
+            pbar.update()
+            # tqdm.write(str(a))
+        for index, data in enumerate(PredAndGTDatasetReader(reader, gt_reader)):
+            pool.apply_async(process, args=(data, index,), callback=update)
+        # tqdm.write('scheduled')
+        pool.close()
+        pool.join()
+
+        #print(results)
+
+        # executor = ProcessPoolExecutor()
+        # jobs = [executor.submit(process, r) for r in PredAndGTDatasetReader(reader, gt_reader)]
+
+        # results = []
+        # for job in tqdm(as_completed(jobs), total=size, desc=f'Processing {s} set'):
+        #     results.append(job.result())
+
+        # For some reason, process_map was not working properly
+        #print(f'Evaluating {s} set:')
+        # results = process_map(process, readers, max_workers=max_workers, chunksize=chunksize)
         #results = [process(data) for data in tqdm(readers)]
 
         dataset_metrics_dict = concatenate_metrics_dict(results)
@@ -506,10 +530,11 @@ if __name__ == '__main__':
             plt.figure(fig.number)
             plt.savefig(f'{box_plot_format_folder_name}/{s}.png')
             plt.close()
-            fig2 = generateErrorsBoxPlot(dataset_metrics_dict, distances_key='gt_distance', angles_key='gt_angle')
-            plt.figure(fig2.number)
-            plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
-            plt.close()
+            if gt_reader is not None:
+                fig2 = generateErrorsBoxPlot(dataset_metrics_dict, distances_key='gt_distance', angles_key='gt_angle')
+                plt.figure(fig2.number)
+                plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
+                plt.close()
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
             json.dump(derived_dataset_metrics_dict, f, indent=4, default=np_encoder)
