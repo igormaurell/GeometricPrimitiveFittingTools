@@ -97,6 +97,9 @@ def loadPKL(features_name: str):
         data = pickle.load(f)
     return data
 
+def loadSemantic(semantic_name: str):
+    return loadJSON(f'{semantic_name}')
+
 def loadFeatures(features_name: str, tp: str):
     if tp.lower() in YAML_NAMES:
         return loadYAML(f'{features_name}.{tp}')

@@ -11,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif, computeFeaturesPointIndices
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif, computeFeaturesPointIndices, loadSemantic
 from lib.writers import DatasetWriterFactory
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
@@ -47,6 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--mesh_folder_name', type=str, default = 'mesh', help='mesh folder name.')
     parser.add_argument('--features_folder_name', type=str, default = 'features', help='features folder name.')
     parser.add_argument('--pc_folder_name', type=str, default = 'pc', help='point cloud folder name.')
+    parser.add_argument('--semantic_folder_name', type=str, default='semantic', help='semantic data folder name.')
     parser.add_argument('-d_pc', '--delete_old_pc', action='store_true', help='')
 
     parser.add_argument('--pcd_generation_method', choices=['sampling', 'lidar'], type=str, default = 'sampling', help='')
@@ -87,6 +88,7 @@ if __name__ == '__main__':
     mesh_folder_name = join(folder_name, args['mesh_folder_name'])
     features_folder_name = join(folder_name, args['features_folder_name'])
     pc_folder_name = join(folder_name, args['pc_folder_name'])
+    semantic_folder_name = join(folder_name, args['semantic_folder_name'])
     leaf_size = args['leaf_size']
 
     parameters = {}
@@ -163,6 +165,18 @@ if __name__ == '__main__':
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
         funif(print, True)('Done.\n')
 
+        semantic_filename = join(semantic_folder_name, filename) + '.json'
+        semantic_labels_dict = {}
+        semantic_labels = []
+        semantic_labels_faces = []
+        semantic_point_indices = []
+        if exists(semantic_folder_name):
+            funif(print, True)('Loading semantic labels...')
+            semantic_labels_dict = loadSemantic(semantic_filename)
+            for instance in semantic_labels_dict["semantic"]:
+                semantic_labels_faces += instance["face_indices"]
+            funif(print, True)('Done.\n')
+
         mesh = None
         if exists(pc_filename):
             print('Opening PC...')
@@ -173,6 +187,8 @@ if __name__ == '__main__':
             labels_mesh = pc['label']
             
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+            if (bool(semantic_labels_dict)):
+                semantic_labels, semantic_point_indices = computeLabelsFromFace2Primitive(semantic_labels_faces, semantic_labels_dict["semantic"])
             print('Done.\n')
 
         elif mesh_filename is not None:
@@ -184,7 +200,8 @@ if __name__ == '__main__':
             mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, [1, 2, 0]])
 
             if pcd_generation_method == 'sampling':
-                pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
+                pass
+                # pcd, labels_mesh = mesh.sample_points_uniformly_and_trace(number_of_points=mps_ns, use_triangle_normal=True)#mesh.sample_points_uniformly(number_of_points=mps_ns, use_triangle_normal=True)
             elif pcd_generation_method == 'lidar':
                 pcd, labels_mesh = rayCastingPointCloudGeneration(mesh)
             else:
@@ -196,6 +213,8 @@ if __name__ == '__main__':
             normals = np.asarray(pcd.normals)
 
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+            if (bool(semantic_labels_dict)):
+                semantic_labels, semantic_point_indices = computeLabelsFromFace2Primitive(semantic_labels_faces, semantic_labels_dict["semantic"])
            
             #downsample is done by surface to not mix primitives that are close to each other
             if leaf_size > 0:
@@ -254,7 +273,7 @@ if __name__ == '__main__':
 
         print('Writing...')
         dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points,
-                                              filename=filename, features_point_indices=features_point_indices, mesh=mesh)
+                                              filename=filename, features_point_indices=features_point_indices, mesh=mesh, semantic_data=semantic_labels_dict["semantic"] ,semantic_labels=semantic_labels, semantic_labels_faces=semantic_point_indices)
         print('Done.\n')
 
     dataset_writer_factory.finishAllFormats()
