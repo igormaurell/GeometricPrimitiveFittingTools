@@ -1,5 +1,5 @@
 from .base_dataset_writer import BaseDatasetWriter
-from lib.utils import filterFeaturesData, computeFeaturesPointIndices
+from lib.utils import filterFeaturesData, computeFeaturesPointIndices, filterFeaturesSemanticData
 
 import os
 import uuid
@@ -7,6 +7,16 @@ import pickle
 import numpy as np
 
 class Semantic3dDatasetWriter(BaseDatasetWriter):
+    BASE_CLASSES = {
+        "unlabeled": 0,
+        "tank": 1,
+        "pipe": 2,
+        "silo": 3,
+        "instrumentation": 4,
+        "floor": 5,
+        "wall": 6,
+        "structure": 7
+    }
 
     def __init__(self, parameters):
         super().__init__(parameters)
@@ -26,33 +36,6 @@ class Semantic3dDatasetWriter(BaseDatasetWriter):
         
         if os.path.exists(data_file_path):
             return False
-        
-        if labels is not None:
-            if features_point_indices is None:
-                features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
-            
-            min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(labels)*self.min_number_points)
-            min_number_points = min_number_points if min_number_points >= 0 else 1
-
-            features_data, labels, features_point_indices = filterFeaturesData(features_data, labels, types=self.surface_types,
-                                                                               min_number_points=min_number_points,
-                                                                               features_point_indices=features_point_indices)
-            if len(features_data) == 0:
-                print(f"WARNING: {data_file_path} has no features left.")
-        
-        if np.any(semantic_labels):
-            if not semantic_point_indices:
-                semantic_point_indices = computeFeaturesPointIndices(semantic_labels, size=len(semantic_data))
-            
-            min_number_points = self.min_number_points if self.min_number_points >= 1 else int(len(semantic_labels)*self.min_number_points)
-            min_number_points = min_number_points if min_number_points >= 0 else 1
-
-            semantic_data, semantic_labels, semantic_point_indices = filterFeaturesData(semantic_data, semantic_labels, types=None,
-                                                                               min_number_points=min_number_points,
-                                                                               features_point_indices=semantic_point_indices)
-            
-            if len(semantic_data) == 0:
-                print(f"WARNING: {data_file_path} has no semantic left.")
 
         self.filenames_by_set[self.current_set_name].append(filename)
 
@@ -75,9 +58,14 @@ class Semantic3dDatasetWriter(BaseDatasetWriter):
                     line = x + ' ' + y + ' ' + z + ' ' + intensity_rgb
 
                     data_file.write(line)
-                
-                # print(np.unique(semantic_labels))
-        
+
+                    the_labels_point_idx = semantic_labels[point_idx]
+                    obj = semantic_data[the_labels_point_idx]
+                    label = obj["label"]
+                    label_id = str(Semantic3dDatasetWriter.BASE_CLASSES[label]) + '\n'
+                    
+                    labels_file.write(label_id)
+                    
         if not os.path.exists(data_file_path):
             assert False
         return True

@@ -173,6 +173,39 @@ def filterFeaturesData(features_data, labels, types=None, min_number_points=None
 
     return new_features_data, labels, new_features_point_indices
 
+def filterFeaturesSemanticData(features_data, labels, types=None, min_number_points=None, features_point_indices=None):
+    if features_point_indices is None:
+        features_point_indices = computeFeaturesPointIndices(labels, size=len(features_data))
+    
+    by_type_condition = lambda x: True
+    if types is not None:
+        by_type_condition = lambda x: x['label'].lower() in types
+
+    by_npoints_condition = lambda x: True
+    if min_number_points is not None:
+        by_npoints_condition = lambda x: len(x) >= min_number_points
+
+    labels_map = np.arange(len(features_data), dtype=np.int32)
+    new_features_data = [None]*len(features_data)
+    new_features_point_indices = [None]*len(features_data)
+    for j in range(len(features_data)):
+        feature = features_data[j]
+        fpi = features_point_indices[j]
+        if feature is not None and fpi is not None:
+            if by_type_condition(feature) and by_npoints_condition(fpi):
+                new_features_data[j] = features_data[j]
+                new_features_point_indices[j] = features_point_indices[j]
+            else:
+                labels_map[j] = -1
+        else:
+            labels_map[j] = -1
+
+    if labels is not None:
+        not_minus_one_mask = labels != -1
+        labels[not_minus_one_mask] = labels_map[labels[not_minus_one_mask]]
+
+    return new_features_data, labels, new_features_point_indices
+
 def computeFeaturesPointIndices(labels, size=None):
     if size is None:
         size = np.max(labels) + 1
@@ -199,7 +232,6 @@ def computeLabelsFromFace2Primitive(labels, features_data, max_face=None):
         max_face = np.max(labels)
         for feat in features_data:
             max_face = max(0 if len(feat['face_indices']) == 0 else max(feat['face_indices']), max_face)
-
     face_2_primitive = np.zeros(shape=(max_face+1,), dtype=np.int32) - 1
 
     for i, feat in enumerate(features_data):
@@ -214,7 +246,7 @@ def computeLabelsFromFace2Primitive(labels, features_data, max_face=None):
 
     for i in range(0, len(features_point_indices)):
         features_point_indices[i] = np.array(features_point_indices[i], dtype=np.int64)
-    
+
     return labels, features_point_indices
 
 def downsampleByPointIndices(pcd, indices, labels, leaf_size):

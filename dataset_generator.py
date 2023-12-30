@@ -11,7 +11,7 @@ from shutil import rmtree
 from os import listdir, makedirs
 from os.path import join, isfile, exists
 
-from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif, computeFeaturesPointIndices, loadSemantic
+from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif, computeFeaturesPointIndices, loadSemantic, getAllColorsArray, computeRGB, writeColorPointCloudOBJ
 from lib.writers import DatasetWriterFactory
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
@@ -163,6 +163,7 @@ if __name__ == '__main__':
 
         funif(print, True)('Loading Features...')
         features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
+        # print(f"surfaces: {len(features_data['surfaces'])}")
         funif(print, True)('Done.\n')
 
         semantic_filename = join(semantic_folder_name, filename) + '.json'
@@ -172,10 +173,14 @@ if __name__ == '__main__':
         semantic_point_indices = []
         if exists(semantic_folder_name):
             funif(print, True)('Loading semantic labels...')
+
             semantic_labels_dict = loadSemantic(semantic_filename)
+            # print(f"instances: {len(semantic_labels_dict['semantic'])}")
             for instance in semantic_labels_dict["semantic"]:
                 semantic_labels_faces += instance["face_indices"]
+
             funif(print, True)('Done.\n')
+        semantic_labels_faces = np.asarray(semantic_labels_faces)
 
         mesh = None
         if exists(pc_filename):
@@ -188,7 +193,7 @@ if __name__ == '__main__':
             
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
             if (bool(semantic_labels_dict)):
-                semantic_labels, semantic_point_indices = computeLabelsFromFace2Primitive(semantic_labels_faces, semantic_labels_dict["semantic"])
+                semantic_labels, semantic_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), semantic_labels_dict["semantic"])
             print('Done.\n')
 
         elif mesh_filename is not None:
@@ -214,7 +219,17 @@ if __name__ == '__main__':
 
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
             if (bool(semantic_labels_dict)):
-                semantic_labels, semantic_point_indices = computeLabelsFromFace2Primitive(semantic_labels_faces, semantic_labels_dict["semantic"])
+                semantic_labels, semantic_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), semantic_labels_dict["semantic"])
+                colors_array = getAllColorsArray()
+                cloud_ = np.zeros(shape=(points.shape[0], 6))
+                cloud_[:,:3] = points
+                pc_instances_folder_name = pc_folder_name + "_instances"
+                makedirs(pc_instances_folder_name, exist_ok=True)
+                for index in np.unique(semantic_labels):
+                    color = computeRGB(colors_array[index % len(colors_array)])
+                    indices = semantic_point_indices[index]
+                    cloud_[indices, 3:] = color
+                writeColorPointCloudOBJ(join(pc_instances_folder_name, f"{filename}_instance.obj"), cloud_)
            
             #downsample is done by surface to not mix primitives that are close to each other
             if leaf_size > 0:
