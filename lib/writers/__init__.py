@@ -4,6 +4,7 @@ from .parsenet_dataset_writer import ParsenetDatasetWriter
 from .ls3dc_dataset_writer import LS3DCDatasetWriter
 from .hpnet_dataset_writer import HPNetDatasetWriter
 from .semantic3d_dataset_writer import Semantic3dDatasetWriter
+from .s3dis_dataset_writer import S3DISDatasetWriter
 
 import random
 
@@ -18,6 +19,7 @@ class DatasetWriterFactory:
         'ls3dc': LS3DCDatasetWriter,
         'hpnet': HPNetDatasetWriter,
         "semantic3d": Semantic3dDatasetWriter,
+        "s3dis": S3DISDatasetWriter,
     }
 
     def __init__(self, parameters):

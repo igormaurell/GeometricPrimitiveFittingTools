@@ -194,6 +194,16 @@ if __name__ == '__main__':
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
             if (bool(semantic_labels_dict)):
                 semantic_labels, semantic_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), semantic_labels_dict["semantic"])
+                colors_array = getAllColorsArray()
+                cloud_ = np.zeros(shape=(points.shape[0], 6))
+                cloud_[:,:3] = points
+                pc_instances_folder_name = pc_folder_name + "_instances"
+                makedirs(pc_instances_folder_name, exist_ok=True)
+                for index in np.unique(semantic_labels):
+                    color = computeRGB(colors_array[index % len(colors_array)])
+                    indices = semantic_point_indices[index]
+                    cloud_[indices, 3:] = color
+                writeColorPointCloudOBJ(join(pc_instances_folder_name, f"{filename}_instance.obj"), cloud_)
             print('Done.\n')
 
         elif mesh_filename is not None:

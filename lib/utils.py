@@ -227,6 +227,45 @@ def computeFeaturesPointIndices(labels, size=None):
 
     return features_point_indices
 
+def computeSemanticPointLabels(labels, semantic_data, size=None):
+    if size is None:
+        size = np.max(labels) + 1
+    
+    semantic_point_indices = [None]*size
+
+    labels_mask = labels != -1
+    not_none_features = []
+    label_obj_list = []
+    semantic_point_label = {}
+    for i in range(0, len(labels)):
+        if labels_mask[i]:
+            if semantic_point_indices[labels[i]] is None:
+                not_none_features.append(labels[i])
+                semantic_point_indices[labels[i]] = [i]
+
+                obj = semantic_data[labels[i]]
+                label = obj["label"]
+
+                if label in semantic_point_label.keys():
+                    semantic_point_label[label].append(i)
+                else:
+                    semantic_point_label[label] = [i]
+            else:
+                semantic_point_indices[labels[i]].append(i)
+
+                obj = semantic_data[labels[i]]
+                label = obj["label"]
+                
+                if label in semantic_point_label.keys():
+                    semantic_point_label[label].append(i)
+                else:
+                    semantic_point_label[label] = [i]
+    
+    for i in not_none_features:
+        semantic_point_indices[i] = np.array(semantic_point_indices[i], dtype=np.int64)
+    
+    return semantic_point_indices, semantic_point_label
+
 def computeLabelsFromFace2Primitive(labels, features_data, max_face=None):
     if max_face is None:
         max_face = np.max(labels)
