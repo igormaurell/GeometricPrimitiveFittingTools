@@ -2,6 +2,7 @@ import argparse
 import open3d as o3d
 import numpy as np
 from tqdm import tqdm
+import os
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
 
@@ -71,19 +72,23 @@ def comput_line_set(pcd, region_size, color=(0.2, 0.2, 0.2)):
 
     return line_set
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Visualize point cloud data.')
     parser.add_argument('filepaths', nargs='+', type=str, help='List of paths to the point cloud files')
-    parser.add_argument('--regionsizes', nargs='+', type=float, default=0, help='Region size to generate the lineset of voxel grid')
+    parser.add_argument('--regionsizes', nargs='+', type=float, default=[0], help='Region size to generate the lineset of voxel grid')
     parser.add_argument('--meshfactor', type=float, default=1, help='Factor to scale the mesh')
     parser.add_argument('--showbbox', action='store_true', help='Show bounding box')
+    parser.add_argument('--imagesfolder', type=str, default='./images', help='Folder to save the results')
     args = parser.parse_args()
 
     print("Load a obj point cloud, print it, and render it")
     file_geometries = []
+    filenames = []
     for filepath in tqdm(args.filepaths, desc='Loading files: '):
         geometries = []
+
+        base_filename = os.path.basename(filepath)
+        base_filename = os.path.splitext(base_filename)[0]
 
         is_mesh = True
         mesh = o3d.io.read_triangle_mesh(filepath, print_progress=False)
@@ -120,23 +125,29 @@ if __name__ == '__main__':
             geometries.append(pcd)
 
         file_geometries.append([geometries[0]])
+        filenames.append(f'{base_filename}')
 
         if args.showbbox:
             aabb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector(points))
             line_set_bbox = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb)
             line_set_bbox.paint_uniform_color((0.2, 0.2, 0.2))
-
             geometries_2 = [geometries[0], line_set_bbox]
+            
             file_geometries.append(geometries_2)
+            filenames.append(f'{base_filename}_bbox')
         
         for regionsize in args.regionsizes:
             if regionsize > 0:
                 region_size = np.ones(3)*regionsize
                 line_set_regions = comput_line_set(pcd, region_size)
-
                 geometries_3 = [geometries[0], line_set_regions]
-            
+
                 file_geometries.append(geometries_3)
+                filenames.append(f'{base_filename}_regionsize_{regionsize}')
+
+    os.makedirs(args.imagesfolder, exist_ok=True)
+
+    images_filepath = [os.path.join(args.imagesfolder, f'{filename}.png') for filename in filenames]
 
     vis = o3d.visualization.VisualizerWithKeyCallback()
     vis.create_window()
@@ -156,7 +167,13 @@ if __name__ == '__main__':
                 vis.add_geometry(geometry, reset_bounding_box=False)
         return True
     
+    def save_image_callback(vis):
+        global geometry_index
+        vis.capture_screen_image(images_filepath[geometry_index])
+        return True
+    
     vis.register_key_callback(ord("N"), update_geometries_callback)
+    vis.register_key_callback(ord("S"), save_image_callback)
 
     vis.run()  # user picks points
 
