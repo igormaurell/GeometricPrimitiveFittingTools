@@ -1,8 +1,9 @@
 import argparse
-
 import open3d as o3d
 import numpy as np
-import sys
+from tqdm import tqdm
+
+o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
 
 EPS = np.finfo(np.float32).eps
 
@@ -70,70 +71,94 @@ def comput_line_set(pcd, region_size, color=(0.2, 0.2, 0.2)):
 
     return line_set
 
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Visualize point cloud data.')
+    parser.add_argument('filepaths', nargs='+', type=str, help='List of paths to the point cloud files')
+    parser.add_argument('--regionsizes', nargs='+', type=float, default=0, help='Region size to generate the lineset of voxel grid')
+    parser.add_argument('--meshfactor', type=float, default=1, help='Factor to scale the mesh')
+    parser.add_argument('--showbbox', action='store_true', help='Show bounding box')
+    args = parser.parse_args()
 
-    REGION_SIZE = np.array([4, 4, 4])
+    print("Load a obj point cloud, print it, and render it")
+    file_geometries = []
+    for filepath in tqdm(args.filepaths, desc='Loading files: '):
+        geometries = []
 
-    parser = argparse.ArgumentParser(description='')
+        is_mesh = True
+        mesh = o3d.io.read_triangle_mesh(filepath, print_progress=False)
+        if len(mesh.triangles) == 0:
+            is_mesh = False
 
-    parser.add_argument('filepath', type=str, help='')
-    parser.add_argument('--type', choices=['pcd', 'mesh'], type=str, default='pcd', help='')
+        if is_mesh:
+            points = np.asarray(mesh.vertices)/args.meshfactor
+            
+            bounding_box_min = np.min(points, axis=0).tolist()
+            bounding_box_max = np.max(points, axis=0).tolist()
+            tx = - (bounding_box_max[0] + bounding_box_min[0]) * 0.5
+            ty = - (bounding_box_max[1] + bounding_box_min[1]) * 0.5
+            tz = - bounding_box_min[2]
+            t = np.array([tx, ty, tz])
 
-    args = vars(parser.parse_args())
+            points += t
 
-    filepath = args['filepath']
-    tp = args['type']
+            mesh.vertices = o3d.utility.Vector3dVector(points)
+            geometries.append(mesh)
 
-    if tp == 'pcd':
-        print("Load a obj point cloud, print it, and render it")
-        with open(filepath, 'r') as f:
-            lines = [[float(k) for k in l[2:].split()] for l in f.readlines()]
+        else:
+            with open(filepath, 'r') as f:
+                lines = [[float(k) for k in l[2:].split()] for l in f.readlines()]
 
-        arr = np.asarray(lines)
-        points = arr[:, :3]
-        colors = arr[:, 3:]/255.
+            arr = np.asarray(lines)
+            points = arr[:, :3]
+            colors = arr[:, 3:]/255.
+            
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(points)
+            pcd.colors = o3d.utility.Vector3dVector(colors)
 
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
+            geometries.append(pcd)
+
+        file_geometries.append([geometries[0]])
+
+        if args.showbbox:
+            aabb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector(points))
+            line_set_bbox = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb)
+            line_set_bbox.paint_uniform_color((0.2, 0.2, 0.2))
+
+            geometries_2 = [geometries[0], line_set_bbox]
+            file_geometries.append(geometries_2)
         
-        line_set = comput_line_set(pcd, REGION_SIZE)
+        for regionsize in args.regionsizes:
+            if regionsize > 0:
+                region_size = np.ones(3)*regionsize
+                line_set_regions = comput_line_set(pcd, region_size)
 
-        aabb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(pcd.points)
-        
-        view_data = [pcd, line_set]
+                geometries_3 = [geometries[0], line_set_regions]
+            
+                file_geometries.append(geometries_3)
 
-    elif tp == 'mesh':
-        mesh = o3d.io.read_triangle_mesh(filepath)
-        vertices = np.asarray(mesh.vertices)/100000
+    vis = o3d.visualization.VisualizerWithKeyCallback()
+    vis.create_window()
+    
+    geometry_index = 0
+    for geometry in file_geometries[geometry_index]:
+        vis.add_geometry(geometry)
 
-        bounding_box_min = np.min(vertices, axis=0).tolist()
-        bounding_box_max = np.max(vertices, axis=0).tolist()
-        tx = - (bounding_box_max[0] + bounding_box_min[0]) * 0.5
-        ty = - (bounding_box_max[1] + bounding_box_min[1]) * 0.5
-        tz = - bounding_box_min[2]
-        t = np.array([tx, ty, tz])
+    def update_geometries_callback(vis):
+        global geometry_index
+        geometry_index += 1
+        vis.clear_geometries()
+        if geometry_index >= len(file_geometries):
+            geometry_index = -1
+        else:
+            for geometry in file_geometries[geometry_index]:
+                vis.add_geometry(geometry, reset_bounding_box=False)
+        return True
+    
+    vis.register_key_callback(ord("N"), update_geometries_callback)
 
-        vertices += t
+    vis.run()  # user picks points
 
-        mesh.vertices = o3d.utility.Vector3dVector(vertices)
-
-        aabb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(mesh.vertices)
-        line_set = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb)
-        line_set.paint_uniform_color((0.2, 0.2, 0.2))
-
-        view_data = [mesh, line_set]
-
-    size = np.linalg.norm(aabb.get_max_bound() - aabb.get_min_bound())
-    view_lookat = aabb.get_center()
-    vertices = aabb.get_box_points()
-    for v in vertices[3:7]:
-        view_front = v - view_lookat
-        view_front[2] = 0.7*view_front[2]
-        view_front = view_front/np.linalg.norm(view_front)
-        view_params = {'lookat': view_lookat, 
-                    'up': np.array([0, 0, 1]), 
-                    'front': view_front/np.linalg.norm(view_front),
-                    'zoom': 0.035*size}
-
-        o3d.visualization.draw_geometries(view_data, **view_params, mesh_show_wireframe=False)
+        #o3d.visualization.draw_geometries([pcd, line_set], **view_params)
+    vis.destroy_window()
