@@ -48,11 +48,15 @@ class PrimitivenetDatasetReader(BaseDatasetReader):
 
         with np.load(data_file_path, 'r') as npz_file:
             noisy_points = npz_file['V'] if 'V' in npz_file.keys() else None
+
+            #TODO: fix this
+            noisy_points = noisy_points - np.mean(noisy_points, axis=0)
+
             gt_points = npz_file['V_fixed'] if 'V' in npz_file.keys() else None
             noisy_normals = npz_file['N'] if 'N' in npz_file.keys() else None
             gt_normals = npz_file['N_fixed'] if 'N' in npz_file.keys() else None
             labels = npz_file['L'] if 'L' in npz_file.keys() else None
-            semantics = npz_file['S'] if 'S' in npz_file.keys() else None    
+            semantics = npz_file['S'] if 'S' in npz_file.keys() else None 
 
             unique_labels = np.unique(labels)
             unique_labels = unique_labels[unique_labels != -1]

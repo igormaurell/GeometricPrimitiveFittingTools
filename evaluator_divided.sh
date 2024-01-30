@@ -1,0 +1,6 @@
+python dataset_evaluator.py ~/hd/LS3DC hpnet -s -p -b --dataset_folder_name dataset_pccs_divided_$1_after_noise --data_folder_name hpnet_pred --result_folder_name eval_hpnet_pred --gt_data_folder_name data --gt_format ls3dc --ignore_primitives_orientation --no_use_data_primitives
+
+python dataset_evaluator.py ~/hd/LS3DC parsenet -s -p -b --dataset_folder_name dataset_pccs_divided_$1_after_noise --data_folder_name parsenet_pred --result_folder_name eval_parsenet_pred --gt_data_folder_name data --gt_format ls3dc --ignore_primitives_orientation --no_use_data_primitives
+
+python dataset_evaluator.py ~/hd/LS3DC ls3dc -s -p -b --dataset_folder_name dataset_pccs_divided_$1_after_noise --data_folder_name eff_ransac_result/output_h5 --result_folder_name eval_eff_ransac_result --gt_data_folder_name data --gt_format ls3dc --ignore_primitives_orientation
+python dataset_evaluator.py ~/hd/LS3DC ls3dc -s -p -b --dataset_folder_name dataset_pccs_divided_$1_after_noise --data_folder_name eff_ransac_result/output_h5 --result_folder_name eval_eff_ransac_result_fit --gt_data_folder_name data --gt_format ls3dc --ignore_primitives_orientation --no_use_data_primitives

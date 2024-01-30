@@ -193,6 +193,8 @@ if __name__ == '__main__':
     formats_txt = ','.join(DatasetWriterFactory.WRITERS_DICT.keys())
     parser.add_argument('output_formats', type=str, help='')
 
+    parser.add_argument('--input_gt_format', type=str, help='format of gt data.')
+
     parser.add_argument('-ct', '--curve_types', type=str, default = '', help='types of curves to generate. Default = ')
     parser.add_argument('-st', '--surface_types', type=str, default = 'plane,cylinder,cone,sphere', help='types of surfaces to generate. Default = plane,cylinder,cone,sphere')
     parser.add_argument('-c', '--centralize', action='store_true', help='')
@@ -201,6 +203,8 @@ if __name__ == '__main__':
     parser.add_argument('-nnl', '--normals_noise_limit', type=float, default = 0., help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
     parser.add_argument('-no', '--normalization_order', type=str, default = 'r,c,a,pn,nn,cr', help='')
+    parser.add_argument('--use_noisy_points', action='store_true')
+    parser.add_argument('--use_noisy_normals', action='store_true')
 
     for format in DatasetWriterFactory.WRITERS_DICT.keys():
         parser.add_argument(f'-{format}_ct', f'--{format}_curve_types', type=str, help='types of curves to generate. Default = ')
@@ -230,6 +234,7 @@ if __name__ == '__main__':
 
     folder_name = args['folder']
     input_format = args['input_format']
+    input_gt_format = args['input_gt_format']
     output_formats = [s.lower() for s in args['output_formats'].split(',')]
     curve_types = [s.lower() for s in args['curve_types'].split(',')]
     surface_types = [s.lower() for s in args['surface_types'].split(',')]
@@ -254,12 +259,17 @@ if __name__ == '__main__':
     use_input_gt_transform = args['use_input_gt_transform']
 
     use_data_primitives = not args['no_use_data_primitives']
+    use_noisy_points = args['use_noisy_points']
+    use_noisy_normals = args['use_noisy_normals']
 
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is None:
         input_gt_data_folder_name = input_data_folder_name
     
     if input_gt_data_folder_name is not None and input_gt_dataset_folder_name is None:
         input_gt_dataset_folder_name = input_dataset_folder_name
+
+    if input_gt_format is None:
+        input_gt_format = input_format
 
     input_parameters = {}
     input_gt_parameters = {}
@@ -280,15 +290,15 @@ if __name__ == '__main__':
 
     input_gt_transform_format_folder_name = None
     if input_gt_dataset_folder_name is not None and input_gt_data_folder_name is not None:
-        input_gt_parameters[input_format] = {}
+        input_gt_parameters[input_gt_format] = {}
 
-        input_gt_dataset_format_folder_name = join(folder_name, input_gt_dataset_folder_name, input_format)
-        input_gt_parameters[input_format]['dataset_folder_name'] = input_gt_dataset_format_folder_name
+        input_gt_dataset_format_folder_name = join(folder_name, input_gt_dataset_folder_name, input_gt_format)
+        input_gt_parameters[input_gt_format]['dataset_folder_name'] = input_gt_dataset_format_folder_name
         input_gt_data_format_folder_name = join(input_gt_dataset_format_folder_name, input_gt_data_folder_name)
-        input_gt_parameters[input_format]['data_folder_name'] = input_gt_data_format_folder_name
+        input_gt_parameters[input_gt_format]['data_folder_name'] = input_gt_data_format_folder_name
         input_gt_transform_format_folder_name = join(input_gt_dataset_format_folder_name, transform_folder_name)
-        input_gt_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
-        input_gt_parameters[input_format]['unnormalize'] = True
+        input_gt_parameters[input_gt_format]['transform_folder_name'] = input_gt_transform_format_folder_name
+        input_gt_parameters[input_gt_format]['unnormalize'] = True
 
     if use_input_gt_transform and input_gt_transform_format_folder_name is not None:
         input_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
@@ -336,10 +346,12 @@ if __name__ == '__main__':
 
     if len(input_gt_parameters) > 0:
         gt_reader_factory = DatasetReaderFactory(input_gt_parameters)
-        gt_reader = gt_reader_factory.getReaderByFormat(input_format)
+        gt_reader = gt_reader_factory.getReaderByFormat(input_gt_format)
         gt_reader.setCurrentSetName('val')
         query_files = reader.filenames_by_set['val']
+        print(query_files[0])
         gt_files = gt_reader.filenames_by_set['val']
+        print(gt_files[0])
         assert sorted(query_files) == sorted(gt_files), 'gt has different files from query'
     else:
         gt_reader = None
@@ -359,6 +371,8 @@ if __name__ == '__main__':
         gt_labels = None
         for div_filename in tqdm(divided_filenames, desc=f'Model {merged_filename}', position=1, leave=False):
             data = reader.step()
+            data['points'] = data['points'] if not use_noisy_points else data['noisy_points']
+            data['normals'] = data['normals'] if not use_noisy_normals else data['noisy_normals']
             if gt_reader is not None:
                 gt_data = gt_reader.step()
                 if gt_labels is None:

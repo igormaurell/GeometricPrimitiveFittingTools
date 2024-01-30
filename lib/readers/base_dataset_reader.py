@@ -8,6 +8,9 @@ class DatasetReaderIterator:
         if self.dr.steps_by_set[self.dr.current_set_name] < len(self.dr.filenames_by_set[self.dr.current_set_name]):
             return self.dr.step()
         raise StopIteration
+    
+    def __len__(self):
+        return len(self.dr)
 
 class BaseDatasetReader:
 

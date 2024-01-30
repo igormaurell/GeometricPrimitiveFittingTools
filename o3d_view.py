@@ -3,6 +3,8 @@ import open3d as o3d
 import numpy as np
 from tqdm import tqdm
 import os
+from pypcd import pypcd
+from copy import deepcopy
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
 
@@ -46,8 +48,7 @@ def compute_grid(points, region_size):
 
     return regions
 
-def comput_line_set(pcd, region_size, color=(0.2, 0.2, 0.2)):
-    regions = compute_grid(np.asarray(pcd.points), region_size)
+def comput_line_set(regions, color=(0.2, 0.2, 0.2)):
 
     full_len = np.prod(regions.shape[:3])
 
@@ -79,6 +80,9 @@ if __name__ == '__main__':
     parser.add_argument('--meshfactor', type=float, default=1, help='Factor to scale the mesh')
     parser.add_argument('--showbbox', action='store_true', help='Show bounding box')
     parser.add_argument('--imagesfolder', type=str, default='./images', help='Folder to save the results')
+    parser.add_argument('--suffix', type=str, default='', help='Suffix to add to the images filenames')
+    parser.add_argument('--showpcd_labels', action='store_true', help='Show point cloud labels as colors')
+    parser.add_argument('--showmesh_wireframe', action='store_true', help='Show mesh wireframe')
     args = parser.parse_args()
 
     print("Load a obj point cloud, print it, and render it")
@@ -111,16 +115,37 @@ if __name__ == '__main__':
             geometries.append(mesh)
 
         else:
-            with open(filepath, 'r') as f:
-                lines = [[float(k) for k in l[2:].split()] for l in f.readlines()]
+            if filepath.endswith('.obj'):
+                with open(filepath, 'r') as f:
+                    lines = [[float(k) for k in l[2:].split()] for l in f.readlines()]
 
-            arr = np.asarray(lines)
-            points = arr[:, :3]
-            colors = arr[:, 3:]/255.
+                arr = np.asarray(lines)
+                points = arr[:, :3]
+                colors = arr[:, 3:]/255.
+                
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(points)
+                pcd.colors = o3d.utility.Vector3dVector(colors)
             
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(points)
-            pcd.colors = o3d.utility.Vector3dVector(colors)
+            elif filepath.endswith('.pcd'):
+                pcd = o3d.geometry.PointCloud()
+
+                if not args.showpcd_labels:
+                    pcd_in = o3d.io.read_point_cloud(filepath, print_progress=False)
+                    points = np.asarray(pcd_in.points)
+                    pcd.points = o3d.utility.Vector3dVector(points)
+                else:
+                    pc = pypcd.PointCloud.from_path(filepath).pc_data
+      
+                    points = np.vstack((pc['x'], pc['y'], pc['z'])).T
+                    normals = np.vstack((pc['normal_x'], pc['normal_y'], pc['normal_z'])).T
+                    labels = pc['label']
+                    colors_table = np.random.rand(len(labels), 3)
+                    colors = colors_table[labels]
+                    
+                    pcd.points = o3d.utility.Vector3dVector(points)
+                    pcd.normals = o3d.utility.Vector3dVector(normals)
+                    pcd.colors = o3d.utility.Vector3dVector(colors)
 
             geometries.append(pcd)
 
@@ -139,18 +164,33 @@ if __name__ == '__main__':
         for regionsize in args.regionsizes:
             if regionsize > 0:
                 region_size = np.ones(3)*regionsize
-                line_set_regions = comput_line_set(pcd, region_size)
+                regions = compute_grid(np.asarray(pcd.points), region_size)   
+                line_set_regions = comput_line_set(regions[:, :])
                 geometries_3 = [geometries[0], line_set_regions]
 
                 file_geometries.append(geometries_3)
                 filenames.append(f'{base_filename}_regionsize_{regionsize}')
 
+                regions = regions[:, :, :]*2.5
+                pcd_2 = deepcopy(pcd)
+                pcd_2 = pcd_2.scale(2.5, center=np.array([0, 0, 0]))
+                regions[:, :, :, 0, :] += region_size/3
+                regions[:, :, :, 1, :] += region_size/3
+                pcd_2 = pcd_2.translate(region_size/3, relative=True)
+                regions = regions[:, :, :]/2.5
+                pcd_2 = pcd_2.scale(1/2.5, center=np.array([0, 0, 0]))
+                line_set_regions_2 = comput_line_set(regions[:, :])
+                geometries_4 = [pcd_2, line_set_regions_2]
+                file_geometries.append(geometries_4)
+                filenames.append(f'{base_filename}_regionsize_{regionsize}_explode')                
+
     os.makedirs(args.imagesfolder, exist_ok=True)
 
-    images_filepath = [os.path.join(args.imagesfolder, f'{filename}.png') for filename in filenames]
+    images_filepath = [os.path.join(args.imagesfolder, f'{filename}_{ind}{args.suffix}.png') for ind, filename in enumerate(filenames)]
 
     vis = o3d.visualization.VisualizerWithKeyCallback()
     vis.create_window()
+    vis.get_render_option().mesh_show_wireframe = args.showmesh_wireframe
     
     geometry_index = 0
     for geometry in file_geometries[geometry_index]:
@@ -161,10 +201,9 @@ if __name__ == '__main__':
         geometry_index += 1
         vis.clear_geometries()
         if geometry_index >= len(file_geometries):
-            geometry_index = -1
-        else:
-            for geometry in file_geometries[geometry_index]:
-                vis.add_geometry(geometry, reset_bounding_box=False)
+            geometry_index = 0
+        for geometry in file_geometries[geometry_index]:
+            vis.add_geometry(geometry, reset_bounding_box=False)
         return True
     
     def save_image_callback(vis):
@@ -172,10 +211,22 @@ if __name__ == '__main__':
         vis.capture_screen_image(images_filepath[geometry_index])
         return True
     
+    def burst_images_callback(vis):
+        global geometry_index
+        initial_geometry_index = geometry_index
+        while True:
+            save_image_callback(vis)
+            if update_geometries_callback(vis):
+                vis.update_renderer()
+                vis.poll_events()
+            if geometry_index == initial_geometry_index:
+                break
+        return True
+    
     vis.register_key_callback(ord("N"), update_geometries_callback)
     vis.register_key_callback(ord("S"), save_image_callback)
+    vis.register_key_callback(ord("B"), burst_images_callback)
 
-    vis.run()  # user picks points
+    vis.run()
 
-        #o3d.visualization.draw_geometries([pcd, line_set], **view_params)
     vis.destroy_window()

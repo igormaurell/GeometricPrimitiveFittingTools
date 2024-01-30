@@ -176,12 +176,11 @@ def np_encoder(object):
     if isinstance(object, np.generic):
         return object.item()
 
-def process(data_tuple, index):
-    if len(data_tuple) == 2:
-        data, gt_data = data_tuple
+def process(data, index):
+    if isinstance(data, tuple):
+        data, gt_data = data
         data = mergeQueryAndGTData(data, gt_data, force_match=force_match)
     else:
-        data = data_tuple[0]
         gt_data = None
 
     filename = data['filename'] if 'filename' in data.keys() else str(i)
@@ -216,7 +215,7 @@ def process(data_tuple, index):
 
         gt_points = gt_data['points']
         gt_normals = gt_data['normals']
-    
+
     reescale_factor = 1.
     if cube_reescale_factor > 0:
         if gt_data is not None:
@@ -469,6 +468,10 @@ if __name__ == '__main__':
 
     sets = ['val', 'train']
     colors_full = getAllColorsArray()
+    workers = 20
+    
+    pool = Pool(workers)
+
     for s in sets:
         reader.setCurrentSetName(s)
         size = len(reader.filenames_by_set[s])
@@ -489,10 +492,7 @@ if __name__ == '__main__':
 
         full_logs_dicts = {}
 
-        workers = 20
         max_workers = min(size, workers)
-
-        pool = Pool(max_workers)
 
         results = [None]*size
         pbar = tqdm(total=size)
@@ -500,26 +500,15 @@ if __name__ == '__main__':
             a = a[0]
             results[a[1]] = a[0]
             pbar.update()
-            # tqdm.write(str(a))
-        for index, data in enumerate(PredAndGTDatasetReader(reader, gt_reader)):
-            pool.apply_async(process, args=(data, index,), callback=update)
-        # tqdm.write('scheduled')
-        pool.close()
-        pool.join()
 
-        #print(results)
-
-        # executor = ProcessPoolExecutor()
-        # jobs = [executor.submit(process, r) for r in PredAndGTDatasetReader(reader, gt_reader)]
-
-        # results = []
-        # for job in tqdm(as_completed(jobs), total=size, desc=f'Processing {s} set'):
-        #     results.append(job.result())
-
-        # For some reason, process_map was not working properly
-        #print(f'Evaluating {s} set:')
-        # results = process_map(process, readers, max_workers=max_workers, chunksize=chunksize)
-        #results = [process(data) for data in tqdm(readers)]
+        apply_results = []
+        for index, data in enumerate(PredAndGTDatasetReader(reader, gt_reader) if gt_reader is not None else reader):
+            result = pool.apply_async(process, args=(data, index,), callback=update)
+            apply_results.append(result)
+        
+        while(results.count(None) > 0):
+            pass
+        #[aresult.wait() for aresult in apply_results]
 
         dataset_metrics_dict = concatenate_metrics_dict(results)
         dataset_metrics_dict = metrics_dict_list2array(dataset_metrics_dict)
@@ -531,6 +520,7 @@ if __name__ == '__main__':
             plt.savefig(f'{box_plot_format_folder_name}/{s}.png')
             plt.close()
             if gt_reader is not None:
+                print(dataset_metrics_dict)
                 fig2 = generateErrorsBoxPlot(dataset_metrics_dict, distances_key='gt_distance', angles_key='gt_angle')
                 plt.figure(fig2.number)
                 plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
@@ -538,5 +528,8 @@ if __name__ == '__main__':
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
             json.dump(derived_dataset_metrics_dict, f, indent=4, default=np_encoder)
-
+        
         pprint(derived_dataset_metrics_dict)
+
+    pool.close()
+    pool.join()

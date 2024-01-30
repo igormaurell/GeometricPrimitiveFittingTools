@@ -15,6 +15,43 @@ import matplotlib.pyplot as plt
 from asGeometryOCCWrapper.curves import CurveFactory
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
+EN_DICT = {
+    'Ellipse': 'Ellipse',
+    'BSpline': 'B-Spline',
+    'Circle': 'Circle',
+    'Line': 'Line',
+    'Types': 'Types',
+    'Amount': 'Amount',
+    'Sphere': 'Sphere',
+    'Cylinder': 'Cylinder',
+    'Cone': 'Cone',
+    'Torus': 'Torus',
+    'BSpline': 'B-Spline',
+    'Plane': 'Plane',
+    'Area': 'Area',
+}
+
+PT_DICT = {
+    'Ellipse': 'Elipse',
+    'BSpline': 'B-Spline',
+    'Circle': 'Círculo',
+    'Line': 'Reta',
+    'Types': 'Tipos',
+    'Amount': 'Quantidade',
+    'Sphere': 'Esfera',
+    'Cylinder': 'Cilindro',
+    'Cone': 'Cone',
+    'Torus': 'Toro',
+    'BSpline': 'B-Spline',
+    'Plane': 'Plano',
+    'Area': 'Área',
+}
+
+LANG_DICT = {
+    'en': EN_DICT,
+    'pt': PT_DICT,
+}
+
 def addStats(dict1, dict2):
     for key, value in dict2.items():
         if type(value) is int or type(value) is float:
@@ -52,8 +89,10 @@ def createNestedPieGraph(labels, in_data, out_data, title='', number_in_per_out=
 
     #ax.set(title=title, loc='top', bbox_to_anchor=(0.6, 0, 0.5, 1))
 
+    labels = [LANG_DICT[LANG][l] for l in labels]
+
     ax.legend(wedges[0], labels,
-            title="Types",
+            title=LANG_DICT[LANG]["Types"],
             loc="lower right",
             bbox_to_anchor=(0.6, 0, 0.5, 1), fontsize='xx-large')
 
@@ -74,6 +113,8 @@ def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface'
         colors = np.asarray([list(SurfaceFactory.FEATURES_SURFACE_CLASSES[l].getColor()) + [255] for l in labels])
     else:
         assert False
+
+    labels = [LANG_DICT[LANG][l] for l in labels]
 
     colors = colors/255.
 
@@ -102,7 +143,7 @@ def createPieGraph(labels, data, title='', num_models=1, geometry_type='surface'
     #ax.set_title(title, pad=32.0, fontsize=20)
     
     plt.legend(wedges[0], labels,
-            title="Types",
+            title=LANG_DICT[LANG]["Types"],
             loc="lower right",
             fontsize='x-large')
     plt.rcParams['legend.title_fontsize'] = 'xx-large'
@@ -118,6 +159,8 @@ def createBarGraph(labels, data, title='', num_models=1, geometry_type='surface'
         colors = np.asarray([list(SurfaceFactory.FEATURES_SURFACE_CLASSES[l].getColor()) + [255] for l in labels])
     else:
         assert False
+
+    labels = [LANG_DICT[LANG][l] for l in labels]
 
     colors = colors/255.
 
@@ -140,7 +183,7 @@ def createBarGraph(labels, data, title='', num_models=1, geometry_type='surface'
     
     #ax.legend(loc='upper left', ncols=3)
     ax.set_ylabel(data_label, fontsize=14)
-    ax.set_xlabel('Types', fontsize=14)
+    ax.set_xlabel(LANG_DICT[LANG]["Types"], fontsize=14)
     #ax.set_title(title, pad=32.0, fontsize=20)
     ax.set_xticks(x, [labels[i] for i in sorted_indices])
 
@@ -162,6 +205,8 @@ def createBarHGraph(labels, data, title='', num_models=1, geometry_type='surface
     else:
         assert False
 
+    labels = [LANG_DICT[LANG][l] for l in labels]
+
     colors = colors/255.
 
     height = 0.2
@@ -182,7 +227,7 @@ def createBarHGraph(labels, data, title='', num_models=1, geometry_type='surface
     
     #ax.legend(loc='upper left', ncols=3)
     ax.set_xlabel(data_label, fontsize=42, fontweight='bold')
-    ax.set_ylabel('Types', fontsize=42, fontweight='bold')
+    ax.set_ylabel(LANG_DICT[LANG]["Types"], fontsize=42, fontweight='bold')
     #ax.set_title(title, pad=32.0, fontsize=20)
     ax.set_yticks(y, [labels[i] for i in sorted_indices], fontsize=40)
     ax.tick_params(axis='x', labelsize=40)
@@ -237,9 +282,9 @@ def statsData2Graphs(data, num_models=1, graph='barh'):
             # data_small.append(d['number_small_curves'])
     #fig_number_curves = createNestedPieGraph(columns_curves, data_number, data_small, title='Nuber of Curves per Type')
     fig_number_curves = func(columns_curves, data_number, title='Number of Curves per Type', 
-                             num_models=num_models, geometry_type='curve', data_label='Amount')
+                             num_models=num_models, geometry_type='curve', data_label=LANG_DICT[LANG]['Amount'])
     fig_number_vertices = func(columns_curves, data_vertices,  title='Number of Vertices per Type of Curve', 
-                               num_models=num_models, geometry_type='curve', data_label='Amount')
+                               num_models=num_models, geometry_type='curve', data_label=LANG_DICT[LANG]['Amount'])
 
     ##surfaces
     columns_surfaces = []
@@ -256,11 +301,11 @@ def statsData2Graphs(data, num_models=1, graph='barh'):
         # data_small.append(d['number_small_surfaces'])
     #fig_number_surfaces = createNestedPieGraph(columns_surfaces, data_number, data_small, title='Nuber of Surfaces per Type')
     fig_number_surfaces = func(columns_surfaces, data_number, title='Number of Surfaces per Type',
-                                         num_models=num_models, data_label='Amount')
+                                         num_models=num_models, data_label=LANG_DICT[LANG]['Amount'])
     fig_number_faces = func(columns_surfaces, data_faces,  title='Number of Faces per Type of Surface',
-                                      num_models=num_models, data_label='Amount')
+                                      num_models=num_models, data_label=LANG_DICT[LANG]['Amount'])
     fig_area = func(columns_surfaces, data_area,  title='Area per Type of Surface',
-                              num_models=num_models, data_label='Area')
+                              num_models=num_models, data_label=LANG_DICT[LANG]['Area'])
 
     return fig_number_curves, fig_number_vertices, fig_number_surfaces, fig_number_faces, fig_area
 
@@ -269,8 +314,8 @@ if __name__ == '__main__':
     parser.add_argument('folder', type=str, help='dataset folder.')
 
     parser.add_argument('--stats_folder_name', type=str, default = 'stats', help='stats folder name.')
-    
     parser.add_argument('--graphs_folder_name', type=str, default = 'graphs', help='graphs folder name.')
+    parser.add_argument('--lang', type=str, default='en', choices=['pt', 'en'], help='language.')
     
     args = vars(parser.parse_args())
 
@@ -279,6 +324,7 @@ if __name__ == '__main__':
     graphs_folder_name = join(folder_name, args['graphs_folder_name'])
     rmtree(graphs_folder_name, ignore_errors=True)
     makedirs(graphs_folder_name, exist_ok=True)
+    LANG = args['lang']
 
     stats_files_name = listdir(stats_folder_name)
 
