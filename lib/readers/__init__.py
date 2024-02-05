@@ -23,7 +23,7 @@ class PredAndGTDatasetReader:
             raise StopIteration
     
     def __len__(self):
-        return len(self.pred_reader.filenames_by_set[self.current_set_name])
+        return len(self.pred_reader.filenames_by_set[self.pred_reader.current_set_name])
 
 class DatasetReaderFactory:
     READERS_DICT = {

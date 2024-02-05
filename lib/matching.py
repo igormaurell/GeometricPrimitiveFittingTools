@@ -115,7 +115,6 @@ def memory_eff_match(query_labels, gt_labels):
 # from HPNet
 def hungarianMatching(query_labels, gt_labels):
     #pred_ind, gt_ind = parsenet_match(query_labels, gt_labels)
-
     pred_ind, gt_ind = memory_eff_match(query_labels, gt_labels)
 
     for index in range(len(pred_ind)):
@@ -127,11 +126,12 @@ def hungarianMatching(query_labels, gt_labels):
             continue
 
         #print(gt_ind[index], np.count_nonzero(pred_indices_i), np.count_nonzero(gt_indices_i))
-
-    matching = np.zeros(max(0, np.max(pred_ind) + 1), dtype=np.int32) - 1
     if len(pred_ind) > 0:
+        matching = np.zeros(max(0, np.max(pred_ind) + 1), dtype=np.int32) - 1
         matching[pred_ind] = gt_ind
-
+    else:
+        matching = np.zeros(0, dtype=np.int32)    
+    
     return matching[:np.max(query_labels) + 1]
 
 def mergeQueryAndGTData(query, gt, global_min=-1, num_points=0, force_match=False):

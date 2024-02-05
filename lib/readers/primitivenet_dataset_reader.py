@@ -46,46 +46,58 @@ class PrimitivenetDatasetReader(BaseDatasetReader):
         with open(transforms_file_path, 'rb') as pkl_file:
             transforms = pickle.load(pkl_file)
 
-        with np.load(data_file_path, 'r') as npz_file:
-            noisy_points = npz_file['V'] if 'V' in npz_file.keys() else None
+        try:
+            with np.load(data_file_path, 'r') as npz_file:
+                noisy_points = npz_file['V'] if 'V' in npz_file.keys() else None
 
-            #TODO: fix this
-            noisy_points = noisy_points - np.mean(noisy_points, axis=0)
+                #TODO: fix this
+                noisy_points = noisy_points - np.mean(noisy_points, axis=0)
 
-            gt_points = npz_file['V_fixed'] if 'V' in npz_file.keys() else None
-            noisy_normals = npz_file['N'] if 'N' in npz_file.keys() else None
-            gt_normals = npz_file['N_fixed'] if 'N' in npz_file.keys() else None
-            labels = npz_file['L'] if 'L' in npz_file.keys() else None
-            semantics = npz_file['S'] if 'S' in npz_file.keys() else None 
+                gt_points = npz_file['V_fixed'] if 'V' in npz_file.keys() else None
+                noisy_normals = npz_file['N'] if 'N' in npz_file.keys() else None
+                gt_normals = npz_file['N_fixed'] if 'N' in npz_file.keys() else None
+                labels = npz_file['L'] if 'L' in npz_file.keys() else None
 
-            unique_labels = np.unique(labels)
-            unique_labels = unique_labels[unique_labels != -1]
+                positive_mask = labels >= 0
+                len_before = len(np.unique(labels[positive_mask]))
+                counts = np.bincount(labels[positive_mask])
+                keep_labels_mask = counts >= 1000
+                valid_mask = keep_labels_mask[labels[positive_mask]]
+                labels[positive_mask][~valid_mask] = -1
 
-            if len(unique_labels) > 0:
-                max_size = max(unique_labels) + 1
-            else:
-                max_size = 0
+                semantics = npz_file['S'] if 'S' in npz_file.keys() else None 
 
-            fpi = computeFeaturesPointIndices(labels, size=max_size)
+                unique_labels = np.unique(labels)
+                unique_labels = unique_labels[unique_labels != -1]
 
-            points_scale = None
-            features_data = [None]*max_size  
-            for label in unique_labels:
-                indices = fpi[label]
-                types = semantics[indices]
-                tp_id = stats.mode(types)
+                if len(unique_labels) > 0:
+                    max_size = max(unique_labels) + 1
+                else:
+                    max_size = 0
 
-                feature = {}
-                tp = PrimitivenetDatasetReader.TYPES_MAP[tp_id]
-            
-                points = noisy_points if not self.fit_noisy_points else gt_points
-                normals = noisy_normals if not self.fit_noisy_normals else gt_normals
+                fpi = computeFeaturesPointIndices(labels, size=max_size)
 
-                if points_scale is None:
-                    _, _, points_scale = cubeRescale(points.copy())
+                points_scale = None
+                features_data = [None]*max_size  
+                for label in unique_labels:
+                    indices = fpi[label]
+                    types = semantics[indices]
+                    tp_id = stats.mode(types)
 
-                feature = FittingFunctions.fit(tp, points[indices], normals[indices], scale=1/points_scale)
-                features_data[label] = feature
+                    feature = {}
+                    tp = PrimitivenetDatasetReader.TYPES_MAP[tp_id]
+                
+                    points = noisy_points if not self.fit_noisy_points else gt_points
+                    normals = noisy_normals if not self.fit_noisy_normals else gt_normals
+
+                    if points_scale is None:
+                        _, _, points_scale = cubeRescale(points.copy())
+
+                    feature = FittingFunctions.fit(tp, points[indices], normals[indices], scale=1/points_scale)
+                    features_data[label] = feature
+        except Exception as e:
+            print(f'Error reading {filename}: {e}')
+            exit()
 
         if self.unnormalize:
             gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)

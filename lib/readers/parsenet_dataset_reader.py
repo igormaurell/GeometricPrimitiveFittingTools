@@ -150,6 +150,8 @@ class ParsenetDatasetReader(BaseDatasetReader):
             types = prim[indices]
             tp_id = stats.mode(types)
 
+            if tp_id not in ParsenetDatasetReader.PRIMITIVES_MAP:
+                tp_id = 1
             tp = ParsenetDatasetReader.PRIMITIVES_MAP[tp_id]
             if points_scale is None:
                 _, _, points_scale = cubeRescale(points.copy())

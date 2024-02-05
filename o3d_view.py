@@ -73,6 +73,16 @@ def comput_line_set(regions, color=(0.2, 0.2, 0.2)):
 
     return line_set
 
+def compute_partial_pcds(pcd, regions):
+    pcds = []
+    for i in range(regions.shape[0]):
+        for j in range(regions.shape[1]):
+            for k in range(regions.shape[2]):
+                r = regions[i, j, k]
+                mask = np.logical_and(np.all(pcd.points > r[0], axis=1), np.all(pcd.points < r[1], axis=1))
+                pcds.append(pcd.select_by_index(np.where(mask)[0]))
+    return pcds
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Visualize point cloud data.')
     parser.add_argument('filepaths', nargs='+', type=str, help='List of paths to the point cloud files')
@@ -83,8 +93,8 @@ if __name__ == '__main__':
     parser.add_argument('--suffix', type=str, default='', help='Suffix to add to the images filenames')
     parser.add_argument('--showpcd_labels', action='store_true', help='Show point cloud labels as colors')
     parser.add_argument('--showmesh_wireframe', action='store_true', help='Show mesh wireframe')
+    parser.add_argument('--showmerge_process', action='store_true', help='Show merge process')
     args = parser.parse_args()
-
     print("Load a obj point cloud, print it, and render it")
     file_geometries = []
     filenames = []
@@ -122,6 +132,8 @@ if __name__ == '__main__':
                 arr = np.asarray(lines)
                 points = arr[:, :3]
                 colors = arr[:, 3:]/255.
+                white_mask = np.all(colors == 1, axis=1)
+                colors[white_mask] = [0, 0, 0]
                 
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(points)
@@ -171,25 +183,44 @@ if __name__ == '__main__':
                 file_geometries.append(geometries_3)
                 filenames.append(f'{base_filename}_regionsize_{regionsize}')
 
-                regions = regions[:, :, :]*2.5
-                pcd_2 = deepcopy(pcd)
-                pcd_2 = pcd_2.scale(2.5, center=np.array([0, 0, 0]))
-                regions[:, :, :, 0, :] += region_size/3
-                regions[:, :, :, 1, :] += region_size/3
-                pcd_2 = pcd_2.translate(region_size/3, relative=True)
-                regions = regions[:, :, :]/2.5
-                pcd_2 = pcd_2.scale(1/2.5, center=np.array([0, 0, 0]))
-                line_set_regions_2 = comput_line_set(regions[:, :])
-                geometries_4 = [pcd_2, line_set_regions_2]
-                file_geometries.append(geometries_4)
-                filenames.append(f'{base_filename}_regionsize_{regionsize}_explode')                
+                if args.showmerge_process:
+                    merge_folder = os.path.join(args.imagesfolder, f'{base_filename}_regionsize_{regionsize}')
+                    os.makedirs(merge_folder, exist_ok=True)
+                    pcds = compute_partial_pcds(pcd, regions)
+                    geoms = []
+                    for ind, pc in enumerate(pcds):
+                        geoms.append(pc)
+                        file_geometries.append(geoms[0:ind+1])
+                        filenames.append(os.path.join(f'{base_filename}_regionsize_{regionsize}', f'part_{ind}'))
+
+                # regions = regions[:, :, :]*2.5
+                # pcd_2 = deepcopy(pcd)
+                # pcd_2 = pcd_2.scale(2.5, center=np.array([0, 0, 0]))
+                # regions[:, :, :, 0, :] += region_size/3
+                # regions[:, :, :, 1, :] += region_size/3
+                # pcd_2 = pcd_2.translate(region_size/3, relative=True)
+                # regions = regions[:, :, :]/2.5
+                # pcd_2 = pcd_2.scale(1/2.5, center=np.array([0, 0, 0]))
+                # line_set_regions_2 = comput_line_set(regions[:, :])
+                # geometries_4 = [pcd_2, line_set_regions_2]
+                # file_geometries.append(geometries_4)
+                # filenames.append(f'{base_filename}_regionsize_{regionsize}_explode')                
 
     os.makedirs(args.imagesfolder, exist_ok=True)
 
-    images_filepath = [os.path.join(args.imagesfolder, f'{filename}_{ind}{args.suffix}.png') for ind, filename in enumerate(filenames)]
+    filenames_count = {}
+    def get_filename_count(filename):
+        if filename in filenames_count:
+            filenames_count[filename] += 1
+            return filenames_count[filename]
+        else:
+            filenames_count[filename] = 0
+            return 0
+        
+    images_filepath = [os.path.join(args.imagesfolder, f'{filename}_{get_filename_count(filename)}{args.suffix}.png') for filename in filenames]
 
     vis = o3d.visualization.VisualizerWithKeyCallback()
-    vis.create_window()
+    vis.create_window(width=1080, height=1080)
     vis.get_render_option().mesh_show_wireframe = args.showmesh_wireframe
     
     geometry_index = 0

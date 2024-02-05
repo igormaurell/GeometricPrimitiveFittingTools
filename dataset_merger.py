@@ -349,9 +349,7 @@ if __name__ == '__main__':
         gt_reader = gt_reader_factory.getReaderByFormat(input_gt_format)
         gt_reader.setCurrentSetName('val')
         query_files = reader.filenames_by_set['val']
-        print(query_files[0])
         gt_files = gt_reader.filenames_by_set['val']
-        print(gt_files[0])
         assert sorted(query_files) == sorted(gt_files), 'gt has different files from query'
     else:
         gt_reader = None
@@ -360,6 +358,11 @@ if __name__ == '__main__':
     dataset_writer_factory.setCurrentSetNameAllFormats('val')     
 
     files_dict = getMergedFilesDict(reader.filenames_by_set['val'])
+    
+    fs = ['uploads_files_98611_3D_offshore_oil_tanker_dock'] #['27','3D-In Lined Calciner (ILC)-Steel Building','76.Skid_XL-60','Assem1','Assem1  with accurate Skid','Chiller NH3 for brine_03','Condensate_Module','russ','uploads_files_98369_mooring_dock_with_bridge','uploads_files_98408_fuel_gas_scrubber','uploads_files_98448_contango_111106c-3d_steel','uploads_files_98485_lean_to_jacket','uploads_files_98589_3d_salvage_jacket','uploads_files_98609_firewater_tower_3d','uploads_files_98611_3D_offshore_oil_tanker_dock']
+
+    for f in fs:
+        del files_dict[f]
 
     for merged_filename, divided_filenames in tqdm(files_dict.items(), desc='Generating Merged Models', position=0):
         input_data = {}

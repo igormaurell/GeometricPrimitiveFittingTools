@@ -58,54 +58,57 @@ class LS3DCDatasetReader(BaseDatasetReader):
 
         with open(transforms_file_path, 'rb') as pkl_file:
             transforms = pickle.load(pkl_file)
+        try:
+            with h5py.File(data_file_path, 'r') as h5_file:
+                gt_points = h5_file['gt_points'][()].astype(np.float32) if 'gt_points' in h5_file.keys() else None
+                noisy_points = h5_file['noisy_points'][()].astype(np.float32) if 'noisy_points' in h5_file.keys() else None
+                if noisy_points is None and gt_points is not None:
+                    noisy_points = gt_points.copy()
+                gt_normals = h5_file['gt_normals'][()].astype(np.float32) if 'gt_normals' in h5_file.keys() else None
+                noisy_normals = h5_file['noisy_normals'][()].astype(np.float32) if 'noisy_normals' in h5_file.keys() else None
+                if noisy_normals is None and gt_normals is not None:
+                    noisy_normals = gt_normals.copy()
+                labels = h5_file['gt_labels'][()].astype(np.int32) if 'gt_labels' in h5_file.keys() else None
+                gt_indices = h5_file['gt_indices'][()].astype(np.int32) if 'gt_indices' in h5_file.keys() else None
+                matching = h5_file['matching'][()].astype(np.int32) if 'matching' in h5_file.keys() else None
+                global_indices = h5_file['global_indices'][()].astype(np.int32) if 'global_indices' in h5_file.keys() else None
 
-        with h5py.File(data_file_path, 'r') as h5_file:
-            gt_points = h5_file['gt_points'][()].astype(np.float32) if 'gt_points' in h5_file.keys() else None
-            noisy_points = h5_file['noisy_points'][()].astype(np.float32) if 'noisy_points' in h5_file.keys() else None
-            if noisy_points is None and gt_points is not None:
-                noisy_points = gt_points.copy()
-            gt_normals = h5_file['gt_normals'][()].astype(np.float32) if 'gt_normals' in h5_file.keys() else None
-            noisy_normals = h5_file['noisy_normals'][()].astype(np.float32) if 'noisy_normals' in h5_file.keys() else None
-            if noisy_normals is None and gt_normals is not None:
-                noisy_normals = gt_normals.copy()
-            labels = h5_file['gt_labels'][()].astype(np.int32) if 'gt_labels' in h5_file.keys() else None
-            gt_indices = h5_file['gt_indices'][()].astype(np.int32) if 'gt_indices' in h5_file.keys() else None
-            matching = h5_file['matching'][()].astype(np.int32) if 'matching' in h5_file.keys() else None
-            global_indices = h5_file['global_indices'][()].astype(np.int32) if 'global_indices' in h5_file.keys() else None
+                found_soup_ids = []
+                soup_id_to_key = {}
+                soup_prog = re.compile('feature_([0-9]+)$')
+                for key in list(h5_file.keys()):
+                    m = soup_prog.match(key)
+                    if m is not None:
+                        soup_id = int(m.group(1))
+                        found_soup_ids.append(soup_id)
+                        soup_id_to_key[soup_id] = key
 
-            found_soup_ids = []
-            soup_id_to_key = {}
-            soup_prog = re.compile('feature_([0-9]+)$')
-            for key in list(h5_file.keys()):
-                m = soup_prog.match(key)
-                if m is not None:
-                    soup_id = int(m.group(1))
-                    found_soup_ids.append(soup_id)
-                    soup_id_to_key[soup_id] = key
+                max_size = max(found_soup_ids) + 1 if len(found_soup_ids) > 0 else 0
+                features_data = [None]*max_size  
+                found_soup_ids.sort()
+                points_scale = None
+                for i in found_soup_ids:
+                    g = h5_file[soup_id_to_key[i]]
+                    points = noisy_points if not self.fit_noisy_points else gt_points
+                    normals = noisy_normals if not self.fit_noisy_normals else gt_normals
+                    if points_scale is None:
+                        _, _, points_scale = cubeRescale(points.copy())
 
-            max_size = max(found_soup_ids) + 1 if len(found_soup_ids) > 0 else 0
-            features_data = [None]*max_size  
-            found_soup_ids.sort()
-            points_scale = None
-            for i in found_soup_ids:
-                g = h5_file[soup_id_to_key[i]]
-                points = noisy_points if not self.fit_noisy_points else gt_points
-                normals = noisy_normals if not self.fit_noisy_normals else gt_normals
-                if points_scale is None:
-                    _, _, points_scale = cubeRescale(points.copy())
-
-                feature = hdf5_group_to_dict(g['parameters'])
-                if not self.use_data_primitives:
-                    tp = feature['type']
-                    mask = labels==i
-                    feature = FittingFunctions.fit(tp, points[mask], normals[mask], scale=1/points_scale)
-                else:
-                    feature = FittingFunctions.validate_feature(feature, 1/points_scale)
-                features_data[i] = feature
-            
-            if self.unnormalize:
-                gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)
-                noisy_points, noisy_normals, _ = applyTransforms(noisy_points, transforms, normals=noisy_normals, features=[])
+                    feature = hdf5_group_to_dict(g['parameters'])
+                    if not self.use_data_primitives:
+                        tp = feature['type']
+                        mask = labels==i
+                        feature = FittingFunctions.fit(tp, points[mask], normals[mask], scale=1/points_scale)
+                    else:
+                        feature = FittingFunctions.validate_feature(feature, 1/points_scale)
+                    features_data[i] = feature
+                
+                if self.unnormalize:
+                    gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)
+                    noisy_points, noisy_normals, _ = applyTransforms(noisy_points, transforms, normals=noisy_normals, features=[])
+        except Exception as e:
+            print(f'Error reading {filename}: {e}')
+            exit()
 
         result = {
             'noisy_points': noisy_points,
