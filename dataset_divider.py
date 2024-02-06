@@ -8,6 +8,8 @@ from shutil import rmtree
 from os import makedirs
 from os.path import join, exists
 
+import h5py
+
 import numpy as np
 
 import time
@@ -93,7 +95,9 @@ if __name__ == '__main__':
 
     parser.add_argument('-ra',  '--region_axis', type=str, default='z', help='')
     parser.add_argument('-trs', '--train_region_size', nargs='+', default=[4], help='')
+    parser.add_argument('-tgs', '--train_grid_stride', nargs='+', default=None, help='')
     parser.add_argument('-vrs', '--val_region_size', nargs='+', default=[4], help='')
+    parser.add_argument('-vgs', '--val_grid_stride', nargs='+', default=None, help='')
     parser.add_argument('-tnp', '--train_number_points', type=int, default=0, help='')
     parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
     parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=5000, help='')
@@ -124,8 +128,22 @@ if __name__ == '__main__':
     division_info_folder_name = args['division_info_folder_name']
 
     region_axis = args['region_axis']
-    train_region_size = parse_size_arg(args['train_region_size'], region_axis=region_axis)  
+    train_region_size = parse_size_arg(args['train_region_size'], region_axis=region_axis)
+    
+    train_grid_stride = args['train_grid_stride']
+    if train_grid_stride is None:
+        train_grid_stride = train_region_size.copy()
+    else:
+        train_grid_stride = parse_size_arg(train_grid_stride, region_axis=region_axis)
+
     val_region_size = parse_size_arg(args['val_region_size'], region_axis=region_axis)
+    
+    val_grid_stride = args['val_grid_stride']
+    if val_grid_stride is None:
+        val_grid_stride = val_region_size.copy()
+    else:
+        val_grid_stride = parse_size_arg(val_grid_stride, region_axis=region_axis)
+    
     train_number_points = args['train_number_points']
     val_number_points = args['val_number_points']
     instance_min_number_points = args['instance_min_number_points']
@@ -210,7 +228,7 @@ if __name__ == '__main__':
     for i in trange(len(reader), desc='Generating Validation Set', colour='green', position=0):
         point_cloud_full = None
         data = reader.step()
-        regions_grid = computeGridOfRegions(data['points'], val_region_size)
+        regions_grid = computeGridOfRegions(data['points'], val_region_size, val_grid_stride)
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         # print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
         full_len = np.prod(regions_grid.shape[:3])
@@ -232,6 +250,14 @@ if __name__ == '__main__':
                 else:
                     point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
                 dataset_writer_factory.stepAllFormats(**result)
+                division_params_filename = join(output_division_info_folder_name, f"{result['filename']}.h5")
+                with h5py.File(division_params_filename, 'w') as h5_file:
+                    size_x, size_y, _, _, _ = regions_grid.shape
+                    i3 = j // (size_y * size_x)
+                    i2 = (j // size_x) % size_y
+                    i1 = j % size_x
+                    h5_file.create_dataset('region', data=regions_grid[i1, i2, i3, :, :])
+                    h5_file.create_dataset('indices', data=result['global_indices'])
             
         writeColorPointCloudOBJ(f'{output_division_info_folder_name}/{filename}_val.obj', point_cloud_full)
 

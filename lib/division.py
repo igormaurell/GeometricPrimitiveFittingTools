@@ -6,27 +6,27 @@ from lib.utils import sortedIndicesIntersection
 
 EPS = np.finfo(np.float32).eps
 
-def getRegionAxisMinMax(region_index, axis_min, axis_max, axis_size):
+def getRegionAxisMinMax(region_index, axis_min, axis_max, axis_size, axis_stride):
     if axis_size == np.inf:
-        M = axis_max
         m = axis_min
+        M = axis_max
     else:
-        M = axis_min + (region_index+1)*axis_size
-        m = M - axis_size
+        m = axis_min + region_index*axis_stride
+        M = m + axis_size
 
     return max(m, axis_min), min(M, axis_max)
 
-def computeGridOfRegions(points, region_size):
+def computeGridOfRegions(points, region_size, grid_stride):
     min_points = np.min(points, 0)
     max_points = np.max(points, 0)
     points_size = max_points - min_points
 
-    num_parts = np.ceil(points_size/region_size)
+    num_parts = np.floor((points_size - region_size)/grid_stride) + 1
     num_parts = num_parts.astype('int64')
     num_parts[num_parts==0] = 1
 
     #adapting regions size to current model
-    rs = points_size/num_parts
+    rs = region_size# points_size/num_parts
 
     min_points -= EPS
     max_points += EPS
@@ -34,11 +34,11 @@ def computeGridOfRegions(points, region_size):
     regions = np.ndarray((num_parts[0], num_parts[1], num_parts[2], 2, 3), dtype=np.float64)
 
     for i in range(num_parts[0]):
-        m0, M0 = getRegionAxisMinMax(i, min_points[0], max_points[0], rs[0])
+        m0, M0 = getRegionAxisMinMax(i, min_points[0], max_points[0], rs[0], grid_stride[0])
         for j in range(num_parts[1]):
-            m1, M1 = getRegionAxisMinMax(j, min_points[1], max_points[1], rs[1])
+            m1, M1 = getRegionAxisMinMax(j, min_points[1], max_points[1], rs[1], grid_stride[1])
             for k in range(num_parts[2]):
-                m2, M2 = getRegionAxisMinMax(k, min_points[2], max_points[2], rs[2])
+                m2, M2 = getRegionAxisMinMax(k, min_points[2], max_points[2], rs[2], grid_stride[2])
                 regions[i, j, k, 0, :] = np.array([m0, m1, m2])
                 regions[i, j, k, 1, :] = np.array([M0, M1, M2])
 
@@ -64,7 +64,6 @@ def computeRegionAroundPoint(point, region_size):
 
     return np.asarray([bb_min_limit, bb_max_limit])
 
-import time
 def randomSamplingPointsOnRegion(points, ll, ur, n_points):
     inidx = np.all(np.logical_and(points >= ll, points < ur), axis=1)
     indices = np.arange(0, inidx.shape[0], 1, dtype=int)
