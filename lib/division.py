@@ -96,6 +96,8 @@ def sampleDataOnRegion(region, data, n_points):
     normals = data['normals']
     noisy_normals = data['noisy_normals']
     labels = data['labels']
+    if labels is None:
+        labels = np.zeros(points.shape[0], dtype=np.int32) - 1
     features_data = data['features_data']
 
     indices = randomSamplingPointsOnRegion(points, ll, ur, n_points)

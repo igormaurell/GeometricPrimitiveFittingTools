@@ -47,8 +47,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
             features_data, labels, features_point_indices = filterFeaturesData(features_data, labels, types=self.surface_types,
                                                                                min_number_points=min_number_points, 
                                                                                features_point_indices=features_point_indices)
-            if len(features_data) == 0:
-                print(f'WARNING: {data_file_path} has no features left.')
+            # if len(features_data) == 0:
+            #     print(f'WARNING: {data_file_path} has no features left.')
 
         self.filenames_by_set[self.current_set_name].append(filename)
 

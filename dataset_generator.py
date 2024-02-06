@@ -16,6 +16,54 @@ from lib.writers import DatasetWriterFactory
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
+def generate_files_dict(features_folder_name, mesh_folder_name, pc_folder_name):
+    if exists(features_folder_name):
+        features_files = sorted([f for f in listdir(features_folder_name) if isfile(join(features_folder_name, f))])
+        print(f'\nGenerating dataset for {len(features_files)} features files...\n')
+    else:
+        features_files = []
+        print('\nThere is no features folder.\n')
+
+    if exists(mesh_folder_name):
+        mesh_files = sorted([f for f in listdir(mesh_folder_name) if isfile(join(mesh_folder_name, f))])
+    else:
+        mesh_files = []
+        print('\nThere is no mesh folder.\n')
+
+    if exists(pc_folder_name):
+        pc_files = sorted([f for f in listdir(pc_folder_name) if isfile(join(pc_folder_name, f))])
+    else:
+        pc_files = []
+        print('\nThere is no pc folder.\n')
+
+    if len(features_files) == 0 and len(mesh_files) == 0 and len(pc_files) == 0:
+        print('There is no features, mesh or pc folder.')
+        exit()
+
+    assert len(features_files) > 0 or len(mesh_files) > 0 or len(pc_files) > 0, 'There is no features, mesh folder or pc folder.'
+
+    # TODO: search in the other lists for the same files
+    files_dict = {}
+    for ff in features_files:
+        base_filename = ff[:ff.rfind('.')]
+        if base_filename not in files_dict:
+            files_dict[base_filename] = {}
+        files_dict[base_filename]['features'] = join(features_folder_name, ff)
+    
+    for mf in mesh_files:
+        base_filename = mf[:mf.rfind('.')]
+        if base_filename not in files_dict:
+            files_dict[base_filename] = {}
+        files_dict[base_filename]['mesh'] = join(mesh_folder_name, mf)
+    
+    for pf in pc_files:
+        base_filename = pf[:pf.rfind('.')]
+        if base_filename not in files_dict:
+            files_dict[base_filename] = {}
+        files_dict[base_filename]['pc'] = join(pc_folder_name, pf)
+
+    return files_dict
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
@@ -128,54 +176,47 @@ if __name__ == '__main__':
             rmtree(pc_folder_name)
     makedirs(pc_folder_name, exist_ok=True)
 
-    if exists(features_folder_name):
-        features_files = sorted([f for f in listdir(features_folder_name) if isfile(join(features_folder_name, f))])
-        print(f'\nGenerating dataset for {len(features_files)} features files...\n')
-    else:
-        print('\nThere is no features folder.\n')
-        exit()
-
-    if exists(mesh_folder_name):
-        mesh_files, mesh_exts = zip(*[(f[:f.rfind('.')], f[f.rfind('.'):]) 
-                                        for f in listdir(mesh_folder_name) if isfile(join(mesh_folder_name, f))])
-    else:
-        print('\nThere is no mesh folder.\n')
+    files_dict = generate_files_dict(features_folder_name, mesh_folder_name, pc_folder_name)
     
     dataset_writer_factory = DatasetWriterFactory(parameters)
 
-    for index, features_filename in enumerate(features_files):
+    for index, filename in enumerate(sorted(files_dict.keys())):
+        
+        fd = files_dict[filename]
 
-        point_position = features_filename.rfind('.')
-        filename = features_filename[:point_position]
+        has_features = 'features' in fd
+        has_mesh = 'mesh' in fd
+        has_pc = 'pc' in fd
 
-        print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index + 1, len(features_files)))
-
-        pc_filename = join(pc_folder_name, filename) + '.pcd'
-
-        mesh_filename = None
-        if filename in mesh_files:
-            mesh_index = mesh_files.index(filename)
-            mesh_filename = join(mesh_folder_name, filename) + mesh_exts[mesh_index]
+        print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index + 1, len(files_dict.keys())))
     
-        feature_tp =  features_filename[(point_position + 1):]
-
-        funif(print, True)('Loading Features...')
-        features_data = loadFeatures(join(features_folder_name, filename), feature_tp)
-        funif(print, True)('Done.\n')
-
+        features_data = []
         mesh = None
-        if exists(pc_filename):
+        labels = None
+        features_point_indices = None
+        if has_features:
+            features_filename = fd['features']
+            features_ext = features_filename[features_filename.rfind('.')+1:]
+
+            funif(print, True)('Loading Features...')
+            features_data = loadFeatures(join(features_folder_name, filename), features_ext)
+            funif(print, True)('Done.\n')
+
+        if has_pc:
+            pc_filename = fd['pc']
             print('Opening PC...')
             pc = pypcd.PointCloud.from_path(pc_filename).pc_data
       
             points = np.vstack((pc['x'], pc['y'], pc['z'])).T
             normals = np.vstack((pc['normal_x'], pc['normal_y'], pc['normal_z'])).T
-            labels_mesh = pc['label']
-            
-            labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+            if 'label' in pc.dtype.names and features_data is not None:
+                labels_mesh = pc['label']
+                
+                labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
             print('Done.\n')
 
-        elif mesh_filename is not None:
+        elif has_mesh:
+            mesh_filename = fd['mesh']
             print('Opening Mesh...')
             mesh = o3d.io.read_triangle_mesh(mesh_filename, print_progress=True)
             print('Done.\n')
@@ -190,12 +231,12 @@ if __name__ == '__main__':
             else:
                 assert False, 'Point Cloud Generation Method is invalid.'
 
-            labels_mesh = np.asarray(labels_mesh)
-
             points = np.asarray(pcd.points)
             normals = np.asarray(pcd.normals)
+            labels_mesh = np.asarray(labels_mesh)
 
-            labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
+            if features_data is not None:
+                labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
            
             #downsample is done by surface to not mix primitives that are close to each other
             if leaf_size > 0:
@@ -216,17 +257,19 @@ if __name__ == '__main__':
                 normals = np.asarray(down_pcd.normals)[perm]
                 labels_mesh = np.array(down_labels)[perm]
 
-                labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])   
+                if features_data is not None:
+                    labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])   
 
-            savePCD(pc_filename,  points, normals=normals, labels=labels_mesh)
+            savePCD(pc_filename, points, normals=normals, labels=labels_mesh)
 
             mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
         else:
             print(f'\nFeature {filename} has no PCD or OBJ to use.')
             continue
             
-        if mesh is None:
+        if mesh is None and has_mesh:
             print('Opening Mesh...')
+            mesh_filename = fd['mesh']
             mesh = o3d.io.read_triangle_mesh(mesh_filename, enable_post_processing=False)
             mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
             print('Done.\n')
