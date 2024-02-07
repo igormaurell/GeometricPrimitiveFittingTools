@@ -103,6 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('-uon', '--use_original_noise', action='store_true', help='')
     parser.add_argument('-mps_ns', '--mesh_point_sampling_n_samples', type=int, default = 10000000, help='n_samples param for mesh_point_sampling execution, if necessary. Default: 50000000.')
     parser.add_argument('-t_p', '--train_percentage', type=float, default = 0.8, help='')
+    parser.add_argument('-op', '--outliers_percentile', type=int, default = 0, help='')
     parser.add_argument('-m_np', '--min_number_points', type=float, default = 0.0001, help='filter geometries by number of points.')
     parser.add_argument('-ls', '--leaf_size', type=float, default = 0.0, help='')
 
@@ -119,6 +120,7 @@ if __name__ == '__main__':
     cube_reescale_factor = args['cube_reescale_factor']
     normalization_order = args['normalization_order'].split(',')
 
+    outliers_percentile = args['outliers_percentile']
     mps_ns = args['mesh_point_sampling_n_samples']
     delete_old_pc = args['delete_old_pc']
     train_percentage = args['train_percentage']
@@ -209,8 +211,17 @@ if __name__ == '__main__':
       
             points = np.vstack((pc['x'], pc['y'], pc['z'])).T
             normals = np.vstack((pc['normal_x'], pc['normal_y'], pc['normal_z'])).T
+
+            inliers_mask = np.ones(len(points), dtype=bool)
+            if outliers_percentile > 0:
+                norms = np.linalg.norm(points, axis=1)
+                tquartile = np.percentile(norms, 99)
+                inliers_mask = norms < tquartile
+                points = points[inliers_mask]
+                normals = normals[inliers_mask]
+
             if 'label' in pc.dtype.names and features_data is not None:
-                labels_mesh = pc['label']
+                labels_mesh = pc['label'][inliers_mask]
                 
                 labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
             print('Done.\n')
@@ -234,6 +245,15 @@ if __name__ == '__main__':
             points = np.asarray(pcd.points)
             normals = np.asarray(pcd.normals)
             labels_mesh = np.asarray(labels_mesh)
+
+            inliers_mask = np.ones(len(points), dtype=bool)
+            if outliers_percentile > 0:
+                norms = np.linalg.norm(points, axis=1)
+                tquartile = np.percentile(norms, 99)
+                inliers_mask = norms < tquartile
+                points = points[inliers_mask]
+                normals = normals[inliers_mask]
+                labels_mesh = labels_mesh[inliers_mask]
 
             if features_data is not None:
                 labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
