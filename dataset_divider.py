@@ -30,6 +30,7 @@ def process_model_val(data, regions_grid, filename, val_number_points, ind):
     result = sampleDataOnRegion(regions_grid[i, j, k], data, val_number_points)
 
     result['filename'] = filename_curr
+    result['region_ids'] = (i, j, k)
 
     return result
 
@@ -219,7 +220,6 @@ if __name__ == '__main__':
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
 
     reader = dataset_reader_factory.getReaderByFormat(input_format)
-
     dataset_writer_factory = DatasetWriterFactory(output_parameters)
     number_val = 0
     print('\nValidation Set:')
@@ -229,6 +229,7 @@ if __name__ == '__main__':
         point_cloud_full = None
         data = reader.step()
         regions_grid = computeGridOfRegions(data['points'], val_region_size, val_grid_stride)
+
         filename = data['filename'] if 'filename' in data.keys() else str(i)
         # print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
         full_len = np.prod(regions_grid.shape[:3])
@@ -242,6 +243,8 @@ if __name__ == '__main__':
                 pass
                 # print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {val_min_number_points}")
             else:
+                i, j, k = result['region_ids']
+                del result['region_ids']
                 points = np.zeros((result['points'].shape[0], 6))
                 points[:, 0:3] = result['points']
                 points[:, 3:6] = np.array(computeRGB(colors[j]))
@@ -252,11 +255,7 @@ if __name__ == '__main__':
                 dataset_writer_factory.stepAllFormats(**result)
                 division_params_filename = join(output_division_info_folder_name, f"{result['filename']}.h5")
                 with h5py.File(division_params_filename, 'w') as h5_file:
-                    size_x, size_y, _, _, _ = regions_grid.shape
-                    i3 = j // (size_y * size_x)
-                    i2 = (j // size_x) % size_y
-                    i1 = j % size_x
-                    h5_file.create_dataset('region', data=regions_grid[i1, i2, i3, :, :])
+                    h5_file.create_dataset('region', data=regions_grid[i, j, k, :, :])
                     h5_file.create_dataset('indices', data=result['global_indices'])
             
         writeColorPointCloudOBJ(f'{output_division_info_folder_name}/{filename}_val.obj', point_cloud_full)

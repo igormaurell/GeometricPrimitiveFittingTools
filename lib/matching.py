@@ -75,10 +75,10 @@ def parsenet_match(query_labels, gt_labels):
 
     return rids, cids
 
-def relaxed_iou_fast_eff_memory(query_labels, gt_labels):
+def relaxed_iou_fast_eff_memory(query_labels, gt_labels, size_multiplier=2):
     size_query = np.max(query_labels) + 1
     size_gt = np.max(gt_labels) + 1
-    size_final = max(2*size_query, size_gt)
+    size_final = max(size_multiplier*size_query, size_gt)
 
     valid_query_mask = query_labels != -1
     valid_gt_mask = gt_labels != -1
@@ -104,12 +104,15 @@ def relaxed_iou_fast_eff_memory(query_labels, gt_labels):
 
     return cost
 
-def memory_eff_match(query_labels, gt_labels):
-    cost = relaxed_iou_fast_eff_memory(query_labels, gt_labels)
+def memory_eff_match(query_labels, gt_labels, size_multiplier=2, return_riou=False):
+    riou = relaxed_iou_fast_eff_memory(query_labels, gt_labels,
+                                       size_multiplier=size_multiplier)
     
-    cost_ = 1.0 - cost
+    cost_ = 1.0 - riou
     rids, cids = solve_dense(cost_)
 
+    if return_riou:
+        return rids, cids, riou
     return rids, cids
 
 # from HPNet

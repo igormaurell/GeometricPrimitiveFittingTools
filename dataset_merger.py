@@ -5,6 +5,8 @@ from tqdm import tqdm
 
 import numpy as np
 
+import h5py
+
 from os import makedirs
 from os.path import join, exists
 from shutil import rmtree
@@ -12,7 +14,9 @@ from shutil import rmtree
 from lib.writers import DatasetWriterFactory
 from lib.readers import DatasetReaderFactory
 
-from lib.matching import mergeQueryAndGTData
+from lib.matching import mergeQueryAndGTData, memory_eff_match
+
+import open3d as o3d
 
 def findLast(c, s, from_idx=0, to_idx=None):
     to_idx = len(s) if to_idx is None else to_idx
@@ -22,6 +26,16 @@ def findLast(c, s, from_idx=0, to_idx=None):
     idx = substr.rfind(c)
     
     return idx + from_idx
+
+def get_voxel_position(vfilename):
+    u3_idx = vfilename.rfind('_')
+    u2_idx = vfilename.rfind('_', 0, u3_idx)
+    u1_idx = vfilename.rfind('_', 0, u2_idx)
+
+    return int(vfilename[u1_idx+1:u2_idx]), int(vfilename[u2_idx+1:u3_idx]), int(vfilename[u3_idx+1:])
+
+def voxel_position_2_key(u1_idx, u2_idx, u3_idx):
+    return f"{u1_idx}_{u2_idx}_{u3_idx}"
 
 def getMergedFilesDict(files):
     result = {}
@@ -185,6 +199,257 @@ def mergeFeatures(features, method='max'):
 
     return new_features
 
+def generate_neighbors_keys(region_ids):
+    i, j, k = region_ids
+    dev = (-1, 0, 1)
+    neighbors = []
+    for dx in dev:
+        for dy in dev:
+            for dz in dev:
+                if dz == 0 and dy == 0 and dx == 0:
+                    continue
+                neighbors.append(voxel_position_2_key(i+dx, j+dy, k+dz))
+    return neighbors
+
+def compute_regions_intersection(region1, region2):
+    min_vertex1 = region1[0]
+    max_vertex1 = region1[1]
+
+    min_vertex2 = region2[0]
+    max_vertex2 = region2[1]
+
+    min_vertex = np.maximum(min_vertex1, min_vertex2)
+    max_vertex = np.minimum(max_vertex1, max_vertex2)
+
+    return np.vstack((min_vertex, max_vertex))
+
+def view_intersection(intersection_region, region, n_region):
+    aabb = o3d.geometry.AxisAlignedBoundingBox(min_bound=intersection_region[0], max_bound=intersection_region[1])
+    line_set = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb)
+    line_set.paint_uniform_color([1, 0, 0])
+
+    aabb2 = o3d.geometry.AxisAlignedBoundingBox(min_bound=region[0], max_bound=region[1])
+    line_set2 = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb2)
+    aabb3 = o3d.geometry.AxisAlignedBoundingBox(min_bound=n_region[0], max_bound=n_region[1])
+    line_set2 += o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb3)
+    line_set2.paint_uniform_color([0, 0, 0])
+
+    o3d.visualization.draw_geometries([line_set, line_set2])
+
+def generate_intersection_key(key1, key2):
+    keys = sorted([key1, key2])
+    return f"{keys[0]}_{keys[1]}"
+
+
+# TODO: remove repeated points that have matched with some other points during matching procedure
+def merge_without_gt(divided_data, riou_threshold=0.5, view=False):
+    visited_intersections = set()
+    global_maps_dict = {}
+    new_global_id = 0
+
+    for vkey, data in divided_data.items():
+        v_region = data['region']
+
+        neighbors = [n for n in generate_neighbors_keys(data['region_ids']) if n in divided_data]
+
+        if vkey not in global_maps_dict:
+            labels = data['labels']
+            valid_labels_mask = labels > -1
+            global_maps_dict[vkey] = np.zeros(len(np.unique(labels[valid_labels_mask])), dtype=np.int32) - 1
+
+        # dev = (0, 0.5, 1)
+        # colors = [(a, b, c) for a in dev[::-1] for b in dev for c in dev]
+
+        # local_geoms = []
+        v_global_map = global_maps_dict[vkey]
+        for _, nkey in enumerate(neighbors):
+            n_data = divided_data[nkey]
+
+            if nkey not in global_maps_dict:
+                labels = n_data['labels']
+                valid_labels_mask = labels > -1
+                global_maps_dict[nkey] = np.zeros(len(np.unique(labels[valid_labels_mask])), dtype=np.int32) - 1
+
+            n_global_map = global_maps_dict[nkey]
+
+            n_region = n_data['region']
+
+            intersection_key = generate_intersection_key(vkey, nkey)
+
+            if intersection_key not in visited_intersections:
+
+                i_region = compute_regions_intersection(v_region, n_region)
+
+                v_region_mask = np.all(np.logical_and(data['points'] >= i_region[0], data['points'] < i_region[1]), axis=1)
+                n_region_mask = np.all(np.logical_and(n_data['points'] >= i_region[0], n_data['points'] < i_region[1]), axis=1)
+
+                if np.count_nonzero(v_region_mask) == 0 or np.count_nonzero(n_region_mask) == 0:
+                    continue
+
+                v_i_points = data['points'][v_region_mask]
+                n_i_points = n_data['points'][n_region_mask]
+
+                v_i_labels = data['labels'][v_region_mask]
+                n_i_labels = n_data['labels'][n_region_mask]
+                
+                pcds = [o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points)).paint_uniform_color([1, 0, 0]),
+                        o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points)).paint_uniform_color([0, 0, 1])]
+                
+                # o3d.visualization.draw_geometries(pcds)
+
+                tree = o3d.geometry.KDTreeFlann(pcds[0])
+                _, indices, distances = zip(*[tree.search_hybrid_vector_3d(point, 0.01, 1) for point in pcds[1].points])
+               
+                distances = [vet[0] if len(vet) > 0 else -1 for vet in distances]
+                vindices = [vet[0] if len(vet) > 0 else -1 for vet in indices]
+                nindices = range(len(indices))
+
+                ind_dist = sorted([(d, vi, ni) for d, vi, ni in zip(distances, vindices, nindices) if vi != -1])
+
+                v_i_m_visited = np.zeros(len(v_i_points), dtype=np.bool_)
+                v_i_m_indices = []
+                n_i_m_visited = np.zeros(len(n_i_points), dtype=np.bool_)
+                n_i_m_indices = []
+
+                for _, v_ind, n_ind in ind_dist:
+                    if v_i_m_visited[v_ind] or n_i_m_visited[n_ind]:
+                        continue
+                    v_i_m_visited[v_ind] = True
+                    n_i_m_visited[n_ind] = True
+                    v_i_m_indices.append(v_ind)
+                    n_i_m_indices.append(n_ind)
+                
+                v_i_m_indices = np.asarray(v_i_m_indices)
+                n_i_m_indices = np.asarray(n_i_m_indices)
+                
+                if len(v_i_m_indices) == 0 or len(n_i_m_indices) == 0:
+                    continue
+
+                # view matching
+                # o3d.visualization.draw_geometries(pcds)
+                # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points[v_i_m_indices])).paint_uniform_color([1, 0, 0])])
+                # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points[n_i_m_indices])).paint_uniform_color([0, 0, 1])])
+                # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points[v_i_m_indices])).paint_uniform_color([1, 0, 0]),
+                #                                     o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points[n_i_m_indices])).paint_uniform_color([0, 0, 1])])
+
+
+                # match in the intersection region using hungarian matching
+                v_i_m_labels = v_i_labels[v_i_m_indices]
+                v_i_m_valid_mask = v_i_m_labels > -1
+                n_i_m_labels = n_i_labels[n_i_m_indices]
+                n_i_m_valid_mask = n_i_m_labels > -1
+                i_m_valid_mask = np.logical_and(v_i_m_valid_mask, n_i_m_valid_mask)
+
+                v_i_m_labels_valid = v_i_m_labels[i_m_valid_mask]
+                v_i_m_map, v_i_m_labels_valid_unique = np.unique(v_i_m_labels_valid, return_inverse=True)
+                
+                n_i_m_labels_valid = n_i_m_labels[i_m_valid_mask]
+                n_i_m_map, n_i_m_labels_valid_unique = np.unique(n_i_m_labels_valid, return_inverse=True)
+
+                # print('------------------------------')
+
+                # print(v_i_m_map, v_i_m_labels_valid_unique)
+                # print(n_i_m_map, n_i_m_labels_valid_unique)
+
+                vids, nids, riou = memory_eff_match(v_i_m_labels_valid_unique, n_i_m_labels_valid_unique,
+                                                    size_multiplier=1, return_riou=True)
+        
+                vids_match = []
+                nids_match = []
+                for vidx, nidx in zip(vids, nids):
+                    if riou[vidx, nidx] > riou_threshold:
+                        vids_match.append(vidx)
+                        nids_match.append(nidx)
+                    
+                # remapping to original instance labels
+                vids_match = v_i_m_map[np.asarray(vids_match, dtype=np.int32)]
+                nids_match = n_i_m_map[np.asarray(nids_match, dtype=np.int32)]
+
+                # colors = np.random.rand(100, 3)
+                # colors2 = np.random.rand(100, 3)
+
+                # v_pcd = o3d.geometry.PointCloud()
+                # v_pcd.points = o3d.utility.Vector3dVector(data['points'])
+                # v_pcd.colors = o3d.utility.Vector3dVector(colors[data['labels']])
+                # line_set = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(o3d.geometry.AxisAlignedBoundingBox(min_bound=v_region[0], max_bound=v_region[1]))
+
+                # n_pcd = o3d.geometry.PointCloud()
+                # n_pcd.points = o3d.utility.Vector3dVector(n_data['points'])
+                # n_colors = colors2[n_data['labels']]
+                # n_pcd.colors = o3d.utility.Vector3dVector(n_colors)
+                # line_set += o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(o3d.geometry.AxisAlignedBoundingBox(min_bound=n_region[0], max_bound=n_region[1]))
+
+                # line_set.paint_uniform_color([0, 0, 0])
+                # o3d.visualization.draw_geometries([v_pcd, n_pcd, line_set])
+
+                # n_change_label_mask = n_data['labels'] == nids_match
+                # match_map = np.zeros(np.max(nids_match) + 1, dtype=np.int32) - 1
+                # match_map[nids_match] = vids_match
+                # n_colors[n_change_label_mask] = colors[match_map[n_data['labels'][n_change_label_mask]]]
+                # n_pcd.colors = o3d.utility.Vector3dVector(n_colors)
+                                
+                # o3d.visualization.draw_geometries([v_pcd, n_pcd, line_set])
+
+                for vidx, nidx in zip(vids_match, nids_match):
+                    assert v_global_map[vidx] == -1 or n_global_map[nidx] == -1 or v_global_map[vidx] == n_global_map[nidx], \
+                           f'incompatible global maps: {v_global_map[vidx]} != {n_global_map[nidx]}, {vkey} and {nkey}'
+                    
+                    # both instances are not mapped, creating new global id
+                    if v_global_map[vidx] == -1 and n_global_map[nidx] == -1:
+                        v_global_map[vidx] = new_global_id
+                        n_global_map[nidx] = new_global_id
+                        new_global_id += 1
+                    
+                    # one of the instances is not mapped, using the mapped one
+                    elif v_global_map[vidx] == -1:
+                        v_global_map[vidx] = n_global_map[nidx]
+                    elif n_global_map[nidx] == -1:
+                        n_global_map[nidx] = v_global_map[vidx]
+
+                global_maps_dict[nkey] = n_global_map
+
+            visited_intersections.add(intersection_key)
+        
+            # view_intersection(intersection_region, region, n_region)
+
+            # aabb = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_vertex, max_bound=max_vertex)
+
+            # line_set = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb)
+            # line_set.paint_uniform_color([0, 0, 0])
+            # pcd = o3d.geometry.PointCloud()
+            # pcd.points = o3d.utility.Vector3dVector(n_data['points'])
+            # pcd.paint_uniform_color(colors[index])
+            # local_geoms += [line_set, pcd]
+        
+        # geoms.append(local_geoms)
+        
+        global_maps_dict[vkey] = v_global_map
+
+    if view:
+        vis = o3d.visualization.VisualizerWithKeyCallback()
+        vis.create_window(width=1080, height=1080)
+
+        for geometry in geoms[0]:
+            vis.add_geometry(geometry)
+
+        geometry_index = 1
+
+        def update_geometries_callback(vis):
+            nonlocal geometry_index
+            if geometry_index >= len(geoms):
+                return True
+            for geometry in geoms[geometry_index]:
+                vis.add_geometry(geometry, reset_bounding_box=False)
+            geometry_index += 1
+            return True
+
+        vis.register_key_callback(ord("N"), update_geometries_callback)
+
+        vis.run()
+
+        vis.destroy_window()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts a dataset from OBJ and YAML to HDF5')
     parser.add_argument('folder', type=str, help='dataset folder.')
@@ -223,6 +488,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dataset_folder_name', type=str, default = 'dataset_merged', help='output dataset folder name.')
     parser.add_argument('--output_data_folder_name', type=str, default = '', help='output data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
+    parser.add_argument('--division_info_folder_name', type=str, default = 'division_info', help='point cloud folder name.')
     parser.add_argument('--merge_method', choices=['max', 'wm'], type=str, default = 'wm', help='')
 
     parser.add_argument('--use_input_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
@@ -254,6 +520,7 @@ if __name__ == '__main__':
     output_data_folder_name = input_data_folder_name if output_data_folder_name == '' else output_data_folder_name
     input_gt_data_folder_name = args['input_gt_data_folder_name']
     transform_folder_name = args['transform_folder_name']
+    division_info_folder_name = args['division_info_folder_name']
     merge_method = args['merge_method']
 
     use_input_gt_transform = args['use_input_gt_transform']
@@ -302,6 +569,8 @@ if __name__ == '__main__':
 
     if use_input_gt_transform and input_gt_transform_format_folder_name is not None:
         input_parameters[input_format]['transform_folder_name'] = input_gt_transform_format_folder_name
+
+    input_division_info_folder_name = join(folder_name, input_dataset_folder_name, division_info_folder_name)
 
     output_parameters = {}
     for format in output_formats:
@@ -359,20 +628,23 @@ if __name__ == '__main__':
 
     files_dict = getMergedFilesDict(reader.filenames_by_set['val'])
     
-    fs = ['uploads_files_98611_3D_offshore_oil_tanker_dock'] #['27','3D-In Lined Calciner (ILC)-Steel Building','76.Skid_XL-60','Assem1','Assem1  with accurate Skid','Chiller NH3 for brine_03','Condensate_Module','russ','uploads_files_98369_mooring_dock_with_bridge','uploads_files_98408_fuel_gas_scrubber','uploads_files_98448_contango_111106c-3d_steel','uploads_files_98485_lean_to_jacket','uploads_files_98589_3d_salvage_jacket','uploads_files_98609_firewater_tower_3d','uploads_files_98611_3D_offshore_oil_tanker_dock']
+    # fs = ['uploads_files_98611_3D_offshore_oil_tanker_dock'] #['27','3D-In Lined Calciner (ILC)-Steel Building','76.Skid_XL-60','Assem1','Assem1  with accurate Skid','Chiller NH3 for brine_03','Condensate_Module','russ','uploads_files_98369_mooring_dock_with_bridge','uploads_files_98408_fuel_gas_scrubber','uploads_files_98448_contango_111106c-3d_steel','uploads_files_98485_lean_to_jacket','uploads_files_98589_3d_salvage_jacket','uploads_files_98609_firewater_tower_3d','uploads_files_98611_3D_offshore_oil_tanker_dock']
 
-    for f in fs:
-        del files_dict[f]
+    # for f in fs:
+    #     del files_dict[f]
 
     for merged_filename, divided_filenames in tqdm(files_dict.items(), desc='Generating Merged Models', position=0):
         input_data = {}
-        reader.filenames_by_set['val'] = sorted(divided_filenames)
+        divided_data = {}
+        divided_filenames_sorted = sorted(divided_filenames)
+        reader.filenames_by_set['val'] = divided_filenames_sorted
         if gt_reader is not None:
-            gt_reader.filenames_by_set['val'] = sorted(divided_filenames)
+            gt_reader.filenames_by_set['val'] = divided_filenames_sorted
         global_min = -1
         num_points = 0
         gt_labels = None
-        for div_filename in tqdm(divided_filenames, desc=f'Model {merged_filename}', position=1, leave=False):
+        geoms = []
+        for div_filename in tqdm(divided_filenames_sorted, desc=f'Model {merged_filename}', position=1, leave=False):
             data = reader.step()
             data['points'] = data['points'] if not use_noisy_points else data['noisy_points']
             data['normals'] = data['normals'] if not use_noisy_normals else data['noisy_normals']
@@ -386,11 +658,25 @@ if __name__ == '__main__':
                 global_min = min(global_min, np.min(data['labels']))
                 num_points += len(gt_data['points'])
 
-            input_data = addDictionaries(input_data, data)
+                input_data = addDictionaries(input_data, data)
+            else:
+                u1_idx, u2_idx, u3_idx = get_voxel_position(div_filename)
+
+                vkey = voxel_position_2_key(u1_idx, u2_idx, u3_idx)
+
+                divided_data[vkey] = data
+                divided_data[vkey]['region_ids'] = (u1_idx, u2_idx, u3_idx)
+                divided_data[vkey]['region'] = np.vstack((np.min(data['points'], axis=0), np.max(data['points'], axis=0)))
+        
+        # here we have the merge without GT
+        if len(input_data.keys()) == 0 and len(divided_data.keys()) > 0:
+            merge_without_gt(divided_data)
+            
 
         input_data['features_data'] = mergeFeatures(input_data['features_data'], merge_method)
 
-        #adding non gt (primitives that are not in the ground truth but there are in prediction) ate the end of features list (and adjusting labels)
+        # adding non gt (primitives that are not in the ground truth but there are in prediction) 
+        # at the end of features list (and adjusting labels)
         if gt_reader is not None:
             input_data['features_data'] = [x for x in input_data['features_data'] if x is not None]
             num_gt_features = len(input_data['features_data'])

@@ -54,7 +54,6 @@ def comput_line_set(regions, color=(0.2, 0.2, 0.2)):
 
     size_x, size_y, _, _, _ = regions.shape
     
-
     line_set = o3d.geometry.LineSet() 
     for ind in range(full_len):
         k = ind // (size_y * size_x)
