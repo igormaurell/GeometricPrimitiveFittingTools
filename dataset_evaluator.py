@@ -477,7 +477,7 @@ if __name__ == '__main__':
     workers = 20
     total_size = sum([len(files) for files in reader.filenames_by_set.values()])
     pbar = tqdm(total=total_size)
-    pool = Pool(min(workers, total_size))
+    pool = Pool(min(workers, total_size, 2))
     sets_results = [None for s in sets if len(reader.filenames_by_set[s]) > 0]
     sets = [s for s in sets if len(reader.filenames_by_set[s]) > 0]
     for set_index, s in enumerate(sets):

@@ -10,6 +10,7 @@ import h5py
 from os import makedirs
 from os.path import join, exists
 from shutil import rmtree
+from lib.utils import getAllColorsArray
 
 from lib.writers import DatasetWriterFactory
 from lib.readers import DatasetReaderFactory
@@ -73,7 +74,7 @@ def getMergedFilesDict(files):
     return result
 
 def addDictionaries(dict1, dict2):
-    concatenate_keys = ['noisy_points', 'points', 'normals', 'labels', 'gt_indices', 'global_indices', 'non_gt_features']
+    concatenate_keys = ['noisy_points', 'points', 'noisy_normals', 'normals', 'labels', 'gt_indices', 'global_indices', 'non_gt_features']
     merge_keys = ['features_data']
     result_dict = dict1.copy()
 
@@ -244,7 +245,7 @@ def generate_intersection_key(key1, key2):
 
 
 # TODO: remove repeated points that have matched with some other points during matching procedure
-def merge_without_gt(divided_data, riou_threshold=0.35, view=True, view_process=False):    
+def merge_without_gt(divided_data, has_labels=True, riou_threshold=0.7, view=True, view_process=False):    
     visited_parts = set()
 
     visit_queue = [list(sorted(divided_data.keys()))[0]]
@@ -277,131 +278,135 @@ def merge_without_gt(divided_data, riou_threshold=0.35, view=True, view_process=
                     merged_data['features_data'][i] = [(merged_data['features_data'][i], np.count_nonzero(merged_data['labels'] == i))]
         
         else:
+            
             n_data = data
-
             data = merged_data
+            
+            if has_labels:  
+                v_region = np.vstack((np.min(data['points'], axis=0), np.max(data['points'], axis=0)))
 
-            v_region = np.vstack((np.min(data['points'], axis=0), np.max(data['points'], axis=0)))
+                n_region = n_data['region']
+    
+                i_region = compute_regions_intersection(v_region, n_region)
 
-            n_region = n_data['region']
- 
-            i_region = compute_regions_intersection(v_region, n_region)
+                v_region_mask = np.all(np.logical_and(data['points'] >= i_region[0], data['points'] < i_region[1]), axis=1)
+                n_region_mask = np.all(np.logical_and(n_data['points'] >= i_region[0], n_data['points'] < i_region[1]), axis=1)
 
-            v_region_mask = np.all(np.logical_and(data['points'] >= i_region[0], data['points'] < i_region[1]), axis=1)
-            n_region_mask = np.all(np.logical_and(n_data['points'] >= i_region[0], n_data['points'] < i_region[1]), axis=1)
-
-            if np.count_nonzero(v_region_mask) == 0 or np.count_nonzero(n_region_mask) == 0:
-                continue
-
-            v_i_points = data['points'][v_region_mask]
-            n_i_points = n_data['points'][n_region_mask]
-
-            v_i_labels = data['labels'][v_region_mask]
-            n_i_labels = n_data['labels'][n_region_mask]
-                
-            pcds = [o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points)).paint_uniform_color([1, 0, 0]),
-                    o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points)).paint_uniform_color([0, 0, 1])]
-                
-            # o3d.visualization.draw_geometries(pcds)
-
-            tree = o3d.geometry.KDTreeFlann(pcds[0])
-            _, indices, distances = zip(*[tree.search_hybrid_vector_3d(point, 0.01, 1) for point in pcds[1].points])
-               
-            distances = [vet[0] if len(vet) > 0 else -1 for vet in distances]
-            vindices = [vet[0] if len(vet) > 0 else -1 for vet in indices]
-            nindices = range(len(indices))
-
-            ind_dist = sorted([(d, vi, ni) for d, vi, ni in zip(distances, vindices, nindices) if vi != -1])
-
-            v_i_m_visited = np.zeros(len(v_i_points), dtype=np.bool_)
-            v_i_m_indices = []
-            n_i_m_visited = np.zeros(len(n_i_points), dtype=np.bool_)
-            n_i_m_indices = []
-
-            for _, v_ind, n_ind in ind_dist:
-                if v_i_m_visited[v_ind] or n_i_m_visited[n_ind]:
+                if np.count_nonzero(v_region_mask) == 0 or np.count_nonzero(n_region_mask) == 0:
                     continue
-                v_i_m_visited[v_ind] = True
-                n_i_m_visited[n_ind] = True
-                v_i_m_indices.append(v_ind)
-                n_i_m_indices.append(n_ind)
+
+                v_i_points = data['points'][v_region_mask]
+                n_i_points = n_data['points'][n_region_mask]
+
+                v_i_labels = data['labels'][v_region_mask]
+                n_i_labels = n_data['labels'][n_region_mask]
+                    
+                pcds = [o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points)).paint_uniform_color([1, 0, 0]),
+                        o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points)).paint_uniform_color([0, 0, 1])]
+                    
+                # o3d.visualization.draw_geometries(pcds)
+
+                tree = o3d.geometry.KDTreeFlann(pcds[0])
+                _, indices, distances = zip(*[tree.search_hybrid_vector_3d(point, 0.01, 1) for point in pcds[1].points])
                 
-            v_i_m_indices = np.asarray(v_i_m_indices)
-            n_i_m_indices = np.asarray(n_i_m_indices)
+                distances = [vet[0] if len(vet) > 0 else -1 for vet in distances]
+                vindices = [vet[0] if len(vet) > 0 else -1 for vet in indices]
+                nindices = range(len(indices))
+
+                ind_dist = sorted([(d, vi, ni) for d, vi, ni in zip(distances, vindices, nindices) if vi != -1])
+
+                v_i_m_visited = np.zeros(len(v_i_points), dtype=np.bool_)
+                v_i_m_indices = []
+                n_i_m_visited = np.zeros(len(n_i_points), dtype=np.bool_)
+                n_i_m_indices = []
+
+                for _, v_ind, n_ind in ind_dist:
+                    if v_i_m_visited[v_ind] or n_i_m_visited[n_ind]:
+                        continue
+                    v_i_m_visited[v_ind] = True
+                    n_i_m_visited[n_ind] = True
+                    v_i_m_indices.append(v_ind)
+                    n_i_m_indices.append(n_ind)
+                    
+                v_i_m_indices = np.asarray(v_i_m_indices)
+                n_i_m_indices = np.asarray(n_i_m_indices)
+                    
+                if len(v_i_m_indices) == 0 or len(n_i_m_indices) == 0:
+                    continue
+
+                # view matching
+                # o3d.visualization.draw_geometries(pcds)
+                # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points[v_i_m_indices])).paint_uniform_color([1, 0, 0])])
+                # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points[n_i_m_indices])).paint_uniform_color([0, 0, 1])])
+                # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points[v_i_m_indices])).paint_uniform_color([1, 0, 0]),
+                #                                    o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points[n_i_m_indices])).paint_uniform_color([0, 0, 1])])
+
+                # match in the intersection region using hungarian matching
+                v_i_m_labels = v_i_labels[v_i_m_indices]
+                v_i_m_valid_mask = v_i_m_labels > -1
+                n_i_m_labels = n_i_labels[n_i_m_indices]
+                n_i_m_valid_mask = n_i_m_labels > -1
+                i_m_valid_mask = np.logical_and(v_i_m_valid_mask, n_i_m_valid_mask)
+
+                v_i_m_labels_valid = v_i_m_labels[i_m_valid_mask]
+                v_i_m_map, v_i_m_labels_valid_unique = np.unique(v_i_m_labels_valid, return_inverse=True)
                 
-            if len(v_i_m_indices) == 0 or len(n_i_m_indices) == 0:
-                continue
+                n_i_m_labels_valid = n_i_m_labels[i_m_valid_mask]
+                n_i_m_map, n_i_m_labels_valid_unique = np.unique(n_i_m_labels_valid, return_inverse=True)
 
-            # view matching
-            # o3d.visualization.draw_geometries(pcds)
-            # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points[v_i_m_indices])).paint_uniform_color([1, 0, 0])])
-            # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points[n_i_m_indices])).paint_uniform_color([0, 0, 1])])
-            # o3d.visualization.draw_geometries([o3d.geometry.PointCloud(o3d.utility.Vector3dVector(v_i_points[v_i_m_indices])).paint_uniform_color([1, 0, 0]),
-            #                                    o3d.geometry.PointCloud(o3d.utility.Vector3dVector(n_i_points[n_i_m_indices])).paint_uniform_color([0, 0, 1])])
+                # print('------------------------------')
 
-            # match in the intersection region using hungarian matching
-            v_i_m_labels = v_i_labels[v_i_m_indices]
-            v_i_m_valid_mask = v_i_m_labels > -1
-            n_i_m_labels = n_i_labels[n_i_m_indices]
-            n_i_m_valid_mask = n_i_m_labels > -1
-            i_m_valid_mask = np.logical_and(v_i_m_valid_mask, n_i_m_valid_mask)
+                # print(v_i_m_map, v_i_m_labels_valid_unique)
+                # print(n_i_m_map, n_i_m_labels_valid_unique)
 
-            v_i_m_labels_valid = v_i_m_labels[i_m_valid_mask]
-            v_i_m_map, v_i_m_labels_valid_unique = np.unique(v_i_m_labels_valid, return_inverse=True)
+                if len(v_i_m_labels_valid_unique) == 0 or len(n_i_m_labels_valid_unique) == 0:
+                    continue
+
+                vids, nids, riou = memory_eff_match(v_i_m_labels_valid_unique, n_i_m_labels_valid_unique,
+                                                    size_multiplier=1, return_riou=True)
             
-            n_i_m_labels_valid = n_i_m_labels[i_m_valid_mask]
-            n_i_m_map, n_i_m_labels_valid_unique = np.unique(n_i_m_labels_valid, return_inverse=True)
+                vids_match = []
+                nids_match = []
+                for vidx, nidx in zip(vids, nids):
+                    if riou[vidx, nidx] > riou_threshold:
+                        vids_match.append(vidx)
+                        nids_match.append(nidx)
+                    
+                # remapping to original instance labels
+                vids_match = v_i_m_map[np.asarray(vids_match, dtype=np.int32)]
+                nids_match = n_i_m_map[np.asarray(nids_match, dtype=np.int32)]
 
-            # print('------------------------------')
+                if view_process:
+                    pcd = o3d.geometry.PointCloud()
+                    pcd.points = o3d.utility.Vector3dVector(data['points'])
+                    pcd.colors = o3d.utility.Vector3dVector(colors[data['labels']])
+                    pcd2 = o3d.geometry.PointCloud()
+                    pcd2.points = o3d.utility.Vector3dVector(n_data['points'])
+                    pcd2.colors = o3d.utility.Vector3dVector(colors[::-1][n_data['labels']])
+                    line_set = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(o3d.geometry.AxisAlignedBoundingBox(min_bound=v_region[0], max_bound=v_region[1]))
+                    line_set.paint_uniform_color([0, 0, 1])
+                    line_set2 = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(o3d.geometry.AxisAlignedBoundingBox(min_bound=n_region[0], max_bound=n_region[1]))
+                    line_set2.paint_uniform_color([1, 0, 0])
+                    geoms = [pcd, pcd2, line_set, line_set2]
+                    o3d.visualization.draw_geometries(geoms)
 
-            # print(v_i_m_map, v_i_m_labels_valid_unique)
-            # print(n_i_m_map, n_i_m_labels_valid_unique)
+                global_map = np.zeros(np.max(n_data['labels']) + 1, dtype=np.int32) - 1
+                global_map[nids_match] = vids_match
 
-            vids, nids, riou = memory_eff_match(v_i_m_labels_valid_unique, n_i_m_labels_valid_unique,
-                                                size_multiplier=1, return_riou=True)
-        
-            vids_match = []
-            nids_match = []
-            for vidx, nidx in zip(vids, nids):
-                if riou[vidx, nidx] > riou_threshold:
-                    vids_match.append(vidx)
-                    nids_match.append(nidx)
+                max_label = np.max(data['labels'])
+
+                for i in range(len(global_map)):
+                    if global_map[i] == -1:
+                        max_label += 1
+                        global_map[i] = max_label
+
+                n_data['labels'] = global_map[n_data['labels']]
+
+                n_features_data = [None] * (np.max(global_map) + 1)
+                for i in range(len(global_map)):
+                    n_features_data[global_map[i]] = n_data['features_data'][i]
                 
-            # remapping to original instance labels
-            vids_match = v_i_m_map[np.asarray(vids_match, dtype=np.int32)]
-            nids_match = n_i_m_map[np.asarray(nids_match, dtype=np.int32)]
-
-            if view_process:
-                pcd = o3d.geometry.PointCloud()
-                pcd.points = o3d.utility.Vector3dVector(data['points'])
-                pcd.colors = o3d.utility.Vector3dVector(colors[data['labels']])
-                pcd2 = o3d.geometry.PointCloud()
-                pcd2.points = o3d.utility.Vector3dVector(n_data['points'])
-                pcd2.colors = o3d.utility.Vector3dVector(colors[::-1][n_data['labels']])
-                line_set = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(o3d.geometry.AxisAlignedBoundingBox(min_bound=v_region[0], max_bound=v_region[1]))
-                line_set.paint_uniform_color([0, 0, 1])
-                line_set2 = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(o3d.geometry.AxisAlignedBoundingBox(min_bound=n_region[0], max_bound=n_region[1]))
-                line_set2.paint_uniform_color([1, 0, 0])
-                geoms = [pcd, pcd2, line_set, line_set2]
-                o3d.visualization.draw_geometries(geoms)
-
-            global_map = np.zeros(np.max(n_data['labels']) + 1, dtype=np.int32) - 1
-            global_map[nids_match] = vids_match
-
-            max_label = np.max(data['labels'])
-
-            for i in range(len(global_map)):
-                if global_map[i] == -1:
-                    max_label += 1
-                    global_map[i] = max_label
-
-            n_data['labels'] = global_map[n_data['labels']]
-
-            n_features_data = [None] * (np.max(global_map) + 1)
-            for i in range(len(global_map)):
-                n_features_data[global_map[i]] = n_data['features_data'][i]
-            
-            n_data['features_data'] = n_features_data
+                n_data['features_data'] = n_features_data
 
             merged_data = addDictionaries(merged_data, n_data)
 
@@ -631,8 +636,10 @@ if __name__ == '__main__':
         num_points = 0
         gt_labels = None
         geoms = []
+        whole_labels = []
         for div_filename in tqdm(divided_filenames_sorted, desc=f'Model {merged_filename}', position=1, leave=False):
             data = reader.step()
+            whole_labels.append(data['labels'])
             data['points'] = data['points'] if not use_noisy_points else data['noisy_points']
             data['normals'] = data['normals'] if not use_noisy_normals else data['noisy_normals']
             if gt_reader is not None:
@@ -655,9 +662,12 @@ if __name__ == '__main__':
                 divided_data[vkey]['region_ids'] = (u1_idx, u2_idx, u3_idx)
                 divided_data[vkey]['region'] = np.vstack((np.min(data['points'], axis=0), np.max(data['points'], axis=0)))
         
+        whole_labels = np.concatenate(whole_labels)
+        has_labels = len(np.unique(whole_labels)) > 1
+
         # here we have the merge without GT
         if len(input_data.keys()) == 0 and len(divided_data.keys()) > 0:
-            input_data = merge_without_gt(divided_data)
+            input_data = merge_without_gt(divided_data, has_labels=has_labels)
             
 
         input_data['features_data'] = mergeFeatures(input_data['features_data'], merge_method)

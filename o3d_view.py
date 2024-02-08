@@ -216,7 +216,8 @@ if __name__ == '__main__':
             filenames_count[filename] = 0
             return 0
         
-    images_filepath = [os.path.join(args.imagesfolder, f'{filename}_{get_filename_count(filename)}{args.suffix}.png') for filename in filenames]
+    images_filepath = [os.path.join(args.imagesfolder, f'{filename}_{get_filename_count(filename)}{args.suffix}') for filename in filenames]
+    counts = [0 for _ in filenames]
 
     vis = o3d.visualization.VisualizerWithKeyCallback()
     vis.create_window(width=1080, height=1080)
@@ -238,12 +239,17 @@ if __name__ == '__main__':
     
     def save_image_callback(vis):
         global geometry_index
-        vis.capture_screen_image(images_filepath[geometry_index])
+        vis.capture_screen_image(f'{images_filepath[geometry_index]}_{counts[geometry_index]}.png')
+        counts[geometry_index] += 1
         return True
-    
+
+    bursting = False    
     def burst_images_callback(vis):
-        global geometry_index
+        global geometry_index, bursting
+        if bursting:
+            return False
         initial_geometry_index = geometry_index
+        bursting = True
         while True:
             save_image_callback(vis)
             if update_geometries_callback(vis):
@@ -251,6 +257,7 @@ if __name__ == '__main__':
                 vis.poll_events()
             if geometry_index == initial_geometry_index:
                 break
+        bursting = False
         return True
     
     vis.register_key_callback(ord("N"), update_geometries_callback)
