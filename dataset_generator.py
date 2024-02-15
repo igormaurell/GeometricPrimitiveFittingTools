@@ -192,7 +192,8 @@ if __name__ == '__main__':
 
         print('\nGenerating Dataset - Model {} - [{}/{}]:'.format(filename, index + 1, len(files_dict.keys())))
     
-        features_data = []
+        pc_filename = None
+        features_data = None
         mesh = None
         labels = None
         features_point_indices = None
@@ -280,6 +281,9 @@ if __name__ == '__main__':
                 if features_data is not None:
                     labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])   
 
+            if pc_filename is None:
+                pc_filename = join(pc_folder_name, filename + '.pcd')
+
             savePCD(pc_filename, points, normals=normals, labels=labels_mesh)
 
             mesh = (np.asarray(mesh.vertices), np.asarray(mesh.triangles))
@@ -316,8 +320,10 @@ if __name__ == '__main__':
             print('Done.\n')
 
         print('Writing...')
-        dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, features_data=features_data, noisy_points=noisy_points,
-                                              filename=filename, features_point_indices=features_point_indices, mesh=mesh)
+        dataset_writer_factory.stepAllFormats(points=points, normals=normals, labels=labels, 
+                                              features_data=features_data if features_data is not None else [], 
+                                              noisy_points=noisy_points, filename=filename, 
+                                              features_point_indices=features_point_indices, mesh=mesh)
         print('Done.\n')
 
     dataset_writer_factory.finishAllFormats()

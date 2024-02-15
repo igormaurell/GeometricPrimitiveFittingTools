@@ -4,7 +4,8 @@ import numpy as np
 from tqdm import tqdm
 import os
 from pypcd import pypcd
-from copy import deepcopy
+import threading
+from time import sleep
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
 
@@ -259,10 +260,21 @@ if __name__ == '__main__':
                 break
         bursting = False
         return True
-    
+
+    video_count = 0
+    def video_callback(vis):
+        global video_count
+        for i in range(500):
+            vis.capture_screen_image(f'{images_filepath[geometry_index]}_video_{video_count}_{i}.png')
+            vis.update_renderer()
+            vis.poll_events()
+            sleep(0.05)
+        video_count += 1
+
     vis.register_key_callback(ord("N"), update_geometries_callback)
     vis.register_key_callback(ord("S"), save_image_callback)
     vis.register_key_callback(ord("B"), burst_images_callback)
+    vis.register_key_callback(ord("V"), video_callback)
 
     vis.run()
 
