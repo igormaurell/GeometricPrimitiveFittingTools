@@ -120,7 +120,7 @@ if __name__ == '__main__':
 
             points += t
 
-            mesh.vertices = o3d.utility.Vector3dVector(points)
+            mesh.vertices = o3d.utility.Vector3dVector(points/100000)
             geometries.append(mesh)
 
         else:
