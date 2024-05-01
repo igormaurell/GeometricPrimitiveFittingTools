@@ -67,13 +67,13 @@ if __name__ == '__main__':
     parser.add_argument('-pp', "--project_points", action="store_true", help="[Optional] Used in mesh generation.")
     parser.add_argument('-r', "--reegenerate", action="store_true", help="[Optional] Used in mesh generation.")
     parser.add_argument('-nf', "--no_filter", action="store_true", help="[Optional] Used in mesh generation.")
-    parser.add_argument('--n_neighbors_mesh', type=int, default=N_NEIGHBORS, help="[Optional] Used in mesh generation.")
-    parser.add_argument('--leaf_size_mesh', type=float, default=LEAF_SIZE, help="[Optional] Used in mesh generation.")
-    parser.add_argument('--max_workers_mesh', type=int, default=MAX_WORKERS, help="[Optional] Used in mesh generation.")
+    parser.add_argument('--n_neighbors_mesh', type=int, default=-1, help="[Optional] Used in mesh generation.")
+    parser.add_argument('--leaf_size_mesh', type=float, default=-1, help="[Optional] Used in mesh generation.")
+    parser.add_argument('--max_workers_mesh', type=int, default=-1, help="[Optional] Used in mesh generation.")
 
     args = vars(parser.parse_args())
 
-    generate_mesh = args.generate_mesh
+    generate_mesh = args["generate_mesh"]
 
     folder_name = args['folder']
     formats = [s.lower() for s in args['formats'].split(',')]
