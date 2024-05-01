@@ -13,6 +13,7 @@ from os.path import join, isfile, exists
 
 from lib.utils import loadFeatures, computeLabelsFromFace2Primitive, savePCD, downsampleByPointIndices, rayCastingPointCloudGeneration, funif, computeFeaturesPointIndices
 from lib.writers import DatasetWriterFactory
+from lib import triangulation
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
@@ -58,7 +59,21 @@ if __name__ == '__main__':
     parser.add_argument('-m_np', '--min_number_points', type=float, default = 0.0001, help='filter geometries by number of points.')
     parser.add_argument('-ls', '--leaf_size', type=float, default = 0.0, help='')
 
+    parser.add_argument('--generate_mesh', action='store_true', default=False, help='Generate mesh from point cloud')
+    parser.add_argument('--mesh_foldername', type=str, default='mesh', help='')
+    parser.add_argument('--triangulation_foldername', type=str, default='triangulation', help='')
+    parser.add_argument('--triangulation_features_foldername', type=str, default='triangulation_features', help='')
+    parser.add_argument('-gf', "--generate_triangulation_features", action="store_true", help="[Optional] Used in mesh generation.")
+    parser.add_argument('-pp', "--project_points", action="store_true", help="[Optional] Used in mesh generation.")
+    parser.add_argument('-r', "--reegenerate", action="store_true", help="[Optional] Used in mesh generation.")
+    parser.add_argument('-nf', "--no_filter", action="store_true", help="[Optional] Used in mesh generation.")
+    parser.add_argument('--n_neighbors_mesh', type=int, default=N_NEIGHBORS, help="[Optional] Used in mesh generation.")
+    parser.add_argument('--leaf_size_mesh', type=float, default=LEAF_SIZE, help="[Optional] Used in mesh generation.")
+    parser.add_argument('--max_workers_mesh', type=int, default=MAX_WORKERS, help="[Optional] Used in mesh generation.")
+
     args = vars(parser.parse_args())
+
+    generate_mesh = args.generate_mesh
 
     folder_name = args['folder']
     formats = [s.lower() for s in args['formats'].split(',')]
@@ -174,6 +189,14 @@ if __name__ == '__main__':
             
             labels, features_point_indices = computeLabelsFromFace2Primitive(labels_mesh.copy(), features_data['surfaces'])
             print('Done.\n')
+
+            if generate_mesh:
+                print("Generating mesh from point cloud...")
+                if (generate_mesh_from_pointcloud(args, pc_filename, features_data)):
+                    print("\tMesh generated on: {}".format(mesh_folder_name))
+                else:
+                    print("\tThe mesh could not be generated.")
+                print("Done")
 
         elif mesh_filename is not None:
             print('Opening Mesh...')
