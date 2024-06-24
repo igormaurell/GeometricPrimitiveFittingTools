@@ -15,7 +15,7 @@ from tqdm.contrib.concurrent import thread_map
 
 from functools import partial
 
-from lib.surfaces_projector import SurfacesProjector
+from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
 import os
 from pathlib import Path
@@ -78,50 +78,6 @@ def filter_pcd(pcd):
         pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=N_NEIGHBORS, std_ratio=2.0)
     return pcd
 
-def delaunay_uv_triangulation(pcd, surface):
-    pcd = filter_pcd(pcd)
-    if len(pcd.points) > 2:
-        _, _, max_r = compute_local_densities(pcd) 
-
-        points = np.asarray(pcd.points)
-
-        response = SurfacesProjector.projectPointsOnSurfaceFeatures(points, surface)
-
-        if response is None:
-            return o3d.geometry.TriangleMesh()
-        
-        uvs, _ = response
-
-        tri = Delaunay(uvs)
-        triangles = tri.simplices
-
-        triangles_filter = []
-        index_perm = [(0,1), (0,2), (1,2)]
-        for t in triangles:
-            keep = True
-            for i, j in index_perm:
-                A = points[t[i]]
-                B = points[t[j]]
-                dist = np.linalg.norm(B - A, ord=2)
-                if dist > max_r:
-                    keep = False
-                    break
-            triangles_filter.append(keep)
-        triangles_filter = np.array(triangles_filter)
-
-        triangles = triangles[triangles_filter]
-
-        mesh = o3d.geometry.TriangleMesh()
-        mesh.vertices = o3d.utility.Vector3dVector(points)
-        mesh.triangles = o3d.utility.Vector3iVector(triangles)
-
-        plt.scatter(uvs[:, 0], uvs[:, 1])
-        plt.show()
-
-        return mesh
-    else:
-        return o3d.geometry.TriangleMesh()
-
 def bpa_triangulation(pcd, surface=None):
     pcd = filter_pcd(pcd)
     if len(pcd.points) > 2:
@@ -148,12 +104,12 @@ def triangulation(pcd, data):
     mesh = o3d.geometry.TriangleMesh()
 
     if len(pcd_surf.points) > 0:
-        result = SurfacesProjector.projectPointsOnSurfaceFeatures(np.asarray(pcd_surf.points), data)
-        if result is not None:
-            uvs, points = result
-            data['point_parameters'] = uvs
+        surface = SurfaceFactory.fromDict(data)
+        if surface is not None:
+            proj_points, _, proj_params = surface.projectPointsOnGeometry(np.asarray(pcd_surf.points))
+            data['point_parameters'] = proj_params
             if PROJECT_POINTS:
-                pcd_surf.points = o3d.utility.Vector3dVector(points)
+                pcd_surf.points = o3d.utility.Vector3dVector(proj_points)
 
         mesh = bpa_triangulation(pcd_surf, surface=data)
 
@@ -167,10 +123,12 @@ def triangulation_by_surface(pcd, surfaces_data):
     for i, r in enumerate(result):
         surfaces_data[i]['vert_indices'] = list(range(len(final_mesh.vertices), len(final_mesh.vertices) + len(r.vertices)))
         del surfaces_data[i]['vert_parameters'] #missing
-        res = SurfacesProjector.projectPointsOnSurfaceFeatures(np.asarray(r.vertices), surfaces_data[i])
-        if res is not None:
-            uvs, _ = res
-            surfaces_data[i]['vert_parameters'] = uvs if type(uvs) is list else uvs.tolist()
+
+        surface = SurfaceFactory.fromDict(surfaces_data[i])
+        if surface is not None:
+            _, _, proj_params = surface.projectPointsOnGeometry(np.asarray(r.vertices))
+            surfaces_data[i]['vert_parameters'] = proj_params
+
         surfaces_data[i]['face_indices'] = list(range(len(final_mesh.triangles), len(final_mesh.triangles) + len(r.triangles)))
         surfaces_data[i]['point_indices'] = surfaces_data[i]['point_indices'] if type(surfaces_data[i]['point_indices']) is list else surfaces_data[i]['point_indices'].tolist()
         if 'point_parameters' in surfaces_data[i]:
