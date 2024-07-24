@@ -58,6 +58,7 @@ class LS3DCDatasetReader(BaseDatasetReader):
 
         with open(transforms_file_path, 'rb') as pkl_file:
             transforms = pickle.load(pkl_file)
+
         try:
             with h5py.File(data_file_path, 'r') as h5_file:
                 gt_points = h5_file['gt_points'][()].astype(np.float32) if 'gt_points' in h5_file.keys() else None

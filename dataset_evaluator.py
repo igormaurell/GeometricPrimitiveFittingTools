@@ -445,7 +445,7 @@ if __name__ == '__main__':
         gt_parameters[gt_format]['unnormalize'] = unnormalize
 
     if use_gt_transform and gt_transform_format_folder_name is not None:
-        parameters[gt_format]['transform_folder_name'] = gt_transform_format_folder_name
+        parameters[input_format]['transform_folder_name'] = gt_transform_format_folder_name
 
     dataset_reader_factory = DatasetReaderFactory(parameters)
     reader = dataset_reader_factory.getReaderByFormat(input_format)

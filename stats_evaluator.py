@@ -222,14 +222,14 @@ def createBarHGraph(labels, data, title='', num_models=1, geometry_type='surface
         last_pos = y[-1] if len(y) > 0 else 0
         pos = last_pos + height + offset
         rects = ax.barh(pos, data[i], height, label=labels[i], color=colors[i])
-        ax.bar_label(rects, fmt=f'  {round(percents[i]*100, 2)}%', padding=3, fontsize=38) 
+        ax.bar_label(rects, fmt=f'  {round(percents[i]*100, 2)}%', padding=3, fontsize=58) 
         y.append(pos)
     
     #ax.legend(loc='upper left', ncols=3)
     ax.set_xlabel(data_label, fontsize=42, fontweight='bold')
     ax.set_ylabel(LANG_DICT[LANG]["Types"], fontsize=42, fontweight='bold')
     #ax.set_title(title, pad=32.0, fontsize=20)
-    ax.set_yticks(y, [labels[i] for i in sorted_indices], fontsize=40)
+    ax.set_yticks(y, [labels[i] for i in sorted_indices], fontsize=60)
     ax.tick_params(axis='x', labelsize=40)
     t = ax.xaxis.get_offset_text()
     t.set_size(40)
