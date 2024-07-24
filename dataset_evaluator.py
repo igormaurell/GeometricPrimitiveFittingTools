@@ -13,6 +13,7 @@ from lib.evaluator import computeIoUs
 from lib.primitives import ResidualLoss
 from lib.normalization import rescale, cubeRescale
 from pprint import pprint
+from math import ceil
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
@@ -211,7 +212,7 @@ def process(data_tuple):
         gt_data = None
     else:
         data, gt_data = data_tuple
-        data = mergeQueryAndGTData(data, gt_data)
+        data = mergeQueryAndGTData(data, gt_data, force_match=force_match)
 
     residual_distance = ResidualLoss()
 
@@ -266,11 +267,16 @@ def process(data_tuple):
         if feature is not None and indices is not None:
             points_curr = points[indices]
             normals_curr = normals[indices]
+            reescale_factor_curr = reescale_factor
             primitive = None
-            try:
-                primitive = SurfaceFactory.fromDict(feature)
-                tp = primitive.getType()     
-            except:
+            if not no_use_occ_geometries:
+                try:
+                    primitive = SurfaceFactory.fromDict(feature)
+                    tp = primitive.getType()
+                except:
+                    pass
+            
+            if primitive is None:
                 tp = feature['type']
                 
             if tp not in dataset_errors:
@@ -292,11 +298,16 @@ def process(data_tuple):
                 if not no_use_occ_geometries and primitive is not None:
                     distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
                                                                 symmetric_normals=ignore_primitives_orientation)
+                    print(len(distances), np.all(np.isnan(distances)))
                 else:
+                    if not no_use_occ_geometries:
+                        points_curr, features_curr, _ = rescale(points_curr, features=[feature], factor=1/1000)
+                        feature = features_curr[0]
+                        reescale_factor_curr *= 1000
                     distances = residual_distance.residual_loss(points_curr, feature)
                     angles = []
-
-                distances *= reescale_factor
+                
+                distances*= reescale_factor_curr
 
                 dataset_errors[tp]['distances'].append(distances)
                 dataset_errors[tp]['angles'].append(angles)
@@ -310,10 +321,12 @@ def process(data_tuple):
                         distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
                                                                                 symmetric_normals=ignore_primitives_orientation)
                     else:
+                        if not no_use_occ_geometries:
+                            points_gt_curr, _, _ = rescale(points_gt_curr, factor=1/1000)
                         distances_to_gt = residual_distance.residual_loss(points_gt_curr, feature)
                         angles_to_gt = []
                 
-                    distances_to_gt*= reescale_factor
+                    distances_to_gt*= reescale_factor_curr
 
                     dataset_errors[tp]['distances_to_gt'].append(distances_to_gt.astype(np.float32))
                     dataset_errors[tp]['angles_to_gt'].append(angles_to_gt)
@@ -346,8 +359,6 @@ def process(data_tuple):
     logs_dict_final['Total']['number_of_points'] += np.count_nonzero(labels==-1)
 
     filtered_logs_dict_final = filterLog(logs_dict_final)
-
-    #print(data['filename'], logs_dict_final['Total']['mean_distance_gt_error'])
 
     with open(f'{log_format_folder_name}/{filename}.json', 'w') as f:
         json.dump(filtered_logs_dict_final, f, indent=4)
@@ -394,10 +405,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--use_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
     parser.add_argument('--no_use_data_primitives', action='store_true')
+    parser.add_argument('--force_match', action='store_true')
     parser.add_argument('--use_noisy_points', action='store_true')
     parser.add_argument('--use_noisy_normals', action='store_true')
     parser.add_argument('--no_use_occ_geometries', action='store_true')
     parser.add_argument('--ignore_primitives_orientation', action='store_true')
+    parser.add_argument('-w', '--workers', type=int, default=20, help='')
     parser.add_argument('-un', '--unnormalize', action='store_true', help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
 
@@ -425,8 +438,10 @@ if __name__ == '__main__':
     use_noisy_normals = args['use_noisy_normals']
     no_use_occ_geometries = args['no_use_occ_geometries']
     ignore_primitives_orientation = args['ignore_primitives_orientation']
+    workers = args['workers']
     unnormalize = args['unnormalize']
     cube_reescale_factor = args['cube_reescale_factor']
+    force_match = args['force_match']
 
     if gt_dataset_folder_name is not None or gt_data_folder_name is not None or gt_format is not None:
         if gt_data_folder_name is None:
@@ -495,21 +510,28 @@ if __name__ == '__main__':
     colors_full = getAllColorsArray()
     for s in sets:
         reader.setCurrentSetName(s)
-        size = len(reader.filenames_by_set['val'])
-        reader.filenames_by_set['val'] = reader.filenames_by_set['val']
+        size = len(reader.filenames_by_set[s])
+        reader.filenames_by_set[s] = reader.filenames_by_set[s]
+        if size == 0:
+            continue
         if gt_reader is not None:
             gt_reader.setCurrentSetName(s)
-            files = reader.filenames_by_set['val']
-            gt_files = gt_reader.filenames_by_set['val']
-            assert sorted(files) == sorted(gt_files), f'\n {len(sorted(files))} \n {len(sorted(gt_files))}'
-            gt_reader.filenames_by_set['val'] = deepcopy(files)
+            files = reader.filenames_by_set[s]
+            gt_files = gt_reader.filenames_by_set[s]
+            if sorted(files) != sorted(gt_files):
+                print(f'Pred has {len(sorted(files))} files and GT has {len(sorted(gt_files))} files.')
+                continue
+            gt_reader.filenames_by_set[s] = deepcopy(files)
             readers = zip(reader, gt_reader)
         else:
             readers = zip(reader)
 
         full_logs_dicts = {}
 
-        results = process_map(process, readers, max_workers=20, chunksize=1)
+        max_workers = min(size, workers)
+        chunksize = ceil(size/max_workers)
+
+        results = process_map(process, readers, max_workers=max_workers, chunksize=chunksize)
         #results = [process(data) for data in tqdm(readers)]
 
         print('Accumulating...')
