@@ -4,9 +4,8 @@ from os.path import join, exists
 from os import makedirs
 import numpy as np
 from shutil import rmtree
-from tqdm import tqdm
 import matplotlib.pyplot as plt
-from lib.readers import DatasetReaderFactory
+from lib.readers import DatasetReaderFactory, PredAndGTDatasetReader
 from lib.utils import computeFeaturesPointIndices, writeColorPointCloudOBJ, getAllColorsArray, computeRGB
 from lib.matching import mergeQueryAndGTData
 from lib.evaluator import computeIoUs
@@ -19,7 +18,8 @@ from pprint import pprint
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
-from tqdm.contrib.concurrent import process_map, thread_map
+from multiprocessing import Pool
+from tqdm import tqdm
 
 from copy import deepcopy
 
@@ -41,9 +41,11 @@ def generateErrorsBoxPlot(errors, distances_key='distance', angles_key='angle'):
     fig.tight_layout(pad=2.0)
     ax1.set_title('Distance Deviation (m)')
     if len(data_distances) > 0:
+        data_distances = data_distances[data_distances < np.percentile(data_distances, 75)]
         ax1.boxplot(data_distances, labels=data_labels, autorange=False, meanline=True)
     ax2.set_title('Normal Deviation (°)')
     if len(data_angles) > 0:
+        data_angles = data_angles[data_angles < np.percentile(data_angles, 75)]
         ax2.boxplot(data_angles, labels=data_labels, autorange=False, meanline=True)
     return fig
 
@@ -76,6 +78,8 @@ METRICS_DICT = {
     'gt_angle': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'need_gt': True, 'reduction_key': 'mean'},
     'instance_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'},
     'type_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'}, 
+    'p_coverage': {'derivations': {'mean': np.nanmean}, 'reduction_key': 'mean'},
+    'gt_p_coverage': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'}
 }
 
 # Creating a base metrics dict (with void lists)
@@ -95,12 +99,10 @@ def metrics_dict_list2array(d):
             new_d[tp][key] = np.asarray(value)
     return new_d
 
-def generate_total_key_metrics_dict(d):
-    total_dict = {}
+def generate_total_key_metrics_dict(d, with_gt=True):
+    total_dict = get_base_metrics_dict(with_gt=with_gt)
     for key, value in d.items():
         for key2, value2 in value.items():
-            if key2 not in total_dict:
-                total_dict[key2] = []
             total_dict[key2] += value2
     d['Total'] = total_dict
     return d
@@ -169,23 +171,19 @@ def compute_deviations(points, normals, feature, reescale_factor=1):
         points[nan_mask, :], features_curr, _ = rescale(points, features=[feature], factor=1/reescale_factor_curr)
         feature = features_curr[0]
         distances[nan_mask] = residual_distance.residual_loss(points[nan_mask, :], feature)
-    
-    distance = np.nan if np.all(np.isnan(distances)) else np.nanmean(distances)*reescale_factor
-    angle = np.nan if np.all(np.isnan(angles)) else np.nanmean(angles)
 
-    return distance, angle
+    return distances*reescale_factor, angles
 
 def np_encoder(object):
     if isinstance(object, np.generic):
         return object.item()
 
-def process(data_tuple):
-    if len(data_tuple) == 1:
-        data = data_tuple[0]
-        gt_data = None
-    else:
-        data, gt_data = data_tuple
+def process(data, set_index, index):
+    if isinstance(data, tuple):
+        data, gt_data = data
         data = mergeQueryAndGTData(data, gt_data, force_match=force_match)
+    else:
+        gt_data = None
 
     filename = data['filename'] if 'filename' in data.keys() else str(i)
     points = data['noisy_points'] if use_noisy_points else data['points']
@@ -219,7 +217,7 @@ def process(data_tuple):
 
         gt_points = gt_data['points']
         gt_normals = gt_data['normals']
-    
+
     reescale_factor = 1.
     if cube_reescale_factor > 0:
         if gt_data is not None:
@@ -230,7 +228,7 @@ def process(data_tuple):
     if gt_data is not None:
         model_major_diagonal = np.linalg.norm(np.max(gt_points, axis=0) - np.min(gt_points, axis=0))
     else:
-        model_major_diagonal = np.linalg.norm(np.max(points, axis=0) - np.min(gt_points, axis=0))
+        model_major_diagonal = np.linalg.norm(np.max(points, axis=0) - np.min(points, axis=0))
 
     for i, feature in enumerate(features):
         indices = fpi[i]
@@ -254,7 +252,17 @@ def process(data_tuple):
 
             # Distances (residual)
             if len(indices) > 0 and ('invalid' not in feature or not feature['invalid']):
-                distance, angle = compute_deviations(points_curr, normals_curr, deepcopy(feature), reescale_factor=reescale_factor)
+                distances, angles = compute_deviations(points_curr, normals_curr, deepcopy(feature), reescale_factor=reescale_factor)
+
+                if gt_data is None:
+                    distances = distances[distances < np.percentile(distances, 75)]
+                    angles = angles[angles < np.percentile(angles, 75)] 
+                
+                distance = np.nan if np.all(np.isnan(distances)) else np.nanmean(distances)
+                angle = np.nan if np.all(np.isnan(angles)) else np.nanmean(angles)
+
+                p_coverage_mask = distances < p_coverage_threshold
+                model_metrics[tp]['p_coverage'] += p_coverage_mask.tolist()
 
                 invalid_primitive = (distance >= reescale_factor*model_major_diagonal)              
 
@@ -263,7 +271,13 @@ def process(data_tuple):
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
                     
-                    gt_distance, gt_angle = compute_deviations(points_gt_curr, normals_gt_curr, deepcopy(feature), reescale_factor=reescale_factor)
+                    gt_distances, gt_angles = compute_deviations(points_gt_curr, normals_gt_curr, deepcopy(feature), reescale_factor=reescale_factor)
+
+                    gt_distance = np.nan if np.all(np.isnan(gt_distances)) else np.nanmean(gt_distances)
+                    gt_angle = np.nan if np.all(np.isnan(gt_angles)) else np.nanmean(gt_angles)
+
+                    gt_p_coverage_mask = gt_distances < p_coverage_threshold
+                    model_metrics[tp]['gt_p_coverage'] += gt_p_coverage_mask.tolist()
 
                     #invalid_primitive = invalid_primitive or (gt_distance >= reescale_factor*model_major_diagonal)
 
@@ -301,7 +315,7 @@ def process(data_tuple):
                 #     colors_types[error_both, :] = np.array([255, 0, 255])
 
     # Adding a key to compute the metrics agnostic of prim type
-    model_metrics = generate_total_key_metrics_dict(model_metrics)
+    model_metrics = generate_total_key_metrics_dict(model_metrics, with_gt=(gt_data is not None))
     model_metrics['Total']['n_no_prim_points'].append(np.count_nonzero(labels==-1))  # adding non primitivized points
 
     # Transforming from list to nd array each metric accumulator
@@ -323,14 +337,15 @@ def process(data_tuple):
         plt.figure(fig.number)
         plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
         plt.close()
-        fig2 = generateErrorsBoxPlot(model_metrics, distances_key='gt_distance', angles_key='gt_angle')
-        plt.figure(fig2.number)
-        plt.savefig(f'{box_plot_format_folder_name}/{filename}_gt.png')
-        plt.close()
-    
+        if gt_data is not None:
+            fig2 = generateErrorsBoxPlot(model_metrics, distances_key='gt_distance', angles_key='gt_angle')
+            plt.figure(fig2.number)
+            plt.savefig(f'{box_plot_format_folder_name}/{filename}_gt.png')
+            plt.close()
+        
     model_metrics_reduced = reduce_derived_model_metrics(derived_model_metrics)
     
-    return model_metrics_reduced
+    return model_metrics_reduced, set_index, index
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for evaluate predictions')
@@ -459,7 +474,13 @@ if __name__ == '__main__':
 
     sets = ['val', 'train']
     colors_full = getAllColorsArray()
-    for s in sets:
+    workers = 20
+    total_size = sum([len(files) for files in reader.filenames_by_set.values()])
+    pbar = tqdm(total=total_size)
+    pool = Pool(min(workers, total_size, 2))
+    sets_results = [None for s in sets if len(reader.filenames_by_set[s]) > 0]
+    sets = [s for s in sets if len(reader.filenames_by_set[s]) > 0]
+    for set_index, s in enumerate(sets):
         reader.setCurrentSetName(s)
         size = len(reader.filenames_by_set[s])
         reader.filenames_by_set[s] = reader.filenames_by_set[s]
@@ -469,22 +490,32 @@ if __name__ == '__main__':
             gt_reader.setCurrentSetName(s)
             files = reader.filenames_by_set[s]
             gt_files = gt_reader.filenames_by_set[s]
-            if sorted(files) != sorted(gt_files):
-                print(f'Pred has {len(sorted(files))} files and GT has {len(sorted(gt_files))} files.')
-                continue
-            gt_reader.filenames_by_set[s] = deepcopy(files)
-            readers = zip(reader, gt_reader)
+            intersection_files = sorted(set(files).intersection(gt_files))
+
+            reader.filenames_by_set[s] = deepcopy(intersection_files)
+            gt_reader.filenames_by_set[s] = deepcopy(intersection_files)
+            size = len(intersection_files)
         else:
-            readers = zip(reader)
+            gt_reader = None
 
         full_logs_dicts = {}
 
-        max_workers = min(size, workers)
-        chunksize = ceil(size/max_workers)
+        sets_results[set_index] = [None]*size
+        def update(*a):
+            global pbar, sets_results
+            a = a[0]
+            sets_results[a[1]][a[2]] = a[0]
+            pbar.update()
+        for index, data in enumerate(PredAndGTDatasetReader(reader, gt_reader) if gt_reader is not None else reader):
+            a = pool.apply_async(process, args=(data, set_index, index,), callback=update)
 
-        results = process_map(process, readers, max_workers=max_workers, chunksize=chunksize)
-        #results = [process(data) for data in tqdm(readers)]
+    pool.close()
+    pool.join()
 
+    for set_index, results in tqdm(enumerate(sets_results)):
+        print('None Count:', results.count(None))
+        s = sets[set_index]
+        results = [r for r in results if r is not None]
         dataset_metrics_dict = concatenate_metrics_dict(results)
         dataset_metrics_dict = metrics_dict_list2array(dataset_metrics_dict)
         derived_dataset_metrics_dict = compute_derived_metrics(dataset_metrics_dict)
@@ -494,12 +525,13 @@ if __name__ == '__main__':
             plt.figure(fig.number)
             plt.savefig(f'{box_plot_format_folder_name}/{s}.png')
             plt.close()
-            fig2 = generateErrorsBoxPlot(dataset_metrics_dict, distances_key='gt_distance', angles_key='gt_angle')
-            plt.figure(fig2.number)
-            plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
-            plt.close()
+            if gt_reader is not None:
+                fig2 = generateErrorsBoxPlot(dataset_metrics_dict, distances_key='gt_distance', angles_key='gt_angle')
+                plt.figure(fig2.number)
+                plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
+                plt.close()
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
             json.dump(derived_dataset_metrics_dict, f, indent=4, default=np_encoder)
-
+        
         pprint(derived_dataset_metrics_dict)

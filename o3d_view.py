@@ -1,19 +1,16 @@
 import argparse
-
 import open3d as o3d
 import numpy as np
-<<<<<<< Updated upstream
-import sys
-=======
 from tqdm import tqdm
 import os
 from pypcd import pypcd
+import threading
 from time import sleep
 from copy import deepcopy
 from lib.utils import createViews, get_evenly_distributed_colors
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
->>>>>>> Stashed changes
+import sys
 
 EPS = np.finfo(np.float32).eps
 
@@ -55,14 +52,12 @@ def compute_grid(points, region_size):
 
     return regions
 
-def comput_line_set(pcd, region_size, color=(0.2, 0.2, 0.2)):
-    regions = compute_grid(np.asarray(pcd.points), region_size)
+def comput_line_set(regions, color=(0.2, 0.2, 0.2)):
 
     full_len = np.prod(regions.shape[:3])
 
     size_x, size_y, _, _, _ = regions.shape
     
-
     line_set = o3d.geometry.LineSet() 
     for ind in range(full_len):
         k = ind // (size_y * size_x)
@@ -81,7 +76,16 @@ def comput_line_set(pcd, region_size, color=(0.2, 0.2, 0.2)):
 
     return line_set
 
-<<<<<<< Updated upstream
+def compute_partial_pcds(pcd, regions):
+    pcds = []
+    for i in range(regions.shape[0]):
+        for j in range(regions.shape[1]):
+            for k in range(regions.shape[2]):
+                r = regions[i, j, k]
+                mask = np.logical_and(np.all(pcd.points > r[0], axis=1), np.all(pcd.points < r[1], axis=1))
+                pcds.append(pcd.select_by_index(np.where(mask)[0]))
+    return pcds
+
 if __name__ == '__main__':
 
     REGION_SIZE = np.array([4, 4, 4])
@@ -108,7 +112,6 @@ if __name__ == '__main__':
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
         pcd.colors = o3d.utility.Vector3dVector(colors)
-=======
 def compute_partial_pcds(pcd, regions):
     pcds = []
     for i in range(regions.shape[0]):
@@ -183,11 +186,12 @@ if __name__ == '__main__':
             is_mesh = False
 
         if is_mesh:
+          
             if filepath.endswith('.stl'):
                 points = np.asarray(mesh.vertices)/args.meshfactor
             else:
                 points = np.asarray(mesh.vertices)
-            
+                
             bounding_box_min = np.min(points, axis=0).tolist()
             bounding_box_max = np.max(points, axis=0).tolist()
             tx = - (bounding_box_max[0] + bounding_box_min[0]) * 0.5
@@ -223,7 +227,6 @@ if __name__ == '__main__':
                     cams.append(cam_curr)
                 geometries.append([mesh, dome_lines] + cams)
                 params.append(deepcopy(param))
-
         else:
             if filepath.endswith('.obj'):
                 with open(filepath, 'r') as f:
@@ -238,12 +241,12 @@ if __name__ == '__main__':
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(points)
                 pcd.colors = o3d.utility.Vector3dVector(colors)
+
                 geometries.append(pcd)
                 params.append(get_default_parameters(args))
             
             elif filepath.endswith('.pcd'):
                 pcd = o3d.geometry.PointCloud()
-
                 
                 pcd_in = o3d.io.read_point_cloud(filepath, print_progress=False)
                 points = np.asarray(pcd_in.points)
@@ -257,6 +260,77 @@ if __name__ == '__main__':
                     points = np.vstack((pc['x'], pc['y'], pc['z'])).T
                     normals = np.vstack((pc['normal_x'], pc['normal_y'], pc['normal_z'])).T
                     labels = pc['label']
+                    colors_table = np.random.rand(len(labels), 3)
+                    colors = colors_table[labels]
+                    
+                    pcd.points = o3d.utility.Vector3dVector(points)
+                    pcd.normals = o3d.utility.Vector3dVector(normals)
+                    pcd.colors = o3d.utility.Vector3dVector(colors)
+
+            geometries.append(pcd)
+
+        file_geometries.append([geometries[0]])
+        filenames.append(f'{base_filename}')
+
+        if args.showbbox:
+            aabb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector(points))
+            line_set_bbox = o3d.geometry.LineSet.create_from_axis_aligned_bounding_box(aabb)
+            line_set_bbox.paint_uniform_color((0.2, 0.2, 0.2))
+            geometries_2 = [geometries[0], line_set_bbox]
+            
+            file_geometries.append(geometries_2)
+            filenames.append(f'{base_filename}_bbox')
+        
+        for regionsize in args.regionsizes:
+            if regionsize > 0:
+                region_size = np.ones(3)*regionsize
+                regions = compute_grid(np.asarray(pcd.points), region_size)   
+                line_set_regions = comput_line_set(regions[:, :])
+                geometries_3 = [geometries[0], line_set_regions]
+
+                file_geometries.append(geometries_3)
+                filenames.append(f'{base_filename}_regionsize_{regionsize}')
+
+                if args.showmerge_process:
+                    merge_folder = os.path.join(args.imagesfolder, f'{base_filename}_regionsize_{regionsize}')
+                    os.makedirs(merge_folder, exist_ok=True)
+                    pcds = compute_partial_pcds(pcd, regions)
+                    geoms = []
+                    for ind, pc in enumerate(pcds):
+                        geoms.append(pc)
+                        file_geometries.append(geoms[0:ind+1])
+                        filenames.append(os.path.join(f'{base_filename}_regionsize_{regionsize}', f'part_{ind}'))
+
+                # regions = regions[:, :, :]*2.5
+                # pcd_2 = deepcopy(pcd)
+                # pcd_2 = pcd_2.scale(2.5, center=np.array([0, 0, 0]))
+                # regions[:, :, :, 0, :] += region_size/3
+                # regions[:, :, :, 1, :] += region_size/3
+                # pcd_2 = pcd_2.translate(region_size/3, relative=True)
+                # regions = regions[:, :, :]/2.5
+                # pcd_2 = pcd_2.scale(1/2.5, center=np.array([0, 0, 0]))
+                # line_set_regions_2 = comput_line_set(regions[:, :])
+                # geometries_4 = [pcd_2, line_set_regions_2]
+                # file_geometries.append(geometries_4)
+                # filenames.append(f'{base_filename}_regionsize_{regionsize}_explode')                
+
+    os.makedirs(args.imagesfolder, exist_ok=True)
+
+    filenames_count = {}
+    def get_filename_count(filename):
+        if filename in filenames_count:
+            filenames_count[filename] += 1
+            return filenames_count[filename]
+        else:
+            filenames_count[filename] = 0
+            return 0
+        
+    images_filepath = [os.path.join(args.imagesfolder, f'{filename}_{get_filename_count(filename)}{args.suffix}') for filename in filenames]
+    counts = [0 for _ in filenames]
+
+    vis = o3d.visualization.VisualizerWithKeyCallback()
+    vis.create_window(width=1080, height=1080)
+    vis.get_render_option().mesh_show_wireframe = args.showmesh_wireframe
                     colors_table = np.random.rand(np.max(labels) + 1, 3)
                     colors = colors_table[labels]
                     
@@ -331,11 +405,9 @@ if __name__ == '__main__':
         else:
             filenames_count[filename] = 0
             return 0
->>>>>>> Stashed changes
-        
+          
         line_set = comput_line_set(pcd, REGION_SIZE)
 
-<<<<<<< Updated upstream
         aabb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(pcd.points)
         
         view_data = [pcd, line_set]
@@ -374,7 +446,6 @@ if __name__ == '__main__':
                     'zoom': 0.035*size}
 
         o3d.visualization.draw_geometries(view_data, **view_params, mesh_show_wireframe=False)
-=======
     vis = o3d.visualization.VisualizerWithKeyCallback()
     vis.create_window(width=1920, height=1080)
     
@@ -436,5 +507,5 @@ if __name__ == '__main__':
 
     vis.run()
 
+
     vis.destroy_window()
->>>>>>> Stashed changes

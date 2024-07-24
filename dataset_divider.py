@@ -1,12 +1,14 @@
 import argparse
 
-from tqdm import tqdm
+from tqdm import trange, tqdm
 from tqdm.contrib.concurrent import thread_map, process_map
 from functools import partial
 
 from shutil import rmtree
 from os import makedirs
 from os.path import join, exists
+
+import h5py
 
 import numpy as np
 
@@ -28,6 +30,7 @@ def process_model_val(data, regions_grid, filename, val_number_points, ind):
     result = sampleDataOnRegion(regions_grid[i, j, k], data, val_number_points)
 
     result['filename'] = filename_curr
+    result['region_ids'] = (i, j, k)
 
     return result
 
@@ -93,7 +96,9 @@ if __name__ == '__main__':
 
     parser.add_argument('-ra',  '--region_axis', type=str, default='z', help='')
     parser.add_argument('-trs', '--train_region_size', nargs='+', default=[4], help='')
+    parser.add_argument('-tgs', '--train_grid_stride', nargs='+', default=None, help='')
     parser.add_argument('-vrs', '--val_region_size', nargs='+', default=[4], help='')
+    parser.add_argument('-vgs', '--val_grid_stride', nargs='+', default=None, help='')
     parser.add_argument('-tnp', '--train_number_points', type=int, default=0, help='')
     parser.add_argument('-vnp', '--val_number_points', type=int, default=0, help='')
     parser.add_argument('-tmnp', '--train_min_number_points', type=int, default=5000, help='')
@@ -124,8 +129,22 @@ if __name__ == '__main__':
     division_info_folder_name = args['division_info_folder_name']
 
     region_axis = args['region_axis']
-    train_region_size = parse_size_arg(args['train_region_size'], region_axis=region_axis)  
+    train_region_size = parse_size_arg(args['train_region_size'], region_axis=region_axis)
+    
+    train_grid_stride = args['train_grid_stride']
+    if train_grid_stride is None:
+        train_grid_stride = train_region_size.copy()
+    else:
+        train_grid_stride = parse_size_arg(train_grid_stride, region_axis=region_axis)
+
     val_region_size = parse_size_arg(args['val_region_size'], region_axis=region_axis)
+    
+    val_grid_stride = args['val_grid_stride']
+    if val_grid_stride is None:
+        val_grid_stride = val_region_size.copy()
+    else:
+        val_grid_stride = parse_size_arg(val_grid_stride, region_axis=region_axis)
+    
     train_number_points = args['train_number_points']
     val_number_points = args['val_number_points']
     instance_min_number_points = args['instance_min_number_points']
@@ -201,29 +220,31 @@ if __name__ == '__main__':
     dataset_reader_factory = DatasetReaderFactory(input_parameters)
 
     reader = dataset_reader_factory.getReaderByFormat(input_format)
-
     dataset_writer_factory = DatasetWriterFactory(output_parameters)
     number_val = 0
     print('\nValidation Set:')
     reader.setCurrentSetName('val')
     dataset_writer_factory.setCurrentSetNameAllFormats('val')
-    for i in range(len(reader)):
+    for i in trange(len(reader), desc='Generating Validation Set', colour='green', position=0):
         point_cloud_full = None
         data = reader.step()
-        regions_grid = computeGridOfRegions(data['points'], val_region_size)
+        regions_grid = computeGridOfRegions(data['points'], val_region_size, val_grid_stride)
+
         filename = data['filename'] if 'filename' in data.keys() else str(i)
-        print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
+        # print('\nGenerating val dataset - Model {} - [{}/{}]:'.format(filename, i+1, len(reader)))
         full_len = np.prod(regions_grid.shape[:3])
 
         results = thread_map(partial(process_model_val, data, regions_grid, filename, val_number_points),
-                             range(full_len), chunksize=1)
+                             range(full_len), chunksize=1, position=1, leave=False, desc=f'Processing Model {filename} [1/2]: ')
         
-        for j, result in enumerate(tqdm(results)):
+        for j, result in enumerate(tqdm(results, position=1, leave=False, desc=f'Saving Parts of Model {filename} [2/2]: ')):
             n_p = len(result['points'])
             if n_p < val_min_number_points:
                 pass
                 # print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {val_min_number_points}")
             else:
+                i, j, k = result['region_ids']
+                del result['region_ids']
                 points = np.zeros((result['points'].shape[0], 6))
                 points[:, 0:3] = result['points']
                 points[:, 3:6] = np.array(computeRGB(colors[j]))
@@ -232,6 +253,10 @@ if __name__ == '__main__':
                 else:
                     point_cloud_full = np.concatenate((point_cloud_full, points), axis=0)
                 dataset_writer_factory.stepAllFormats(**result)
+                division_params_filename = join(output_division_info_folder_name, f"{result['filename']}.h5")
+                with h5py.File(division_params_filename, 'w') as h5_file:
+                    h5_file.create_dataset('region', data=regions_grid[i, j, k, :, :])
+                    h5_file.create_dataset('indices', data=result['global_indices'])
             
         writeColorPointCloudOBJ(f'{output_division_info_folder_name}/{filename}_val.obj', point_cloud_full)
 
@@ -241,13 +266,16 @@ if __name__ == '__main__':
     reader.setCurrentSetName('train')
     dataset_writer_factory.setCurrentSetNameAllFormats('train')
     train_set_len = len(reader)
-    for i in range(train_set_len):
+    for i in trange(train_set_len, desc='Generating Training Set', colour='green', position=0):
         point_cloud_full = None
         data = reader.step()
         
         filename = data['filename'] if 'filename' in data.keys() else str(i)
 
-        print('\nGenerating training dataset - Model {} - [{}/{}]:'.format(filename, i+1, train_set_len))
+        # print('\nGenerating training dataset - Model {} - [{}/{}]:'.format(filename, i+1, train_set_len))
+
+        total_process = 3 if train_random_times == 0 or train_grid else 2
+        current_process = 1
 
         results = []
         if train_random_times == 0 or train_grid:
@@ -255,7 +283,9 @@ if __name__ == '__main__':
             full_len = np.prod(regions_grid.shape[:3])
 
             results += thread_map(partial(process_model_val, data, regions_grid, filename, train_number_points,),
-                                  range(full_len), chunksize=1)
+                                  range(full_len), chunksize=1, position=1, leave=False, 
+                                  desc=f'Processing Model {filename} [{current_process}/{total_process}]: ')
+            current_process += 1
             
         if train_random_times > 0:
             size_points = np.max(data['points'], axis=0) -  np.min(data['points'], axis=0)
@@ -265,22 +295,27 @@ if __name__ == '__main__':
             data['search_points'] = computeSearchPoints(data['points'], train_region_size)
 
             if 'search_points' in data and len(data['search_points']) == 0:
-                print('WARNING: no point inside search region, not using it.')
+                #print('WARNING: no point inside search region, not using it.')
                 del data['search_points']
 
             if num_models > 1:
                 results += thread_map(partial(process_model_train, data, filename, train_number_points,
-                                       train_min_number_points), range(num_models), chunksize=1)
+                                       train_min_number_points), range(num_models), chunksize=1, position=1, leave=False, 
+                                       desc=f'Processing Model {filename} [{current_process}/{total_process}]: ')
             else:
                 res = sampleDataOnRegion(np.asarray((np.min(data['points'], axis=0), np.max(data['points'], axis=0))),
                                          data, train_number_points)
                 res['filename'] = f'{filename}_0'
                 results += [res]
+            
+            current_process += 1
        
-        for j, result in enumerate(tqdm(results)):   
+        for j, result in enumerate(tqdm(results, position=1, leave=False, 
+                                        desc=f'Saving Parts of Model {filename} [{current_process}/{total_process}]: ')):   
             n_p = len(result['points'])
             if n_p < train_min_number_points:
-                print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {train_min_number_points}")
+                pass
+                #print(f"{result['filename']} point cloud has {n_p} points. The desired amount is {train_min_number_points}")
             else:
                 points = np.zeros((result['points'].shape[0], 6))
                 points[:, 0:3] = result['points']

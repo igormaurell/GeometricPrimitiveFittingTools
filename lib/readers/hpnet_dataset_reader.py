@@ -71,8 +71,6 @@ class HPNetDatasetReader(BaseDatasetReader):
 
             use_data_primitives = self.use_data_primitives or params is None
 
-            
-
             points_scale = None
             features_data = [None]*max_size  
             for label in unique_labels:

@@ -8,6 +8,9 @@ class DatasetReaderIterator:
         if self.dr.steps_by_set[self.dr.current_set_name] < len(self.dr.filenames_by_set[self.dr.current_set_name]):
             return self.dr.step()
         raise StopIteration
+    
+    def __len__(self):
+        return len(self.dr)
 
 class BaseDatasetReader:
 
@@ -15,7 +18,7 @@ class BaseDatasetReader:
         self.setParameters(parameters)
         
         self.reset()
-
+        
     def setParameters(self, parameters):
         self.dataset_folder_name = parameters['dataset_folder_name'] if 'dataset_folder_name' in parameters.keys() else None
         self.data_folder_name = parameters['data_folder_name'] if 'data_folder_name' in parameters.keys() else None

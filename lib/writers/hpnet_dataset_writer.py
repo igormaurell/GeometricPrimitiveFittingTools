@@ -47,8 +47,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
             features_data, labels, features_point_indices = filterFeaturesData(features_data, labels, types=self.surface_types,
                                                                                min_number_points=min_number_points, 
                                                                                features_point_indices=features_point_indices)
-            if len(features_data) == 0:
-                print(f'WARNING: {data_file_path} has no features left.')
+            # if len(features_data) == 0:
+            #     print(f'WARNING: {data_file_path} has no features left.')
 
         self.filenames_by_set[self.current_set_name].append(filename)
 
@@ -57,8 +57,8 @@ class HPNetDatasetWriter(BaseDatasetWriter):
             points, noisy_points, normals, noisy_normals, features_data, transforms = self.normalize(points, noisy_points, normals,
                                                                                                      noisy_normals, features_data)
 
-            if np.any(np.isnan(points)) or np.any(np.isnan(normals)) or np.any(np.isnan(noisy_points)) or np.any(np.isnan(noisy_normals)):
-                print(np.any(np.isnan(points)), np.any(np.isnan(normals)), np.any(np.isnan(noisy_points)), np.any(np.isnan(noisy_normals)))
+            #if np.any(np.isnan(points)) or np.any(np.isnan(normals)) or np.any(np.isnan(noisy_points)) or np.any(np.isnan(noisy_normals)):
+            #    print(np.any(np.isnan(points)), np.any(np.isnan(normals)), np.any(np.isnan(noisy_points)), np.any(np.isnan(noisy_normals)))
 
             with open(transforms_file_path, 'wb') as pkl_file:
                 pickle.dump(transforms, pkl_file)

@@ -212,14 +212,14 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 if __name__ == '__main__':
-    SIZE = 2000
+    SIZE = 5000
     origin_points = np.zeros((SIZE, 3))
     normals = np.zeros((SIZE, 3))
-    a = np.random.rand(1,3)
+    a = np.array([1, 1, 1]) * np.deg2rad(45)
     normals[:, :] = a/np.linalg.norm(a)
 
     normals[1:, :] = addNormalsNoise(normals[1:,:], limit=10)
-    normals[0, :] *= 1.5
+    #normals[0, :] *= 3
     
     normals*=-1
 
@@ -227,8 +227,13 @@ if __name__ == '__main__':
     U, V, W = zip(*normals)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.quiver(X, Y, Z, U, V, W, arrow_length_ratio=0.1, pivot='tip', colors=np.concatenate((np.array([1., 0, 0])[np.newaxis, :], np.zeros((SIZE - 1, 3))), axis=0),
+    ax.quiver(X, Y, Z, U, V, W, arrow_length_ratio=0.1, pivot='tip', colors=np.concatenate((np.array([1., 0, 0])[np.newaxis, :], np.array([0, 0, 1])*np.ones((SIZE - 1, 3))), axis=0),
               linewidths=([4.0] + [0.5 for _ in range(SIZE-1)]))
+
+
+    # Add a red point at the end of normals[0, :]
+    ax.scatter(-normals[0, 0]+0.08, -normals[0, 1]+0.08, -normals[0, 2]+0.08, color='red', s=50)
+
     ax.set_xlim([0, 1])
     ax.set_ylim([0, 1])
     ax.set_zlim([0, 1])
