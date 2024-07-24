@@ -14,6 +14,8 @@ from lib.primitives import ResidualLoss
 from lib.normalization import rescale, cubeRescale
 from pprint import pprint
 from math import ceil
+from copy import deepcopy
+from pprint import pprint
 
 from asGeometryOCCWrapper.surfaces import SurfaceFactory
 
@@ -21,18 +23,20 @@ from tqdm.contrib.concurrent import process_map, thread_map
 
 from copy import deepcopy
 
+np.warnings.filterwarnings('ignore')
+
 def printAndReturn(text):
     print(text)
     return text
 
-def generateErrorsBoxPlot(errors, distances_key='distances', angles_key='angles'):
+def generateErrorsBoxPlot(errors, distances_key='distance', angles_key='angle'):
     data_distances = []
     data_angles = []
     data_labels = []
     for tp, e in errors.items():
         data_labels.append(tp)
-        data_distances.append(np.concatenate(e[distances_key]) if len(e[distances_key]) > 0 else [])
-        data_angles.append(np.concatenate(e[angles_key]) if len(e[angles_key]) > 0 else [])
+        data_distances.append(e[distances_key])
+        data_angles.append(e[angles_key])
     fig, (ax1, ax2) = plt.subplots(2, 1)
     fig.tight_layout(pad=2.0)
     ax1.set_title('Distance Deviation (m)')
@@ -43,158 +47,7 @@ def generateErrorsBoxPlot(errors, distances_key='distances', angles_key='angles'
         ax2.boxplot(data_angles, labels=data_labels, autorange=False, meanline=True)
     return fig
 
-def sumToLogsDict(keys, d, nop=0, novp=0, noip=0, nopoints=0, novpoints=0, nogtpoints=0,
-                  sd=0, sa=0, sdgt=0, sagt=0, siiou=0., stiou=0.):
-    for key in keys:
-        d[key]['number_of_primitives'] += nop
-        d[key]['number_of_void_primitives'] += novp
-        d[key]['number_of_invalid_primitives'] += noip
-        d[key]['number_of_points'] += nopoints
-        d[key]['number_of_valid_points'] += novpoints
-        d[key]['number_of_valid_gt_points'] += nogtpoints
-        d[key]['mean_distance_error'] += sd
-        d[key]['mean_normal_error'] += sa        
-        d[key]['mean_iou'] += siiou
-        d[key]['mean_type_iou'] += stiou
-        d[key]['mean_distance_gt_error'] += sdgt
-        d[key]['mean_normal_gt_error'] += sagt  
-    return d
-
-def getBaseKeyLogsDict():
-    d = {
-        'number_of_primitives': 0,
-        'number_of_void_primitives': 0,
-        'number_of_invalid_primitives': 0,
-        'number_of_points': 0,
-        'number_of_valid_points': 0,
-        'number_of_valid_gt_points': 0,
-        'mean_distance_error': 0,
-        'mean_normal_error': 0,
-        'mean_iou': 0,
-        'mean_type_iou': 0,
-        'mean_distance_gt_error': 0,
-        'mean_normal_gt_error': 0
-        }
-    return d
-
-def addTwoLogsDict(first, second):
-    for key in second:
-        if key not in first:
-            first[key] = getBaseKeyLogsDict()
-        first = sumToLogsDict([key], first, nop=second[key]['number_of_primitives'], novp=second[key]['number_of_void_primitives'],
-                              noip=second[key]['number_of_invalid_primitives'], nopoints=second[key]['number_of_points'], 
-                              novpoints=second[key]['number_of_valid_points'], nogtpoints=second[key]['number_of_valid_gt_points'],
-                              sd=second[key]['mean_distance_error'], sdgt=second[key]['mean_distance_gt_error'],
-                              sagt=second[key]['mean_normal_gt_error'], sa=second[key]['mean_normal_error'], siiou=second[key]['mean_iou'],
-                              stiou=second[key]['mean_type_iou'])
-    return first
-
-def generateErrorsLogDict(errors):
-    logs_dict = {
-        'Total': getBaseKeyLogsDict(),
-    }
-    for tp, e in errors.items():
-        number_of_primitives = len(e['distances']) + len(e['invalid_primitives'])
-        number_of_void_primitives = len(e['void_primitives'])
-        number_of_invalid_primitives = len(e['invalid_primitives'])
-        ind_distances = e['distances']
-        ind_angles = e['angles']
-        instance_ious = e['instance_ious']
-        type_ious = e['type_ious']
-
-        number_of_points = e['number_of_points']
-        number_of_valid_points = 0
-        summd = 0.
-        summa = 0.
-        for i in range(len(ind_distances)):
-            number_of_valid_points += len(ind_distances[i])
-            summd += np.nanmean(ind_distances[i]) if len(ind_distances[i]) > 0 else 0.
-            summa += np.nanmean(ind_angles[i]) if len(ind_angles[i]) > 0 else 0.
-
-        number_of_valid_gt_points = 0
-        ind_gt_distances = e['distances_to_gt']
-        ind_gt_angles = e['angles_to_gt']
-        summdgt = 0.
-        summagt = 0.
-        if len(ind_gt_distances) > 0:
-            summdgt = 0.
-            summagt = 0.
-            for i in range(len(ind_gt_distances)):
-                number_of_valid_gt_points += len(ind_gt_angles[i])
-                summdgt += np.nanmean(ind_gt_distances[i]) if len(ind_gt_distances[i]) > 0 else 0.
-                summagt += np.nanmean(ind_gt_angles[i]) if len(ind_gt_angles[i]) > 0 else 0.
-        else:
-            summdgt = -1.
-            summagt = -1.
-        
-        if len(instance_ious) > 0:
-            siiou = sum(instance_ious)
-        else:
-            siiou = -1
-        
-        if len(type_ious) > 0:
-            stiou = sum(type_ious)
-        else:
-            stiou = -1
-        
-        if tp not in logs_dict.keys():
-            logs_dict[tp] = getBaseKeyLogsDict()
-        logs_dict = sumToLogsDict(['Total', tp], logs_dict, nop=number_of_primitives, 
-                                  novp=number_of_void_primitives, noip=number_of_invalid_primitives,
-                                  nopoints=number_of_points, novpoints=number_of_valid_points,
-                                  nogtpoints=number_of_valid_gt_points, sd=summd, sa=summa, sdgt=summdgt, sagt=summagt,
-                                  siiou=siiou, stiou=stiou)
-    return logs_dict
-
-def computeLogMeans(logs_dict, denominator=0):
-    result = deepcopy(logs_dict)
-    for tp in logs_dict.keys():
-        #number_valid_points = result[tp]['number_of_valid_points'] if result[tp]['number_of_valid_points'] > 0 else 1
-        #number_valid_points = number_valid_points if denominator == 0 else denominator
-
-        #number_of_valid_gt_points = result[tp]['number_of_valid_gt_points'] if result[tp]['number_of_valid_gt_points'] > 0 else 1
-        #number_of_valid_gt_points = number_of_valid_gt_points if denominator == 0 else denominator
-
-        number_of_primitives = result[tp]['number_of_primitives'] - result[tp]['number_of_void_primitives']
-        number_of_primitives = number_of_primitives if denominator == 0 else denominator
-
-        number_of_valid_primitives = result[tp]['number_of_primitives'] - result[tp]['number_of_invalid_primitives']
-        number_of_valid_primitives = number_of_valid_primitives if denominator == 0 else denominator
-
-        if 'mean_distance_error' in result[tp]:
-            result[tp]['mean_distance_error'] = result[tp]['mean_distance_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
-        if 'mean_normal_error' in result[tp]:
-            result[tp]['mean_normal_error'] = result[tp]['mean_normal_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
-        if 'mean_distance_gt_error' in result[tp]:
-            result[tp]['mean_distance_gt_error'] = result[tp]['mean_distance_gt_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
-        if 'mean_normal_gt_error' in result[tp]:
-            result[tp]['mean_normal_gt_error'] = result[tp]['mean_normal_gt_error']/number_of_valid_primitives if number_of_valid_primitives > 0 else 0.
-        if 'mean_iou' in result[tp]:
-            result[tp]['mean_iou'] = result[tp]['mean_iou']/number_of_primitives if number_of_primitives > 0 else 0.
-        if 'mean_type_iou' in result[tp]:
-            result[tp]['mean_type_iou'] = result[tp]['mean_type_iou']/number_of_primitives if number_of_primitives > 0 else 0.
-
-    return result
-
-def filterLog(logs_dict):
-    result = deepcopy(logs_dict)
-    for tp in logs_dict.keys():
-        if 'mean_distance_gt_error' in result[tp]:
-            if result[tp]['mean_distance_gt_error'] < 0:
-                del result[tp]['mean_distance_gt_error']
-        if 'mean_normal_gt_error' in result[tp]:
-            if result[tp]['mean_normal_gt_error'] < 0:
-                del result[tp]['mean_normal_gt_error']
-        if 'mean_normal_gt_error' not in result[tp] and 'mean_distance_gt_error' not in result[tp]:
-            del result[tp]['number_of_valid_gt_points']
-        if 'mean_iou' in result[tp]:
-            if result[tp]['mean_iou'] < 0:
-                del result[tp]['mean_iou']
-        if 'mean_type_iou' in result[tp]:
-            if result[tp]['mean_type_iou'] < 0:
-                del result[tp]['mean_type_iou']
-    return result
-
+# TODO: delete this and pass by parameter
 folder_name = ''
 dataset_folder_name = ''
 data_folder_name = ''
@@ -206,6 +59,126 @@ write_points_error = False
 box_plot = False
 ignore_primitives_orientation = False
 
+def nancount(data):
+    return np.count_nonzero(~np.isnan(data))
+
+# TODO: transform Metrics into a class
+# The intention here is to make easier to add new metrics
+METRICS_DICT = {
+    'n_prim_points': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
+    'n_no_prim_points': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
+    'n_prim': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
+    'n_invalid_prim': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
+    'n_void_prim': {'derivations': {'total': np.nansum, 'mean': np.nanmean}, 'reduction_key': 'total'},
+    'distance': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'reduction_key': 'mean'},
+    'angle': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'reduction_key': 'mean'},
+    'gt_distance': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'need_gt': True, 'reduction_key': 'mean'},
+    'gt_angle': {'derivations': {'mean': np.nanmean, 'count': nancount}, 'need_gt': True, 'reduction_key': 'mean'},
+    'instance_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'},
+    'type_iou': {'derivations': {'mean': np.nanmean}, 'need_gt': True, 'reduction_key': 'mean'}, 
+}
+
+# Creating a base metrics dict (with void lists)
+def get_base_metrics_dict(with_gt=True):
+    d_list = []
+    for key in METRICS_DICT:
+        need_gt = 'need_gt' in METRICS_DICT[key] and METRICS_DICT[key]['need_gt']
+        if not need_gt or (need_gt and with_gt):
+            d_list.append((key, []))
+    return dict(d_list)
+
+def metrics_dict_list2array(d):
+    new_d = {}
+    for tp, d2 in d.items():
+        new_d[tp] = {}
+        for key, value in d2.items():
+            new_d[tp][key] = np.asarray(value)
+    return new_d
+
+def generate_total_key_metrics_dict(d):
+    total_dict = {}
+    for key, value in d.items():
+        for key2, value2 in value.items():
+            if key2 not in total_dict:
+                total_dict[key2] = []
+            total_dict[key2] += value2
+    d['Total'] = total_dict
+    return d
+
+def compute_derived_metrics(d):
+    derived_metrics_dict = {}
+    for tp, d2 in d.items():
+        derived_metrics_dict[tp] = {}
+        for key, value in METRICS_DICT.items():
+            if key in d2:
+                for name, func in value['derivations'].items():
+                    derived_metrics_dict[tp][f'{name}_{key}'] = func(d2[key])
+    return derived_metrics_dict
+
+def reduce_derived_model_metrics(d):
+    reduction_maps = dict([(f"{value['reduction_key']}_{key}", key) for key, value in METRICS_DICT.items()])
+    reduced_mm = {}
+    for tp, d2 in d.items():
+        reduced_mm[tp] = {}
+        for key, value in d2.items():
+            if key in reduction_maps:
+                reduced_mm[tp][reduction_maps[key]] = [value]
+    return reduced_mm
+
+def concatenate_metrics_dict(dicts):
+    final_dict = {}
+    for d in dicts:
+        for key, value in d.items():
+            if key not in final_dict:
+                final_dict[key] = {}
+            for key2, value2 in value.items():
+                if key2 not in final_dict[key]:
+                    final_dict[key][key2] = []
+                final_dict[key][key2] += value2
+    return final_dict
+
+def compute_deviations(points, normals, feature, reescale_factor=1):
+    distances = np.empty((points.shape[0],))
+    distances[:] = np.nan
+    angles = np.empty((normals.shape[0],))
+    angles[:] = np.nan
+
+    reescale_factor_curr = 1
+
+    if use_occ:
+        points, features_curr, _ = rescale(points, features=[feature], factor=1000)
+        feature = features_curr[0]
+        reescale_factor_curr *= 1000
+
+        try:
+            ## TODO: fix add copy inside asGeometryOCCWrapper
+            primitive = SurfaceFactory.fromDict(deepcopy(feature))
+            distances, angles = primitive.computeErrors(points, normals=normals,
+                                                        symmetric_normals=ignore_primitives_orientation)
+        except:
+            pass
+            print(f"WARNING: fail buiding a {feature['type']}.")    
+    
+    nan_mask = np.isnan(distances)
+    distances[~nan_mask] /= reescale_factor_curr
+
+    if np.any(nan_mask):
+        #print(f"WARNING: nan distances in {feature['type']} geometry. Params: {feature}")    
+        residual_distance = ResidualLoss()
+
+        points[nan_mask, :], features_curr, _ = rescale(points, features=[feature], factor=1/reescale_factor_curr)
+        feature = features_curr[0]
+        distances[nan_mask] = residual_distance.residual_loss(points[nan_mask, :], feature)
+    
+    distance = np.nan if np.all(np.isnan(distances)) else np.nanmean(distances)*reescale_factor
+    angle = np.nan if np.all(np.isnan(angles)) else np.nanmean(angles)
+
+    return distance, angle
+
+def np_encoder(object):
+    if isinstance(object, np.generic):
+        return object.item()
+
 def process(data_tuple):
     if len(data_tuple) == 1:
         data = data_tuple[0]
@@ -213,8 +186,6 @@ def process(data_tuple):
     else:
         data, gt_data = data_tuple
         data = mergeQueryAndGTData(data, gt_data, force_match=force_match)
-
-    residual_distance = ResidualLoss()
 
     filename = data['filename'] if 'filename' in data.keys() else str(i)
     points = data['noisy_points'] if use_noisy_points else data['points']
@@ -228,7 +199,7 @@ def process(data_tuple):
         print('Invalid Model.')
         return None
     
-    dataset_errors = {}
+    model_metrics = {}
 
     colors_instances = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
     colors_types = np.zeros(shape=points.shape, dtype=np.int64) + np.array([255, 255, 255])
@@ -251,99 +222,74 @@ def process(data_tuple):
     
     reescale_factor = 1.
     if cube_reescale_factor > 0:
-        if gt_points is not None:
+        if gt_data is not None:
             _, _, reescale_factor = cubeRescale(gt_points.copy())
         else:
             _, _, reescale_factor = cubeRescale(points.copy())
-    
-    if not no_use_occ_geometries:
-        points, features, _ = rescale(points, features=features, factor=1000)
-        if gt_data is not None:
-            gt_points, _, _ = rescale(gt_points, features=[], factor=1000)  
-        reescale_factor /= 1000
+
+    if gt_data is not None:
+        model_major_diagonal = np.linalg.norm(np.max(gt_points, axis=0) - np.min(gt_points, axis=0))
+    else:
+        model_major_diagonal = np.linalg.norm(np.max(points, axis=0) - np.min(gt_points, axis=0))
 
     for i, feature in enumerate(features):
         indices = fpi[i]
         if feature is not None and indices is not None:
             points_curr = points[indices]
-            normals_curr = normals[indices]
-            reescale_factor_curr = reescale_factor
-            primitive = None
-            if not no_use_occ_geometries:
-                try:
-                    primitive = SurfaceFactory.fromDict(feature)
-                    tp = primitive.getType()
-                except:
-                    pass
-            
-            if primitive is None:
-                tp = feature['type']
+            normals_curr = normals[indices]    
+            tp = feature['type']
                 
-            if tp not in dataset_errors:
-                dataset_errors[tp] = {'number_of_points': 0, 'distances': [], 'angles': [],
-                                      'distances_to_gt': [], 'angles_to_gt': [], 'void_primitives': [],
-                                      'invalid_primitives': [], 'instance_ious': [], 'type_ious': []}
+            if tp not in model_metrics:
+                model_metrics[tp] = get_base_metrics_dict(with_gt=(gt_data is not None))
 
-            dataset_errors[tp]['number_of_points'] += len(indices)
+            # Points
+            model_metrics[tp]['n_prim_points'].append(len(indices))
 
+            # Primitives (Boolean to work in individual models and in the entire dataset at the same time)
+            model_metrics[tp]['n_prim'].append(True)
             if len(indices) == 0:
-                dataset_errors[tp]['void_primitives'].append(i)
-                dataset_errors[tp]['invalid_primitives'].append(i)
-            #elif primitive is None and not no_use_occ_geometries:
-            #    dataset_errors[tp]['invalid_primitives'].append(i)
+                model_metrics[tp]['n_void_prim'].append(True)
             elif 'invalid' in feature and feature['invalid']:
-                dataset_errors[tp]['invalid_primitives'].append(i)
+                model_metrics[tp]['n_invalid_prim'].append(True)
 
+            # Distances (residual)
             if len(indices) > 0 and ('invalid' not in feature or not feature['invalid']):
-                if not no_use_occ_geometries and primitive is not None:
-                    distances, angles = primitive.computeErrors(points_curr, normals=normals_curr,
-                                                                symmetric_normals=ignore_primitives_orientation)
-                    print(len(distances), np.all(np.isnan(distances)))
-                else:
-                    if not no_use_occ_geometries:
-                        points_curr, features_curr, _ = rescale(points_curr, features=[feature], factor=1/1000)
-                        feature = features_curr[0]
-                        reescale_factor_curr *= 1000
-                    distances = residual_distance.residual_loss(points_curr, feature)
-                    angles = []
-                
-                distances*= reescale_factor_curr
+                distance, angle = compute_deviations(points_curr, normals_curr, deepcopy(feature), reescale_factor=reescale_factor)
 
-                dataset_errors[tp]['distances'].append(distances)
-                dataset_errors[tp]['angles'].append(angles)
+                invalid_primitive = (distance >= reescale_factor*model_major_diagonal)              
 
                 if fpi_gt is not None:
                     indices_gt = fpi_gt[i]
                     points_gt_curr = gt_points[indices_gt]
                     normals_gt_curr = gt_normals[indices_gt]
                     
-                    if not no_use_occ_geometries and primitive is not None:
-                        distances_to_gt, angles_to_gt = primitive.computeErrors(points_gt_curr, normals=normals_gt_curr,
-                                                                                symmetric_normals=ignore_primitives_orientation)
-                    else:
-                        if not no_use_occ_geometries:
-                            points_gt_curr, _, _ = rescale(points_gt_curr, factor=1/1000)
-                        distances_to_gt = residual_distance.residual_loss(points_gt_curr, feature)
-                        angles_to_gt = []
-                
-                    distances_to_gt*= reescale_factor_curr
+                    gt_distance, gt_angle = compute_deviations(points_gt_curr, normals_gt_curr, deepcopy(feature), reescale_factor=reescale_factor)
 
-                    dataset_errors[tp]['distances_to_gt'].append(distances_to_gt.astype(np.float32))
-                    dataset_errors[tp]['angles_to_gt'].append(angles_to_gt)
+                    #invalid_primitive = invalid_primitive or (gt_distance >= reescale_factor*model_major_diagonal)
+
+                    if not invalid_primitive:
+                        model_metrics[tp]['gt_distance'].append(gt_distance)
+                        model_metrics[tp]['gt_angle'].append(gt_angle)
+            
+                if not invalid_primitive:
+                    model_metrics[tp]['distance'].append(distance)
+                    model_metrics[tp]['angle'].append(angle)
                 
+                if invalid_primitive:
+                    model_metrics[tp]['n_invalid_prim'].append(True)
+
+            # IoUs (boolean for types to work in models and in the dataset)
             if len(indices) > 0:
                 if gt_data is not None:
-                    dataset_errors[tp]['instance_ious'].append(instance_ious[i])
+                    model_metrics[tp]['instance_iou'].append(instance_ious[i])
                     gt_tp = gt_data['features_data'][i]['type']
-                    dataset_errors[tp]['type_ious'].append(tp==gt_tp)
+                    model_metrics[tp]['type_iou'].append(tp==gt_tp)
 
                 if write_segmentation_gt:
                     colors_instances[indices, :] = computeRGB(colors_full[i%len(colors_full)])
-                    if primitive is not None:
-                        color = primitive.getColor()
-                    else:
-                        color = SurfaceFactory.FEATURES_SURFACE_CLASSES[feature['type']].getColor()
+                    color = SurfaceFactory.FEATURES_SURFACE_CLASSES[feature['type']].getColor()
                     colors_types[indices, :] = color
+
                 # if write_points_error:
                 #     error_dist, error_ang = computeErrorsArrays(indices, distances, angles)
                 #     error_both = sortedIndicesIntersection(error_dist, error_ang)
@@ -353,35 +299,38 @@ def process(data_tuple):
                 #     colors_types[error_ang, :] = np.array([0, 0, 0])
                 #     colors_instances[error_both, :] = np.array([255, 0, 255])
                 #     colors_types[error_both, :] = np.array([255, 0, 255])
-    
-    logs_dict = generateErrorsLogDict(dataset_errors)
-    logs_dict_final = computeLogMeans(logs_dict)
-    logs_dict_final['Total']['number_of_points'] += np.count_nonzero(labels==-1)
 
-    filtered_logs_dict_final = filterLog(logs_dict_final)
+    # Adding a key to compute the metrics agnostic of prim type
+    model_metrics = generate_total_key_metrics_dict(model_metrics)
+    model_metrics['Total']['n_no_prim_points'].append(np.count_nonzero(labels==-1))  # adding non primitivized points
+
+    # Transforming from list to nd array each metric accumulator
+    model_metrics = metrics_dict_list2array(model_metrics)
+
+    derived_model_metrics = compute_derived_metrics(model_metrics)
 
     with open(f'{log_format_folder_name}/{filename}.json', 'w') as f:
-        json.dump(filtered_logs_dict_final, f, indent=4)
-    
+        json.dump(derived_model_metrics, f, indent=4, default=np_encoder)
+        
     if write_segmentation_gt:
         instances_filename = f'{filename}_instances.obj'
-        #points, _, _ = applyTransforms(points, transforms, invert=False)
-        if not no_use_occ_geometries:
-            points /= 1000.
         writeColorPointCloudOBJ(join(seg_format_folder_name, instances_filename), np.concatenate((points, colors_instances), axis=1))
         types_filename = f'{filename}_types.obj'
         writeColorPointCloudOBJ(join(seg_format_folder_name, types_filename), np.concatenate((points, colors_types), axis=1))
+    
     if box_plot:
-        fig = generateErrorsBoxPlot(dataset_errors)
+        fig = generateErrorsBoxPlot(model_metrics)
         plt.figure(fig.number)
         plt.savefig(f'{box_plot_format_folder_name}/{filename}.png')
         plt.close()
-        fig2 = generateErrorsBoxPlot(dataset_errors, distances_key='distances_to_gt', angles_key='angles_to_gt')
+        fig2 = generateErrorsBoxPlot(model_metrics, distances_key='gt_distance', angles_key='gt_angle')
         plt.figure(fig2.number)
-        plt.savefig(f'{box_plot_format_folder_name}/{filename}_to_gt.png')
+        plt.savefig(f'{box_plot_format_folder_name}/{filename}_gt.png')
         plt.close()
     
-    return logs_dict_final
+    model_metrics_reduced = reduce_derived_model_metrics(derived_model_metrics)
+    
+    return model_metrics_reduced
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Geometric Primitive Fitting Results, works for dataset validation and for evaluate predictions')
@@ -408,11 +357,12 @@ if __name__ == '__main__':
     parser.add_argument('--force_match', action='store_true')
     parser.add_argument('--use_noisy_points', action='store_true')
     parser.add_argument('--use_noisy_normals', action='store_true')
-    parser.add_argument('--no_use_occ_geometries', action='store_true')
+    parser.add_argument('--no_use_occ', action='store_true')
     parser.add_argument('--ignore_primitives_orientation', action='store_true')
     parser.add_argument('-w', '--workers', type=int, default=20, help='')
     parser.add_argument('-un', '--unnormalize', action='store_true', help='')
     parser.add_argument('-crf', '--cube_reescale_factor', type=float, default = 0, help='')
+    parser.add_argument('-pct', '--p_coverage_threshold', type=int, default=0.05, help='')
 
     args = vars(parser.parse_args())
 
@@ -436,11 +386,12 @@ if __name__ == '__main__':
     use_data_primitives = not args['no_use_data_primitives']
     use_noisy_points = args['use_noisy_points']
     use_noisy_normals = args['use_noisy_normals']
-    no_use_occ_geometries = args['no_use_occ_geometries']
+    use_occ = not args['no_use_occ']
     ignore_primitives_orientation = args['ignore_primitives_orientation']
     workers = args['workers']
     unnormalize = args['unnormalize']
     cube_reescale_factor = args['cube_reescale_factor']
+    p_coverage_threshold = args['p_coverage_threshold']
     force_match = args['force_match']
 
     if gt_dataset_folder_name is not None or gt_data_folder_name is not None or gt_format is not None:
@@ -534,36 +485,21 @@ if __name__ == '__main__':
         results = process_map(process, readers, max_workers=max_workers, chunksize=chunksize)
         #results = [process(data) for data in tqdm(readers)]
 
-        print('Accumulating...')
-        c = 0
-        dataset_error_dict = {}
-        for logs_dict in tqdm(results):
-            for k, v in logs_dict.items():
-                if k not in dataset_error_dict:
-                    dataset_error_dict[k] = {}
-                    for k2, v2 in v.items():
-                        dataset_error_dict[k][k2] = [[v2]]
-                else:
-                    for k2, v2 in v.items():
-                        dataset_error_dict[k][k2].append([v2])
-
-            #print(reader.filenames_by_set['val'][c], logs_dict['Total']['mean_iou'])
-            full_logs_dicts = addTwoLogsDict(full_logs_dicts, logs_dict)
-            #c+= 1
+        dataset_metrics_dict = concatenate_metrics_dict(results)
+        dataset_metrics_dict = metrics_dict_list2array(dataset_metrics_dict)
+        derived_dataset_metrics_dict = compute_derived_metrics(dataset_metrics_dict)
 
         if box_plot:
-            fig = generateErrorsBoxPlot(dataset_error_dict, distances_key='mean_distance_error', angles_key='mean_normal_error')
+            fig = generateErrorsBoxPlot(dataset_metrics_dict, distances_key='distance', angles_key='angle')
             plt.figure(fig.number)
             plt.savefig(f'{box_plot_format_folder_name}/{s}.png')
             plt.close()
-            fig2 = generateErrorsBoxPlot(dataset_error_dict, distances_key='mean_distance_gt_error', angles_key='mean_normal_gt_error')
+            fig2 = generateErrorsBoxPlot(dataset_metrics_dict, distances_key='gt_distance', angles_key='gt_angle')
             plt.figure(fig2.number)
             plt.savefig(f'{box_plot_format_folder_name}/{s}_to_gt.png')
             plt.close()
-        
-        final_json = filterLog(computeLogMeans(full_logs_dicts, denominator=len(results)))
 
         with open(f'{log_format_folder_name}/{s}.json', 'w') as f:
-            json.dump(final_json, f, indent=4)
+            json.dump(derived_dataset_metrics_dict, f, indent=4, default=np_encoder)
 
-        pprint(final_json)
+        pprint(derived_dataset_metrics_dict)
