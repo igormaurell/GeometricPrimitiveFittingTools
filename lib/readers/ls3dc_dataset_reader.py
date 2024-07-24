@@ -92,7 +92,6 @@ class LS3DCDatasetReader(BaseDatasetReader):
                         _, _, points_scale = cubeRescale(points.copy())
                     feature = FittingFunctions.fit(tp, points[mask], normals[mask], scale=1/points_scale)
                 features_data[i] = feature
-            
             if self.unnormalize:
                 gt_points, gt_normals, features_data = applyTransforms(gt_points, transforms, normals=gt_normals, features=features_data)
                 noisy_points, noisy_normals, _ = applyTransforms(noisy_points, transforms, normals=noisy_normals, features=[])
