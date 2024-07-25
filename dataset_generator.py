@@ -216,7 +216,7 @@ if __name__ == '__main__':
             inliers_mask = np.ones(len(points), dtype=bool)
             if outliers_percentile > 0:
                 norms = np.linalg.norm(points, axis=1)
-                tquartile = np.percentile(norms, 99)
+                tquartile = np.percentile(norms, outliers_percentile)
                 inliers_mask = norms < tquartile
                 points = points[inliers_mask]
                 normals = normals[inliers_mask]
@@ -250,7 +250,7 @@ if __name__ == '__main__':
             inliers_mask = np.ones(len(points), dtype=bool)
             if outliers_percentile > 0:
                 norms = np.linalg.norm(points, axis=1)
-                tquartile = np.percentile(norms, 99)
+                tquartile = np.percentile(norms, outliers_percentile)
                 inliers_mask = norms < tquartile
                 points = points[inliers_mask]
                 normals = normals[inliers_mask]

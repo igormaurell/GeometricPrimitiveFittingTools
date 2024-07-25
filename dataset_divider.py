@@ -247,7 +247,8 @@ if __name__ == '__main__':
                 del result['region_ids']
                 points = np.zeros((result['points'].shape[0], 6))
                 points[:, 0:3] = result['points']
-                points[:, 3:6] = np.array(computeRGB(colors[j]))
+                color_index = np.random.randint(0, len(colors))
+                points[:, 3:6] = np.array(computeRGB(colors[color_index]))
                 if point_cloud_full is None:
                     point_cloud_full = points.copy()
                 else:

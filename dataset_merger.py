@@ -245,7 +245,7 @@ def generate_intersection_key(key1, key2):
 
 
 # TODO: remove repeated points that have matched with some other points during matching procedure
-def merge_without_gt(divided_data, has_labels=True, riou_threshold=0.7, view=True, view_process=False):    
+def merge_without_gt(divided_data, has_labels=True, riou_threshold=0.7, view=False, view_process=False):
     visited_parts = set()
 
     visit_queue = [list(sorted(divided_data.keys()))[0]]
@@ -255,6 +255,7 @@ def merge_without_gt(divided_data, has_labels=True, riou_threshold=0.7, view=Tru
     colors = np.random.rand(200000, 3)
 
     pbar = tqdm(total=len(divided_data), position=1, leave=False)
+
 
     visited_parts.add(visit_queue[0])
     while len(visit_queue) > 0:
@@ -288,6 +289,8 @@ def merge_without_gt(divided_data, has_labels=True, riou_threshold=0.7, view=Tru
                 n_region = n_data['region']
     
                 i_region = compute_regions_intersection(v_region, n_region)
+
+                print(i_region)
 
                 v_region_mask = np.all(np.logical_and(data['points'] >= i_region[0], data['points'] < i_region[1]), axis=1)
                 n_region_mask = np.all(np.logical_and(n_data['points'] >= i_region[0], n_data['points'] < i_region[1]), axis=1)
@@ -481,7 +484,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_data_folder_name', type=str, default = '', help='output data folder name.')
     parser.add_argument('--transform_folder_name', type=str, default = 'transform', help='transform folder name.')
     parser.add_argument('--division_info_folder_name', type=str, default = 'division_info', help='point cloud folder name.')
-    parser.add_argument('--merge_method', choices=['max', 'wm'], type=str, default = 'wm', help='')
+    parser.add_argument('--merge_method', choices=['max', 'wm'], type=str, default = 'max', help='')
 
     parser.add_argument('--use_input_gt_transform', action='store_true', help='flag to use transforms from ground truth dataset (not needed if the dataset folder is the same)')
     parser.add_argument('--no_use_output_gt_transform', action='store_false', help='')

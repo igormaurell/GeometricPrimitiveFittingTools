@@ -1,8 +1,8 @@
-from copy import deepcopy
 import numpy as np
 import random
 
 from lib.utils import sortedIndicesIntersection
+import open3d as o3d
 
 EPS = np.finfo(np.float32).eps
 
