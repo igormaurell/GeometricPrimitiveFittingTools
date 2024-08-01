@@ -5,8 +5,14 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
+if [ -z "$2" ]; then
+    echo "Please provide an output full file path."
+    exit 1
+fi
+
 # Get the full file path
 FILE_PATH="$1"
+OUTPUT_FILE_PATH="$2"
 
 # Extract the directory, filename, and extension
 DIR_PATH=$(dirname "$FILE_PATH")
@@ -34,7 +40,7 @@ python "$PARENT_DIR/dataset_generator.py" "$NEW_FOLDER_PATH" "ls3dc" "-t_p" "0" 
 echo "Dataset Generated."
 
 echo ""
-echo "\n==================================================="
+echo "==================================================="
 echo "Dividing Dataset..."
 conda activate pyoccenv
 python "$PARENT_DIR/dataset_divider.py" "$NEW_FOLDER_PATH" "ls3dc" "hpnet" "-crf" "1" "-c" "-a" "-ra" "z" "-vrs" "4" "4" "4" "-trs" "4" "4" "4" "-tnp" "7000" "-vnp" "7000" "-vmnp" "7000" "-tmnp" "7000" -"-input_dataset_folder_name" "dataset" "--output_dataset_folder_name" "dataset_divided_444_333_7k" "-vgs" "3" "3" "3"
@@ -51,12 +57,12 @@ conda activate hpnet
 python "$HPNET_DIR/train.py" "--eval" "--data_path=$NEW_FOLDER_PATH/dataset_divided_444_333_7k/hpnet/data" "--vis_dir=$NEW_FOLDER_PATH/dataset_divided_444_333_7k/hpnet/predict" "--log_dir=$NEW_FOLDER_PATH/dataset_divided_444_333_7k/hpnet/predict_log" "--checkpoint_path=$HPNET_DIR/log/train_ls3dc_444_7k/checkpoint.tar" "--val_skip" "1" "--vis"
 echo "HPNet Inference Finished."
 
-echo ""
-echo "==================================================="
-echo "Generating Results Evaluation..."
-conda activate pyoccenv
-python "$PARENT_DIR/dataset_evaluator.py" "$NEW_FOLDER_PATH" "hpnet" "-s" "-p" "--dataset_folder_name" "dataset_divided_444_333_7k" "--data_folder_name" "predict" "--result_folder_name" "eval/predict" "--ignore_primitives_orientation" "--unnormalize" "-crf" "1"
-echo "Dataset Validation Generated."
+# echo ""
+# echo "==================================================="
+# echo "Generating Results Evaluation..."
+# conda activate pyoccenv
+# python "$PARENT_DIR/dataset_evaluator.py" "$NEW_FOLDER_PATH" "hpnet" "-s" "-p" "--dataset_folder_name" "dataset_divided_444_333_7k" "--data_folder_name" "predict" "--result_folder_name" "eval/predict" "--ignore_primitives_orientation" "--unnormalize" "-crf" "1"
+# echo "Dataset Validation Generated."
 
 echo ""
 echo "==================================================="
@@ -65,9 +71,18 @@ conda activate pyoccenv
 python "$PARENT_DIR/dataset_merger.py" "$NEW_FOLDER_PATH" "hpnet" "ls3dc" "--input_dataset_folder_name" "dataset_divided_444_333_7k" "--output_dataset_folder_name" "dataset_merged_444_333_7k" "--input_data_folder_name" "predict"
 echo "Results Merged."
 
+# echo ""
+# echo "==================================================="
+# echo "Generating Merged Results Evaluation..."
+# conda activate pyoccenv
+# python "$PARENT_DIR/dataset_evaluator.py" "$NEW_FOLDER_PATH" "ls3dc" "-s" "-p" "--dataset_folder_name" "dataset_merged_444_333_7k" "--data_folder_name" "predict" "--result_folder_name" "eval/predict" "--ignore_primitives_orientation" "--unnormalize" "-crf" "1"
+# echo "Merged Results Evaluation Generated."
+
 echo ""
 echo "==================================================="
-echo "Generating Merged Results Evaluation..."
+echo "Generating Merged Results..."
 conda activate pyoccenv
-python "$PARENT_DIR/dataset_evaluator.py" "$NEW_FOLDER_PATH" "ls3dc" "-s" "-p" "--dataset_folder_name" "dataset_merged_444_333_7k" "--data_folder_name" "predict" "--result_folder_name" "eval/predict" "--ignore_primitives_orientation" "--unnormalize" "-crf" "1"
-echo "Merged Results Evaluation Generated."
+python "results_generator.py" "$NEW_FOLDER_PATH" "ls3dc" "$OUTPUT_FILE_PATH" "--dataset_folder_name" "dataset_merged_444_333_7k" "--data_folder_name" "predict"
+echo "Merged Results Generated."
+
+echo 'Finished.'

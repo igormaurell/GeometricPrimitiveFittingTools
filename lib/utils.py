@@ -104,6 +104,26 @@ def loadFeatures(features_name: str, tp: str):
         return loadPKL(f'{features_name}.{tp}')
     else:
         return loadJSON(f'{features_name}.{tp}')
+    
+def saveYAML(features_name: str, data):
+    with open(features_name, 'w') as f:
+        yaml.dump(data, f)
+
+def saveJSON(features_name: str, data):
+    with open(features_name, 'w') as f:
+        json.dump(data, f, indent=4)
+
+def savePKL(features_name: str, data):
+    with open(features_name, 'wb') as f:
+        pickle.dump(data, f)
+
+def saveFeatures(features_name: str, data, tp: str):
+    if tp.lower() in YAML_NAMES:
+        saveYAML(f'{features_name}.{tp}', data)
+    elif tp.lower() in PKL_NAMES:
+        savePKL(f'{features_name}.{tp}', data)
+    else:
+        saveJSON(f'{features_name}.{tp}', data)
 
 def strUpperFirstLetter(s):
     return s[0].upper() + s[1:]
