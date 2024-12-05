@@ -1,0 +1,8 @@
+numba
+numpy
+pypcd @ git+https://github.com/klintan/pypcd.git
+open3d
+scikit-learn
+matplotlib
+tqdm
+h5py
